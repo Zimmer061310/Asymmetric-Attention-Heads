@@ -8,6 +8,8 @@
 - ChatGPT (teacher): research guidance, advice, teaching.
 - Warp (terminal runner): run code and manage repo files.
 - Prism (thesis writer): write thesis from experiment and research summaries.
+- This passage will sync to all three AI's prompt, AIs must update their Idea, Plan, Summary in this passage. current idea on the "Idea" paragraph, and the current works summarize on the "Summary" paragraph, and the current plan update on the "Plan" paragraph.
+- The repo is https://github.com/Zimmer061310/Ena
 
 ## Basic Plan
 1. Find the topic
@@ -34,3 +36,9 @@
 
 ### Key installed packages (venv torch)
 - torch 2.10.0, torchvision 0.25.0, numpy 2.4.1, sympy 1.14.0, pillow 12.1.0
+
+## Plan
+
+## Idea
+
+## Summary
