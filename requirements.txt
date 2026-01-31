@@ -1,0 +1,14 @@
+torch
+transformers
+datasets
+accelerate
+tokenizers
+numpy
+scipy
+pandas
+matplotlib
+tqdm
+pyyaml
+wandb
+rich
+loguru
