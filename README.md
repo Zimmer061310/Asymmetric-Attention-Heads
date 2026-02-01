@@ -26,8 +26,8 @@
 - torch: /opt/homebrew/Caskroom/miniconda/base/envs/torch
 
 ### Python venvs
-- ~/venvs/base (Python 3.13.11)
-- ~/venvs/torch (Python 3.13.11)
+- ~/venvs/base (Python 3.12.10)
+- ~/venvs/torch (Python 3.12.10)
 
 ### Key installed packages (venv base)
 - torch 2.10.0, transformers 5.0.0, datasets 4.5.0, accelerate 1.12.0, tokenizers 0.22.2
