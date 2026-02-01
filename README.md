@@ -54,6 +54,16 @@
 * Implement or reuse a standard decoder-only Transformer with vanilla multi-head attention (MHA).
 * Fix model scale (e.g. 100M–300M parameters) and datasets for all experiments.
 * Establish baseline metrics: perplexity, decode latency, attention head statistics.
+* Define **success criteria** early (e.g., ≥20% speedup with ≤1–2% perplexity increase).
+
+### AAH Workflow (Simple)
+
+1. **Design AAH**: decide head groups, ranges, and any downsampling rules.
+2. **Set success criteria**: define target speedup and acceptable accuracy drop.
+3. **Build baseline**: run standard attention with fixed dataset/model.
+4. **Implement AAH**: only change attention module.
+5. **Run experiments**: compare AAH vs baseline.
+6. **Analyze**: check if success criteria are met and why.
 
 ### Phase 1 — Asymmetric Attention Heads (AAH) Design
 
