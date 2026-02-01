@@ -41,4 +41,76 @@
 
 ## Idea
 
+### Idea 1 — Head-Grouped KV Cache (HG-KV)
+
+**Core question:** How much attention head independence is actually necessary during autoregressive inference?
+
+**Description:**
+Standard multi-head attention maintains a full, independent KV cache per head, leading to high memory usage and bandwidth pressure during decoding. This idea proposes **grouping attention heads** so that multiple heads share the same K/V representations, forming a *continuous design space* between:
+
+- **MHA** (H groups, fully independent KV)
+- **GQA** (intermediate number of groups)
+- **MQA** (1 group, fully shared KV)
+
+By sweeping the number of KV groups, we explicitly study the trade-off between expressiveness and efficiency.
+
+**What changes in the Transformer chain:**
+- Replace per-head K/V projection with **per-group K/V projection**
+- Heads map deterministically to KV groups during inference
+- KV cache is stored per group instead of per head
+
+**Why this is interesting:**
+- Reduces KV cache size and memory bandwidth
+- Provides a unifying framework for MHA / GQA / MQA
+- Enables controlled ablation on head redundancy
+
+**Planned analysis:**
+- Decode latency and memory usage vs group count
+- Accuracy / perplexity degradation curves
+- Attention entropy and inter-head similarity analysis
+
+**Scope:**
+- Decoder-only Transformer
+- Autoregressive inference
+- Small–medium scale models for reproducibility
+
+---
+
+### Idea 2 — Asymmetric Attention Heads (AAH)
+
+**Core question:** Do all attention heads need the same attention resolution and computation pattern?
+
+**Description:**
+Standard Transformers enforce *homogeneous attention heads*: each head uses the same sequence length, attention computation, and update frequency. This idea proposes **asymmetric attention heads**, where different heads operate under different constraints, for example:
+
+- Short-range vs long-range attention heads
+- High-resolution vs low-resolution (downsampled) attention
+- Heads updated every token vs heads updated intermittently
+
+The model still outputs a standard attention result, but internal heads contribute information at different granularities.
+
+**What changes in the Transformer chain:**
+- Attention heads are partitioned into functional classes
+- Each class applies a different attention mask or sequence reduction
+- Outputs are concatenated and projected as usual
+
+**Why this is interesting:**
+- Reflects empirical redundancy among attention heads
+- Reduces computation while preserving long-context capability
+- Pure attention-module modification (no KV cache tricks required)
+
+**Planned analysis:**
+- Performance vs fraction of reduced-resolution heads
+- Sensitivity to long-context tasks
+- Head specialization and contribution analysis
+
+**Scope:**
+- Decoder-only Transformer
+- Focus on attention computation, not storage
+- Compatible with standard training and inference pipelines
+
 ## Summary
+
+
+
+
