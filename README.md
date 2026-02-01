@@ -189,3 +189,32 @@ To ensure the research topic is **clearly original**, we explicitly separate thi
 This head-centric, compute-allocation perspective is not directly addressed in prior work.
 
 ## Summary
+
+### Current Status
+
+* Research direction **locked** on **Asymmetric Attention Heads (AAH)** as the primary topic.
+* AAH is defined as a **head-level structural modification** of multi-head attention, not a change to the attention formula, KV cache, or sparse indexing.
+* The core hypothesis is that **attention heads do not need uniform computation**, and that uneven allocation of context range and resolution can preserve model quality while reducing cost.
+
+### Structural Progress
+
+* Established a clear baseline: **standard homogeneous Multi-Head Attention (MHA)**.
+* Defined the conceptual transition from homogeneous heads to **explicit head specialization**.
+* Formalized AAH as partitioning heads into functional groups (short-range / long-range / global), while keeping the external Transformer interface unchanged.
+
+### Originality Check
+
+* Compared AAH against:
+
+  * Asymmetric attention *theory* (query–key asymmetry)
+  * Sparse / approximate attention (indexing, LSH, retrieval-based)
+  * KV-cache optimizations (MQA, GQA)
+* Confirmed AAH occupies a **distinct, underexplored design axis**: head-level computational asymmetry.
+
+### Next Steps
+
+* Implement **AAH-v1** with range asymmetry as the minimal, safe starting point.
+* Run controlled ablations against vanilla MHA under equal parameter budgets.
+* Measure accuracy, compute cost, and head-level contribution statistics.
+
+This establishes a clean, original foundation for experimentation and thesis development.
