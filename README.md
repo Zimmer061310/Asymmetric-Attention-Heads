@@ -54,16 +54,6 @@
 * Implement or reuse a standard decoder-only Transformer with vanilla multi-head attention (MHA).
 * Fix model scale (e.g. 100M–300M parameters) and datasets for all experiments.
 * Establish baseline metrics: perplexity, decode latency, attention head statistics.
-* Define **success criteria** early (e.g., ≥20% speedup with ≤1–2% perplexity increase).
-
-### AAH Workflow (Simple)
-
-1. **Design AAH**: decide head groups, ranges, and any downsampling rules.
-2. **Set success criteria**: define target speedup and acceptable accuracy drop.
-3. **Build baseline**: run standard attention with fixed dataset/model.
-4. **Implement AAH**: only change attention module.
-5. **Run experiments**: compare AAH vs baseline.
-6. **Analyze**: check if success criteria are met and why.
 
 ### Phase 1 — Asymmetric Attention Heads (AAH) Design
 
@@ -146,36 +136,56 @@ By sweeping the number of KV groups, we explicitly study the trade-off between e
 **Core question:** Do all attention heads need the same attention resolution and computation pattern?
 
 **Description:**
-Standard Transformers enforce *homogeneous attention heads*: each head uses the same sequence length, attention computation, and update frequency. This idea proposes **asymmetric attention heads**, where different heads operate under different constraints, for example:
+Standard Transformers enforce *homogeneous attention heads*: each head uses the same sequence length, attention computation, and update frequency. This idea proposes **asymmetric attention heads**, where different heads are explicitly assigned different computational roles.
 
-* Short-range vs long-range attention heads
-* High-resolution vs low-resolution (downsampled) attention
-* Heads updated every token vs heads updated intermittently
+Typical head roles include:
 
-The model still outputs a standard attention result, but internal heads contribute information at different granularities.
+* Short-range, high-resolution heads
+* Long-range, low-resolution heads
+* Optional global or summary heads
+
+The external attention interface remains unchanged, while internal heads operate under heterogeneous constraints.
 
 **What changes in the Transformer chain:**
 
 * Attention heads are partitioned into functional classes
-* Each class applies a different attention mask or sequence reduction
-* Outputs are concatenated and projected as usual
+* Each class applies a different attention mask, context length, or resolution
+* Outputs are concatenated and projected identically to standard MHA
 
 **Why this is interesting:**
 
-* Reflects empirical redundancy among attention heads
-* Reduces computation while preserving long-context capability
-* Pure attention-module modification (no KV cache tricks required)
+* Makes head redundancy explicit and controllable
+* Redistributes compute inside the attention module
+* Pure structural modification (no KV cache, no sparse indexing)
 
-**Planned analysis:**
+---
 
-* Performance vs fraction of reduced-resolution heads
-* Sensitivity to long-context tasks
-* Head specialization and contribution analysis
+### Originality and Related-Work Boundary (Important)
 
-**Scope:**
+To ensure the research topic is **clearly original**, we explicitly separate this work from existing literature:
 
-* Decoder-only Transformer
-* Focus on attention computation, not storage
-* Compatible with standard training and inference pipelines
+**What existing work studies:**
+
+* *Asymmetric attention formulations* (e.g. query–key asymmetry, theoretical expressivity)
+* *Sparse / approximate attention* (e.g. asymmetric indexing, LSH, retrieval-style attention)
+* *KV cache optimizations* (e.g. MQA, GQA, paging, quantization)
+
+**What this work does NOT do:**
+
+* Does not modify the attention formula itself
+* Does not approximate attention via sparsity or external indexing
+* Does not reuse existing asymmetric attention theory
+
+**What this work uniquely studies:**
+
+* Head-level **computational asymmetry** inside multi-head attention
+* Attention heads with different context ranges and resolutions
+* Controlled ablation of head heterogeneity under fixed model size
+
+**Open gap addressed by this work:**
+
+> How attention computation should be *unevenly allocated across heads* to maximize efficiency without sacrificing model quality.
+
+This head-centric, compute-allocation perspective is not directly addressed in prior work.
 
 ## Summary
