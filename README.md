@@ -55,6 +55,16 @@
 * Fix model scale (e.g. 100M–300M parameters) and datasets for all experiments.
 * Establish baseline metrics: perplexity, decode latency, attention head statistics.
 
+### Phase 0 — Immediate Action Items (Kickoff)
+
+* **Baseline model (v0):** decoder-only Transformer, GPT-2 tokenizer, seq len 512.
+* **Model scale:** start with a **small sanity model (~20–50M params)**, then scale to **~100M** for main runs.
+* **Datasets:**
+  * **Dev/sanity:** `wikitext-2-raw-v1`
+  * **Main (if resources allow):** `wikitext-103-raw-v1`
+* **Metrics:** validation perplexity, tokens/sec (train + eval), peak GPU memory, attention head entropy.
+* **Logging:** use `wandb` when available; otherwise log CSV locally.
+
 ### Phase 1 — Asymmetric Attention Heads (AAH) Design
 
 * Define head partitions (e.g. short-range vs long-range heads).
@@ -195,6 +205,7 @@ This head-centric, compute-allocation perspective is not directly addressed in p
 * Research direction **locked** on **Asymmetric Attention Heads (AAH)** as the primary topic.
 * AAH is defined as a **head-level structural modification** of multi-head attention, not a change to the attention formula, KV cache, or sparse indexing.
 * The core hypothesis is that **attention heads do not need uniform computation**, and that uneven allocation of context range and resolution can preserve model quality while reducing cost.
+* **Kickoff execution started:** Phase 0 immediate action items defined (baseline model, datasets, metrics, logging).
 
 ### Structural Progress
 
