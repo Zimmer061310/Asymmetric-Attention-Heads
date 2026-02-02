@@ -2,11 +2,17 @@ import os
 import time
 import math
 import csv
+import sys
+import argparse
 import yaml
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from src.data import build_dataloaders
 from src.models.transformer import GPT, GPTConfig
@@ -19,7 +25,11 @@ def load_config(path):
 
 def get_device(device_pref):
     if device_pref == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            return "cuda"
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
     return device_pref
 
 
@@ -49,7 +59,10 @@ def evaluate(model, loader, device, max_batches):
 
 
 def main():
-    cfg = load_config("configs/small.yaml")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/small.yaml")
+    args = parser.parse_args()
+    cfg = load_config(args.config)
     exp = cfg["experiment"]
     data = cfg["data"]
     model_cfg = cfg["model"]
@@ -75,6 +88,10 @@ def main():
         n_embd=model_cfg["n_embd"],
         n_ff=model_cfg["n_ff"],
         dropout=model_cfg["dropout"],
+        aah_enabled=model_cfg.get("aah_enabled", False),
+        aah_local_heads=model_cfg.get("aah_local_heads", 0),
+        aah_window=model_cfg.get("aah_window", data["seq_len"]),
+        aah_stride=model_cfg.get("aah_stride", 1),
     )
     model = GPT(gpt_cfg).to(device)
 

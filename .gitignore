@@ -3,3 +3,7 @@ Thumbs.db
 __pycache__/
 *.pyc
 .venv/
+
+# Experiment artifacts
+wandb/
+experiments/*.pt
