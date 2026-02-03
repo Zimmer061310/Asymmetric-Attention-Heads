@@ -52,6 +52,14 @@ This question is answered **only if**:
 
 If a mechanism violates these, it is **not AAH-v2**.
 
+### Compliance Checklist (Non-Negotiable)
+- Control changes tensor sizes **before** QK^T
+- No masking or zeroing **after** computation
+- No KV-cache sharing or paging tricks
+- No token dropping outside attention
+- No kernel/CUDA rewrites
+- No MoE or external controllers
+
 ---
 
 ## 3. High-Level Architecture
@@ -142,6 +150,11 @@ AAH-v2 enables:
 
 Savings are **input- and training-stage dependent**.
 
+### 7.1 Execution-Time Compute Accounting (Required)
+- Log per-head matmul shapes `(L_q, L_k)` for every layer
+- Compute effective attention elements: `Σ_h (L_q × L_k)_h`
+- Treat post-hoc masking as **no savings**
+
 ---
 
 ## 8. Training Protocol
@@ -207,6 +220,11 @@ AAH-v2 defines the **upper bound of what internal control can achieve**.
 - [ ] FLOP accounting per layer
 - [ ] Ablation vs AAH-v1 and MHA
 - [ ] Written analysis (positive or negative)
+
+### 13.1 Phase Mapping (README Alignment)
+- Phase 1–2: Control port + diagnostics
+- Phase 3: Ablations + FLOP accounting
+- Phase 4–5: Analysis + write-up
 
 ---
 
