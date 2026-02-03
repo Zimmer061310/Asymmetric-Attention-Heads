@@ -146,3 +146,61 @@ AAH-v1 is considered **complete** when:
 * **AAH-v3**: may combine AAH with KV-cache strategies
 
 All future versions must reference AAH-v1 as the baseline.
+
+---
+
+## 9. Experimental Results (Small-Scale Validation)
+
+**Setup**
+
+* Dataset: WikiText-2 (WT-2)
+* Model: small decoder-only Transformer
+* Training steps: 2,000
+* Date: 2026-02-02
+
+### Results Summary
+
+| Model                          | Val Loss | Val PPL | Train Loss | Throughput (tok/s) |
+| ------------------------------ | -------- | ------- | ---------- | ------------------ |
+| Baseline (MHA)                 | 7.7234   | 2260.69 | 8.8502     | 5211.46            |
+| AAH-v1 (H_local=4, W=128, s=4) | 7.7631   | 2352.14 | 8.8780     | 4927.50            |
+| AAH-v1 (H_local=2, W=256, s=2) | 7.7735   | 2376.72 | 8.8521     | 5234.83            |
+
+### Deltas vs Baseline
+
+* **AAH-v1 (W=128, s=4)**
+
+  * +4.05% validation perplexity (worse)
+  * –5.45% throughput (slower)
+
+* **AAH-v1 (W=256, s=2)**
+
+  * +5.13% validation perplexity (worse)
+  * +0.45% throughput (slightly faster)
+
+---
+
+## 10. Interpretation and Conclusion (AAH-v1)
+
+These results indicate that **static, hand-designed asymmetric attention heads do not provide performance or quality benefits** under small-model, short-training regimes.
+
+Observed behavior suggests:
+
+* Reduced attention resolution and forced head specialization **remove useful modeling capacity** rather than redundant computation.
+* Static role assignment introduces optimization friction, especially early in training when head roles are still forming.
+* Downsampling overhead can outweigh theoretical FLOP savings at small sequence lengths.
+
+### Key Conclusion
+
+> **AAH-v1 demonstrates that naive, static head asymmetry is insufficient and can degrade performance.**
+
+This negative result is **intentional and informative**, establishing a necessary baseline and motivating future work.
+
+---
+
+## 11. Implications for Future Versions
+
+* **AAH-v2** will introduce *dynamic head resolution control* to allow heads to adapt their effective context and computation.
+* **AAH-v3** will explore *external controller-driven attention optimization* using a side-loaded model.
+
+All future AAH variants must be evaluated relative to this AAH-v1 baseline.
