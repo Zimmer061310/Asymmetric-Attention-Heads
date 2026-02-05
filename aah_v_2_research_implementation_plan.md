@@ -52,14 +52,6 @@ This question is answered **only if**:
 
 If a mechanism violates these, it is **not AAH-v2**.
 
-### Compliance Checklist (Non-Negotiable)
-- Control changes tensor sizes **before** QK^T
-- No masking or zeroing **after** computation
-- No KV-cache sharing or paging tricks
-- No token dropping outside attention
-- No kernel/CUDA rewrites
-- No MoE or external controllers
-
 ---
 
 ## 3. High-Level Architecture
@@ -150,11 +142,6 @@ AAH-v2 enables:
 
 Savings are **input- and training-stage dependent**.
 
-### 7.1 Execution-Time Compute Accounting (Required)
-- Log per-head matmul shapes `(L_q, L_k)` for every layer
-- Compute effective attention elements: `Σ_h (L_q × L_k)_h`
-- Treat post-hoc masking as **no savings**
-
 ---
 
 ## 8. Training Protocol
@@ -204,43 +191,72 @@ These outcomes are valid research results.
 
 ---
 
-## 12. Relationship to AAH-v3
+## 12. Relationship to ## AAH-v3 — Hierarchical Resolution Control (New)
 
-- AAH-v2: *internal, lightweight, end-to-end control*
-- AAH-v3: *external, side-loaded controller with global view*
+**Core Idea**  
+Introduce a *hierarchical control structure* over attention resolution, moving from **per-head signals → group-level control → global resolution policy**, without changing head identity or attention math.
 
-AAH-v2 defines the **upper bound of what internal control can achieve**.
+### Motivation
+AAH-v2 experiments show:
+- Window control is safe and effective
+- Flat dynamic grouping is learning-harmful
+- Stride control is information-destructive
+
+The failure mode is *per-step structural instability*. AAH-v3 addresses this by making control **hierarchical and aggregative**, not reassigning.
+
+### Conceptual Structure
+```
+Heads (fixed identity)
+  ↓ aggregate stats (entropy / norm / usage)
+Group-level controllers
+  ↓ aggregated constraints
+Group-of-groups controllers
+  ↓
+Global resolution controller (per layer)
+```
+
+### Key Properties
+- **Head identity is fixed** (no reassignment)
+- Control signals flow *upward*, not sideways
+- Resolution decisions are smoothed via aggregation
+- Effective control dynamics are slower and more stable
+
+### Control Scope
+- Adjust *allowed resolution ranges* (e.g. max W, stride bounds)
+- Heads operate within constraints, not discrete switches
+
+### Expected Advantages
+- Preserves head specialization
+- Reduces gradient noise vs flat dynamic grouping
+- Avoids kernel-shape thrashing
+
+### Risks
+- Control latency mismatch
+- Controller overhead
+- Collapse to trivial (all-max or all-min) resolution
+
+This version focuses on **internal hierarchical control** and remains within the main Transformer.
 
 ---
 
-## 13. Deliverables
+## AAH-v4 — External / Side-Loaded Controller (Renamed)
 
-- [ ] Control port implementation
-- [ ] Head-level readable diagnostics
-- [ ] FLOP accounting per layer
-- [ ] Ablation vs AAH-v1 and MHA
-- [ ] Written analysis (positive or negative)
+**Original v3 conception moved here.**
 
-### 13.1 Phase Mapping (README Alignment)
-- Phase 1–2: Control port + diagnostics
-- Phase 3: Ablations + FLOP accounting
-- Phase 4–5: Analysis + write-up
+### Core Idea
+Introduce a *separate, side-loaded model* that observes attention statistics and **controls resolution decisions** across layers or blocks.
 
----
+### Characteristics
+- External controller (third-party / auxiliary model)
+- Slow update cadence (not per step)
+- Global view across layers
+- Decoupled from main Transformer gradients
 
-## 14. Branching Strategy
+### Rationale
+- Avoids destabilizing main training dynamics
+- Enables more powerful decision-making
+- Suitable for large-scale or inference-time optimization
 
-- `main`: stable baselines only
-- `AAH-v1`: frozen, reference baseline
-- `AAH-v2`: active research branch
-
-`main` is updated **only when a version is complete and analyzed**.
-
----
-
-## 15. Guiding Principle
-
-> **If computation is not removed before matmul, it does not count.**
-
-AAH-v2 lives or dies by this rule.
+### Status
+Exploratory / future work. Depends on lessons learned from AAH-v3.
 
