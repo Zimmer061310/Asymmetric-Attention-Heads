@@ -1,0 +1,46 @@
+experiment:
+  name: "aah-v2-stride-wt2"
+  seed: 1337
+  variant: "aah_v2_stride"
+  out_dir: "experiments"
+data:
+  dataset: "wikitext-2-raw-v1"
+  tokenizer: "gpt2"
+  seq_len: 512
+  num_workers: 2
+model:
+  n_layer: 8
+  n_head: 8
+  n_embd: 512
+  n_ff: 2048
+  dropout: 0.1
+  aah_v2_enabled: true
+  aah_v2_windows: [64, 128, 256, 512]
+  aah_v2_strides: [1, 2, 4]
+  aah_v2_group_size: 1
+  aah_v2_control_dim: 16
+  aah_v2_temperature: 1.0
+  aah_v2_dynamic_grouping: false
+  aah_v2_num_groups: 4
+  aah_v2_warmup_steps: 300
+  aah_v2_activation_steps: 400
+  aah_v2_compute_lambda: 0.0
+  aah_v2_min_head_norm: 0.0
+  aah_v2_norm_lambda: 0.0
+  aah_v2_min_head_entropy: 0.0
+  aah_v2_entropy_lambda: 0.0
+  aah_v2_local_chunk: 128
+train:
+  batch_size: 8
+  grad_accum: 1
+  max_steps: 2000
+  lr: 3.0e-4
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 200
+  eval_batches: 50
+  eval_log_progress: true
+  log_interval: 50
+  device: "mps"
+  use_wandb: true
+  log_csv: true
