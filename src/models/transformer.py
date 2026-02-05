@@ -26,6 +26,8 @@ class GPTConfig:
     aah_v2_min_head_norm: float = 0.0
     aah_v2_min_head_entropy: float = 0.0
     aah_v2_local_chunk: int = 128
+    aah_v2_control_interval: int = 1
+    aah_v2_stride_control_enabled: bool = True
 
 
 class CausalSelfAttention(nn.Module):
@@ -96,7 +98,8 @@ class AAHV2Attention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.seq_len = config.seq_len
         self.windows = tuple(int(w) for w in config.aah_v2_windows)
-        self.strides = tuple(int(s) for s in config.aah_v2_strides)
+        stride_enabled = bool(config.aah_v2_stride_control_enabled)
+        self.strides = tuple(int(s) for s in config.aah_v2_strides) if stride_enabled else (1,)
         self.group_size = max(1, int(config.aah_v2_group_size))
         self.dynamic_grouping = bool(config.aah_v2_dynamic_grouping)
         self.num_groups = max(1, int(config.aah_v2_num_groups))
@@ -105,8 +108,14 @@ class AAHV2Attention(nn.Module):
         self.min_head_norm = float(config.aah_v2_min_head_norm)
         self.min_head_entropy = float(config.aah_v2_min_head_entropy)
         self.local_chunk = max(1, int(config.aah_v2_local_chunk))
+        self.control_interval = max(1, int(config.aah_v2_control_interval))
+        self.stride_control_enabled = stride_enabled
         self.eval_mode = False
         self.cached_head_to_group = None
+        self.cached_win_idx = None
+        self.cached_stride_idx = None
+        self.last_control_step = None
+        self.current_step = None
 
         self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
         self.proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
@@ -134,12 +143,30 @@ class AAHV2Attention(nn.Module):
         self.control_enabled = bool(enabled)
         if not self.control_enabled:
             self.cached_head_to_group = None
+            self.cached_win_idx = None
+            self.cached_stride_idx = None
+            self.last_control_step = None
 
     def reset_cache(self):
         self.cached_head_to_group = None
+        self.cached_win_idx = None
+        self.cached_stride_idx = None
+        self.last_control_step = None
 
     def set_eval_mode(self, enabled: bool):
         self.eval_mode = bool(enabled)
+
+    def set_step(self, step: int):
+        self.current_step = int(step)
+
+    def _should_update_control(self):
+        if self.control_interval <= 1:
+            return True
+        if self.current_step is None:
+            return True
+        if self.last_control_step is None:
+            return True
+        return (self.current_step - self.last_control_step) >= self.control_interval
 
     def _head_features(self, q, k, v):
         q_mean = q.abs().mean(dim=(0, 2, 3))
@@ -257,24 +284,33 @@ class AAHV2Attention(nn.Module):
             v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
         if self.control_enabled:
-            feats = self._head_features(q, k, v)
-            if self.dynamic_grouping:
-                if self.eval_mode and self.cached_head_to_group is not None:
-                    head_to_group = self.cached_head_to_group
-                    group_feats, _ = self._group_features(feats)
-                    assign_probs = None
-                else:
-                    group_feats, assign_probs, head_to_group = self._dynamic_grouping(feats)
-                    self.cached_head_to_group = head_to_group.detach().clone()
+            use_cache = (not self._should_update_control()) and self.cached_win_idx is not None and self.cached_stride_idx is not None
+            if use_cache:
+                win_idx = self.cached_win_idx
+                stride_idx = self.cached_stride_idx
             else:
-                group_feats, head_to_group = self._group_features(feats)
-                assign_probs = None
+                feats = self._head_features(q, k, v)
+                if self.dynamic_grouping:
+                    if self.eval_mode and self.cached_head_to_group is not None:
+                        head_to_group = self.cached_head_to_group
+                        group_feats, _ = self._group_features(feats)
+                    else:
+                        group_feats, _, head_to_group = self._dynamic_grouping(feats)
+                        self.cached_head_to_group = head_to_group.detach().clone()
+                else:
+                    group_feats, head_to_group = self._group_features(feats)
 
-            win_logits, stride_logits = self.controller(group_feats)
-            win_idx, _ = self._select_discrete(win_logits)
-            stride_idx, _ = self._select_discrete(stride_logits)
-            win_idx = win_idx[head_to_group]
-            stride_idx = stride_idx[head_to_group]
+                win_logits, stride_logits = self.controller(group_feats)
+                win_idx, _ = self._select_discrete(win_logits)
+                if self.stride_control_enabled:
+                    stride_idx, _ = self._select_discrete(stride_logits)
+                else:
+                    stride_idx = torch.zeros_like(win_idx)
+                win_idx = win_idx[head_to_group]
+                stride_idx = stride_idx[head_to_group]
+                self.cached_win_idx = win_idx.detach().clone()
+                self.cached_stride_idx = stride_idx.detach().clone()
+                self.last_control_step = self.current_step
         else:
             win_idx = torch.full((self.n_head,), 0, device=x.device, dtype=torch.long)
             stride_idx = torch.full((self.n_head,), 0, device=x.device, dtype=torch.long)

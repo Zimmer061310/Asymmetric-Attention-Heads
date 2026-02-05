@@ -1,7 +1,7 @@
 experiment:
-  name: "aah-v2-entropy-wt2"
+  name: "aah-v2-opt-wt2"
   seed: 1337
-  variant: "aah_v2_entropy"
+  variant: "aah_v2_opt"
   out_dir: "experiments"
 data:
   dataset: "wikitext-2-raw-v1"
@@ -16,19 +16,19 @@ model:
   dropout: 0.1
   aah_v2_enabled: true
   aah_v2_windows: [64, 128, 256, 512]
-  aah_v2_strides: [1, 2, 4]
-  aah_v2_stride_control_enabled: true
+  aah_v2_strides: [1]
+  aah_v2_stride_control_enabled: false
   aah_v2_group_size: 1
   aah_v2_control_dim: 16
   aah_v2_temperature: 1.0
   aah_v2_dynamic_grouping: false
   aah_v2_num_groups: 4
-  aah_v2_control_interval: 1
+  aah_v2_control_interval: 5
   aah_v2_warmup_steps: 300
   aah_v2_activation_steps: 400
-  aah_v2_compute_lambda: 0.0
-  aah_v2_min_head_norm: 0.0
-  aah_v2_norm_lambda: 0.0
+  aah_v2_compute_lambda: 0.1
+  aah_v2_min_head_norm: 0.01
+  aah_v2_norm_lambda: 0.1
   aah_v2_min_head_entropy: 0.2
   aah_v2_entropy_lambda: 0.1
   aah_v2_local_chunk: 128

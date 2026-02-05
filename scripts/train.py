@@ -128,6 +128,8 @@ def main():
         aah_v2_dynamic_grouping=model_cfg.get("aah_v2_dynamic_grouping", False),
         aah_v2_num_groups=model_cfg.get("aah_v2_num_groups", 4),
         aah_v2_local_chunk=model_cfg.get("aah_v2_local_chunk", 128),
+        aah_v2_control_interval=model_cfg.get("aah_v2_control_interval", 1),
+        aah_v2_stride_control_enabled=model_cfg.get("aah_v2_stride_control_enabled", True),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -186,12 +188,15 @@ def main():
                 if step < warmup_steps:
                     control_enabled = False
                     lambda_now = 0.0
+                    guardrails_enabled = False
                 elif step < (warmup_steps + activation_steps):
                     control_enabled = True
                     lambda_now = 0.0
+                    guardrails_enabled = True
                 else:
                     control_enabled = True
                     lambda_now = compute_lambda
+                    guardrails_enabled = False
                 if step == warmup_steps:
                     for block in model.blocks:
                         attn = block.attn
@@ -201,44 +206,48 @@ def main():
                     attn = block.attn
                     if hasattr(attn, "set_control"):
                         attn.set_control(control_enabled)
+                    if hasattr(attn, "set_step"):
+                        attn.set_step(step)
             step_t0 = time.time()
             logits, loss = model(x, y)
-
-            if model_cfg.get("aah_v2_enabled", False) and lambda_now > 0:
-                total_elements = 0.0
-                baseline_elements = 0.0
-                lq = None
-                lk_layers = []
-                for block in model.blocks:
-                    attn = block.attn
-                    if hasattr(attn, "last_stats"):
-                        total_elements += attn.last_stats.get("total_elements", 0.0)
-                        baseline_elements += attn.last_stats.get("baseline_elements", 0.0)
-                        if lq is None:
-                            lq = attn.last_stats.get("lq")
-                        lk_layers.append(attn.last_stats.get("lk", []))
-                if baseline_elements > 0:
-                    attn_ratio = total_elements / baseline_elements
-                    loss = loss + (lambda_now * torch.tensor(attn_ratio, device=loss.device))
-                if min_head_norm > 0 and norm_lambda > 0:
-                    norms = []
+            if model_cfg.get("aah_v2_enabled", False):
+                if lambda_now > 0:
+                    total_elements = 0.0
+                    baseline_elements = 0.0
+                    lq = None
+                    lk_layers = []
                     for block in model.blocks:
                         attn = block.attn
                         if hasattr(attn, "last_stats"):
-                            norms.extend(attn.last_stats.get("head_norms", []))
-                    if norms:
-                        norms_t = torch.tensor(norms, device=loss.device)
-                        shortfall = (min_head_norm - norms_t).clamp_min(0.0).mean()
-                        loss = loss + (norm_lambda * shortfall)
-                if min_head_entropy > 0 and ent_lambda > 0:
-                    ents = []
-                    for block in model.blocks:
-                        attn = block.attn
-                        if hasattr(attn, "last_stats"):
-                            ents.extend(attn.last_stats.get("head_entropy", []))
-                    if ents:
-                        ents_t = torch.tensor(ents, device=loss.device)
-                        shortfall = (min_head_entropy - ents_t).clamp_min(0.0).mean()
+                            total_elements += attn.last_stats.get("total_elements", 0.0)
+                            baseline_elements += attn.last_stats.get("baseline_elements", 0.0)
+                            if lq is None:
+                                lq = attn.last_stats.get("lq")
+                            lk_layers.append(attn.last_stats.get("lk", []))
+                    if baseline_elements > 0:
+                        attn_ratio = total_elements / baseline_elements
+                        loss = loss + (lambda_now * torch.tensor(attn_ratio, device=loss.device))
+                if guardrails_enabled:
+                    if min_head_norm > 0 and norm_lambda > 0:
+                        norms = []
+                        for block in model.blocks:
+                            attn = block.attn
+                            if hasattr(attn, "last_stats"):
+                                norms.extend(attn.last_stats.get("head_norms", []))
+                        if norms:
+                            norms_t = torch.tensor(norms, device=loss.device)
+                            shortfall = (min_head_norm - norms_t).clamp_min(0.0).mean()
+                            loss = loss + (norm_lambda * shortfall)
+                    if min_head_entropy > 0 and ent_lambda > 0:
+                        ents = []
+                        for block in model.blocks:
+                            attn = block.attn
+                            if hasattr(attn, "last_stats"):
+                                ents.extend(attn.last_stats.get("head_entropy", []))
+                        if ents:
+                            ents_t = torch.tensor(ents, device=loss.device)
+                            shortfall = (min_head_entropy - ents_t).clamp_min(0.0).mean()
+                            loss = loss + (ent_lambda * shortfall)
                         loss = loss + (ent_lambda * shortfall)
             loss.backward()
             opt.step()

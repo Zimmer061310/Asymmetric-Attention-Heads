@@ -17,11 +17,13 @@ model:
   aah_v2_enabled: true
   aah_v2_windows: [64, 128, 256, 512]
   aah_v2_strides: [1]
+  aah_v2_stride_control_enabled: false
   aah_v2_group_size: 1
   aah_v2_control_dim: 16
   aah_v2_temperature: 1.0
   aah_v2_dynamic_grouping: false
   aah_v2_num_groups: 4
+  aah_v2_control_interval: 5
   aah_v2_warmup_steps: 300
   aah_v2_activation_steps: 400
   aah_v2_compute_lambda: 0.0
