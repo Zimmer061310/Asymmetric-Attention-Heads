@@ -1,0 +1,43 @@
+experiment:
+  name: "aah-v3-control-off-adjusted-wt2"
+  seed: 1337
+  variant: "aah_v3_base"
+  out_dir: "experiments"
+data:
+  dataset: "wikitext-2-raw-v1"
+  tokenizer: "gpt2"
+  seq_len: 512
+  num_workers: 2
+model:
+  n_layer: 8
+  n_head: 8
+  n_embd: 512
+  n_ff: 2048
+  dropout: 0.1
+  aah_v3_enabled: true
+  aah_v3_windows: [64, 128, 256, 512]
+  aah_v3_grouping_enabled: true
+  aah_v3_control_enabled: false
+  aah_v3_control_dim: 16
+  aah_v3_control_interval: 100
+  aah_v3_sim_threshold: 0.7
+  aah_v3_super_threshold: 0.7
+  aah_v3_max_depth: 6
+  aah_v3_ema_alpha: 0.9
+  aah_v3_churn_penalty: 0.05
+  aah_v3_min_group_size: 2
+  aah_v3_warmup_steps: 100
+train:
+  batch_size: 8
+  grad_accum: 1
+  max_steps: 400
+  lr: 3.0e-4
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 200
+  eval_batches: 50
+  eval_log_progress: true
+  log_interval: 50
+  device: "mps"
+  use_wandb: true
+  log_csv: true

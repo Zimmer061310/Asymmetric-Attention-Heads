@@ -1,4 +1,5 @@
 import math
+import time
 from dataclasses import dataclass
 import torch
 import torch.nn as nn
@@ -28,6 +29,19 @@ class GPTConfig:
     aah_v2_local_chunk: int = 128
     aah_v2_control_interval: int = 1
     aah_v2_stride_control_enabled: bool = True
+    aah_v3_enabled: bool = False
+    aah_v3_windows: tuple = (64, 128, 256, 512)
+    aah_v3_control_dim: int = 16
+    aah_v3_control_interval: int = 100
+    aah_v3_sim_threshold: float = 0.7
+    aah_v3_super_threshold: float = 0.7
+    aah_v3_max_depth: int = 6
+    aah_v3_ema_alpha: float = 0.9
+    aah_v3_churn_penalty: float = 0.05
+    aah_v3_min_group_size: int = 2
+    aah_v3_warmup_steps: int = 0
+    aah_v3_control_enabled: bool = True
+    aah_v3_grouping_enabled: bool = True
 
 
 class CausalSelfAttention(nn.Module):
@@ -45,6 +59,8 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()
+        t_start = time.perf_counter()
+        t_control0 = time.perf_counter()
         with record_function("attn_qkv"):
             qkv = self.qkv(x)
             q, k, v = qkv.split(C, dim=2)
@@ -276,6 +292,8 @@ class AAHV2Attention(nn.Module):
 
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()
+        t_start = time.perf_counter()
+        t_control0 = time.perf_counter()
         with record_function("attn_qkv"):
             qkv = self.qkv(x)
             q, k, v = qkv.split(C, dim=2)
@@ -374,6 +392,17 @@ class AAHV2Attention(nn.Module):
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_drop(self.proj(y))
         lk_list = lk_tensor.to(torch.int64).tolist()
+        group_heads = {}
+        group_ratios = {}
+        if head_to_group is not None:
+            for h in range(self.n_head):
+                g = int(head_to_group[h].item())
+                group_heads.setdefault(g, []).append(h)
+            for g, heads in group_heads.items():
+                win_vals = [float(w[int(win_idx[h].item())].item()) for h in heads]
+                avg_w = sum(win_vals) / max(1, len(win_vals))
+                group_ratios[g] = avg_w / float(lq)
+        total_time_ms = (time.perf_counter() - t_start) * 1000.0
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
@@ -381,6 +410,439 @@ class AAHV2Attention(nn.Module):
             "baseline_elements": baseline_elements,
             "head_norms": head_norms,
             "head_entropy": head_entropy,
+        }
+        if return_attn:
+            return y, attn_maps
+        return y
+
+
+class AAHV3Controller(nn.Module):
+    def __init__(self, feat_dim: int, hidden_dim: int, n_windows: int):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(feat_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, n_windows),
+        )
+        self.n_windows = n_windows
+
+    def forward(self, feats):
+        return self.mlp(feats)
+
+
+class AAHV3Attention(nn.Module):
+    """AAH-v3: adaptive, hierarchical resolution control with variable-size supergroups."""
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        self.n_head = config.n_head
+        self.head_dim = config.n_embd // config.n_head
+        self.scale = self.head_dim ** -0.5
+        self.seq_len = config.seq_len
+        self.windows = tuple(int(w) for w in config.aah_v3_windows)
+        self.control_interval = max(1, int(config.aah_v3_control_interval))
+        self.sim_threshold = float(config.aah_v3_sim_threshold)
+        self.super_threshold = float(config.aah_v3_super_threshold)
+        self.max_depth = max(1, int(config.aah_v3_max_depth))
+        self.ema_alpha = float(config.aah_v3_ema_alpha)
+        self.churn_penalty = float(config.aah_v3_churn_penalty)
+        self.min_group_size = max(1, int(config.aah_v3_min_group_size))
+        self.warmup_steps = max(0, int(config.aah_v3_warmup_steps))
+        self.control_enabled = bool(config.aah_v3_control_enabled)
+        self.grouping_enabled = bool(config.aah_v3_grouping_enabled)
+        self.eval_mode = False
+        self.cached_win_idx = None
+        self.cached_head_to_group = None
+        self.last_control_step = None
+        self.current_step = None
+        self.last_stats = {}
+        self.ema_feats = None
+
+        self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
+        self.proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
+        self.attn_drop = nn.Dropout(config.dropout)
+        self.resid_drop = nn.Dropout(config.dropout)
+        self.register_buffer(
+            "full_mask",
+            torch.tril(torch.ones(config.seq_len, config.seq_len)).view(1, 1, config.seq_len, config.seq_len),
+        )
+
+        self.controller = AAHV3Controller(
+            feat_dim=9,
+            hidden_dim=max(4, int(config.aah_v3_control_dim)),
+            n_windows=len(self.windows),
+        )
+
+    def set_control(self, enabled: bool):
+        self.control_enabled = bool(enabled)
+        if not self.control_enabled:
+            self.cached_win_idx = None
+            self.cached_head_to_group = None
+            self.last_control_step = None
+
+    def reset_cache(self):
+        self.cached_win_idx = None
+        self.cached_head_to_group = None
+        self.last_control_step = None
+
+    def set_eval_mode(self, enabled: bool):
+        self.eval_mode = bool(enabled)
+
+    def set_step(self, step: int):
+        self.current_step = int(step)
+
+    def _should_update_control(self):
+        if self.control_interval <= 1:
+            return True
+        if self.current_step is None:
+            return True
+        if self.last_control_step is None:
+            return True
+        return (self.current_step - self.last_control_step) >= self.control_interval
+
+    def _head_features(self, q, k, v):
+        q_mean = q.abs().mean(dim=(0, 2, 3))
+        q_std = q.std(dim=(0, 2, 3))
+        k_mean = k.abs().mean(dim=(0, 2, 3))
+        k_std = k.std(dim=(0, 2, 3))
+        v_mean = v.abs().mean(dim=(0, 2, 3))
+        v_std = v.std(dim=(0, 2, 3))
+        if self.last_stats:
+            last_entropy = torch.tensor(self.last_stats.get("head_entropy", [0.0] * self.n_head), device=q.device)
+            last_norm = torch.tensor(self.last_stats.get("head_norms", [0.0] * self.n_head), device=q.device)
+            last_usage = torch.tensor(self.last_stats.get("head_usage", [0.0] * self.n_head), device=q.device)
+        else:
+            last_entropy = torch.zeros(self.n_head, device=q.device)
+            last_norm = torch.zeros(self.n_head, device=q.device)
+            last_usage = torch.zeros(self.n_head, device=q.device)
+        feats = torch.stack(
+            [q_mean, q_std, k_mean, k_std, v_mean, v_std, last_entropy, last_norm, last_usage],
+            dim=-1,
+        )
+        return feats
+
+    def _cluster(self, feats, threshold, prev_groups=None):
+        n = feats.size(0)
+        if n == 1:
+            return [[0]]
+        feats = F.normalize(feats, dim=-1, eps=1e-6)
+        sim = feats @ feats.transpose(0, 1)
+        if prev_groups is not None and self.churn_penalty > 0:
+            same_group = prev_groups.unsqueeze(0) == prev_groups.unsqueeze(1)
+            sim = torch.clamp(sim + (same_group.float() * self.churn_penalty), max=1.0)
+        adj = sim >= threshold
+        visited = [False] * n
+        groups = []
+        for i in range(n):
+            if visited[i]:
+                continue
+            stack = [i]
+            visited[i] = True
+            comp = [i]
+            while stack:
+                u = stack.pop()
+                neighbors = torch.where(adj[u])[0].tolist()
+                for v in neighbors:
+                    if not visited[v]:
+                        visited[v] = True
+                        stack.append(v)
+                        comp.append(v)
+            groups.append(comp)
+        if self.min_group_size > 1 and len(groups) > 1:
+            groups = self._merge_small_groups(groups, feats, sim)
+        return groups
+
+    def _merge_small_groups(self, groups, feats, sim):
+        groups = [list(g) for g in groups]
+        small = [i for i, g in enumerate(groups) if len(g) < self.min_group_size]
+        if not small:
+            return groups
+        group_feats = []
+        for g in groups:
+            group_feats.append(feats[g].mean(dim=0))
+        group_feats = torch.stack(group_feats, dim=0)
+        for gi in small:
+            if len(groups) <= 1:
+                break
+            if len(groups[gi]) >= self.min_group_size:
+                continue
+            head_idx = groups[gi][0]
+            sims = group_feats @ group_feats[gi].unsqueeze(1)
+            sims = sims.squeeze(1)
+            sims[gi] = -1.0
+            best = int(sims.argmax().item())
+            groups[best].extend(groups[gi])
+            groups[gi] = []
+            group_feats[best] = feats[groups[best]].mean(dim=0)
+        groups = [g for g in groups if g]
+        return groups
+
+    def _aggregate(self, groups, feats):
+        agg = []
+        for g in groups:
+            g_feats = feats[g].mean(dim=0)
+            agg.append(g_feats)
+        return torch.stack(agg, dim=0)
+
+    def _build_hierarchy(self, head_feats, prev_head_groups=None):
+        levels = []
+        groups0 = self._cluster(head_feats, self.sim_threshold, prev_groups=prev_head_groups)
+        feats0 = self._aggregate(groups0, head_feats)
+        levels.append((groups0, feats0))
+        if len(groups0) == 1:
+            return levels
+        feats_prev = feats0
+        for _ in range(1, self.max_depth):
+            groups = self._cluster(feats_prev, self.super_threshold)
+            feats = self._aggregate(groups, feats_prev)
+            levels.append((groups, feats))
+            if len(groups) == 1:
+                break
+            feats_prev = feats
+        return levels
+
+    def _parent_maps(self, levels):
+        parent_maps = []
+        for level in range(len(levels) - 1):
+            groups_next = levels[level + 1][0]
+            num_groups = len(levels[level][0])
+            parent_map = torch.empty(num_groups, dtype=torch.long, device=levels[level][1].device)
+            for parent_idx, children in enumerate(groups_next):
+                for child_idx in children:
+                    parent_map[child_idx] = parent_idx
+            parent_maps.append(parent_map)
+        return parent_maps
+
+    def _select_windows(self, levels, parent_maps, device):
+        n_levels = len(levels)
+        win_indices = [None] * n_levels
+        top_groups, top_feats = levels[-1]
+        top_logits = self.controller(top_feats)
+        top_idx = top_logits.argmax(dim=-1)
+        win_indices[-1] = top_idx
+        for level in range(n_levels - 2, -1, -1):
+            groups, feats = levels[level]
+            logits = self.controller(feats)
+            idx = logits.argmax(dim=-1)
+            parent_map = parent_maps[level].to(device)
+            parent_idx = win_indices[level + 1][parent_map]
+            idx = torch.minimum(idx, parent_idx)
+            win_indices[level] = idx
+        return win_indices[0]
+
+    def _local_attention(self, q, k, v, window):
+        B, T, D = q.shape
+        W = max(1, min(int(window), T))
+        if W == T:
+            att = (q @ k.transpose(-2, -1)) * self.scale
+            mask = self.full_mask[0, 0, :T, :T]
+            att = att.masked_fill(mask == 0, float("-inf"))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_drop(att)
+            y = att @ v
+            return y, att
+        q_pos = torch.arange(0, T, device=q.device).unsqueeze(1)
+        k_pos = torch.arange(0, T, device=q.device).unsqueeze(0)
+        causal = k_pos <= q_pos
+        window_ok = k_pos >= (q_pos - W + 1)
+        att = (q @ k.transpose(-2, -1)) * self.scale
+        att = att.masked_fill(~(causal & window_ok), float("-inf"))
+        att = F.softmax(att, dim=-1)
+        att = self.attn_drop(att)
+        y = att @ v
+        return y, att
+
+    def forward(self, x, return_attn: bool = False):
+        B, T, C = x.size()
+        with record_function("attn_qkv"):
+            qkv = self.qkv(x)
+            q, k, v = qkv.split(C, dim=2)
+            q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+            k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+            v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+
+        in_warmup = (self.current_step is not None) and (self.current_step < self.warmup_steps)
+        shadow_win_idx = None
+        shadow_logit_mean = None
+        if not self.control_enabled:
+            t_attn0 = time.perf_counter()
+            att = (q @ k.transpose(-2, -1)) * self.scale
+            mask = self.full_mask[:, :, :T, :T]
+            att = att.masked_fill(mask == 0, float("-inf"))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_drop(att)
+            y = att @ v
+            y = y.transpose(1, 2).contiguous().view(B, T, C)
+            y = self.resid_drop(self.proj(y))
+            attn_time_ms = (time.perf_counter() - t_attn0) * 1000.0
+            total_time_ms = (time.perf_counter() - t_start) * 1000.0
+            self.last_stats = {
+                "lq": T,
+                "lk": [T for _ in range(self.n_head)],
+                "total_elements": float(self.n_head * T * T),
+                "baseline_elements": float(self.n_head * T * T),
+                "head_norms": [],
+                "head_entropy": [],
+                "head_usage": [],
+                "avg_window": float(T),
+                "group_change_rate": None,
+                "head_groups": [],
+                "shadow_win_idx": [],
+                "shadow_logit_mean": [],
+                "group_heads": {},
+                "group_ratios": {},
+                "control_time_ms": 0.0,
+                "attn_time_ms": attn_time_ms,
+                "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
+            }
+            if return_attn:
+                return y, att
+            return y
+        elif self.control_enabled and not in_warmup:
+            use_cache = (not self._should_update_control()) and self.cached_win_idx is not None
+            if use_cache:
+                win_idx = self.cached_win_idx
+                head_to_group = self.cached_head_to_group
+                group_change_rate = 0.0
+            else:
+                feats = self._head_features(q, k, v)
+                if self.ema_feats is None or self.ema_feats.shape != feats.shape:
+                    self.ema_feats = feats.detach()
+                else:
+                    alpha = max(0.0, min(1.0, self.ema_alpha))
+                    self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
+                prev_groups = None
+                if self.cached_head_to_group is not None:
+                    prev_groups = self.cached_head_to_group
+                levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                parent_maps = self._parent_maps(levels)
+                group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                groups0 = levels[0][0]
+                head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
+                for gi, heads in enumerate(groups0):
+                    for h in heads:
+                        head_to_group[h] = gi
+                win_idx = group_win_idx[head_to_group]
+                if self.cached_head_to_group is None:
+                    group_change_rate = 0.0
+                else:
+                    group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
+                self.cached_head_to_group = head_to_group.detach().clone()
+                self.cached_win_idx = win_idx.detach().clone()
+                self.last_control_step = self.current_step
+        else:
+            head_to_group = None
+            group_change_rate = None
+            if self.grouping_enabled:
+                feats = self._head_features(q, k, v)
+                if self.ema_feats is None or self.ema_feats.shape != feats.shape:
+                    self.ema_feats = feats.detach()
+                else:
+                    alpha = max(0.0, min(1.0, self.ema_alpha))
+                    self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
+                prev_groups = None
+                if self.cached_head_to_group is not None:
+                    prev_groups = self.cached_head_to_group
+                levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                parent_maps = self._parent_maps(levels)
+                group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                groups0 = levels[0][0]
+                head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
+                for gi, heads in enumerate(groups0):
+                    for h in heads:
+                        head_to_group[h] = gi
+                shadow_win_idx = group_win_idx[head_to_group]
+                logits = self.controller(levels[0][1])
+                shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
+                if self.cached_head_to_group is None:
+                    group_change_rate = 0.0
+                else:
+                    group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
+                self.cached_head_to_group = head_to_group.detach().clone()
+            win_idx = torch.full((self.n_head,), 0, device=x.device, dtype=torch.long)
+            if T in self.windows:
+                win_full = self.windows.index(T)
+                win_idx = torch.full((self.n_head,), win_full, device=x.device, dtype=torch.long)
+        control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if self.control_enabled else 0.0
+
+        lq = T
+        window_vals = torch.tensor(self.windows, device=x.device, dtype=torch.float32)
+        w = window_vals[win_idx]
+        lk_tensor = torch.clamp(w, min=1.0, max=float(T))
+        total_elements = float((lq * lk_tensor).sum().item())
+        baseline_elements = float(self.n_head * lq * lq)
+
+        outputs = torch.zeros(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype)
+        head_norms = [0.0 for _ in range(self.n_head)]
+        head_entropy = [0.0 for _ in range(self.n_head)]
+        head_usage = [0.0 for _ in range(self.n_head)]
+        attn_maps = [None for _ in range(self.n_head)] if return_attn else None
+        t_attn0 = time.perf_counter()
+
+        head_groups = {}
+        for h in range(self.n_head):
+            window = self.windows[int(win_idx[h].item())]
+            head_groups.setdefault(window, []).append(h)
+
+        for window, heads in head_groups.items():
+            q_sel = q[:, heads]
+            k_sel = k[:, heads]
+            v_sel = v[:, heads]
+            Bc, Hc, Tc, Dc = q_sel.shape
+            qf = q_sel.reshape(Bc * Hc, Tc, Dc)
+            kf = k_sel.reshape(Bc * Hc, Tc, Dc)
+            vf = v_sel.reshape(Bc * Hc, Tc, Dc)
+            y_f, att_f = self._local_attention(qf, kf, vf, window)
+            y_h = y_f.view(Bc, Hc, Tc, Dc)
+            outputs[:, heads] = y_h
+            norms = y_h.norm(dim=-1).mean(dim=(0, 2))
+            for i, h in enumerate(heads):
+                head_norms[h] = float(norms[i].item())
+            att_h = att_f.view(Bc, Hc, att_f.size(1), att_f.size(2))
+            ent = -(att_h * (att_h + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
+            ent = ent / max(1.0, math.log(att_h.size(-1)))
+            usage = att_h[..., -1].mean(dim=(0, 2))
+            for i, h in enumerate(heads):
+                head_entropy[h] = float(ent[i].item())
+                head_usage[h] = float(usage[i].item())
+            if return_attn:
+                for i, h in enumerate(heads):
+                    attn_maps[h] = att_h[:, i:i+1]
+        attn_time_ms = (time.perf_counter() - t_attn0) * 1000.0
+
+        y = outputs
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.resid_drop(self.proj(y))
+        avg_window = float(w.mean().item())
+        lk_list = lk_tensor.to(torch.int64).tolist()
+        group_heads = {}
+        group_ratios = {}
+        if head_to_group is not None:
+            for h in range(self.n_head):
+                g = int(head_to_group[h].item())
+                group_heads.setdefault(g, []).append(h)
+            for g, heads in group_heads.items():
+                win_vals = [float(w[int(win_idx[h].item())].item()) for h in heads]
+                avg_w = sum(win_vals) / max(1, len(win_vals))
+                group_ratios[g] = avg_w / float(lq)
+        self.last_stats = {
+            "lq": lq,
+            "lk": lk_list,
+            "total_elements": total_elements,
+            "baseline_elements": baseline_elements,
+            "head_norms": head_norms,
+            "head_entropy": head_entropy,
+            "head_usage": head_usage,
+            "avg_window": avg_window,
+            "group_change_rate": group_change_rate,
+            "head_groups": head_to_group.detach().cpu().tolist() if head_to_group is not None else [],
+            "shadow_win_idx": shadow_win_idx.detach().cpu().tolist() if shadow_win_idx is not None else [],
+            "shadow_logit_mean": shadow_logit_mean if shadow_logit_mean is not None else [],
+            "group_heads": group_heads,
+            "group_ratios": group_ratios,
+            "control_time_ms": control_time_ms,
+            "attn_time_ms": attn_time_ms,
+            "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
         }
         if return_attn:
             return y, attn_maps
@@ -401,7 +863,9 @@ class Block(nn.Module):
     def __init__(self, config: GPTConfig):
         super().__init__()
         self.ln1 = nn.LayerNorm(config.n_embd)
-        if config.aah_v2_enabled:
+        if config.aah_v3_enabled:
+            self.attn = AAHV3Attention(config)
+        elif config.aah_v2_enabled:
             self.attn = AAHV2Attention(config)
         else:
             self.attn = CausalSelfAttention(config)
