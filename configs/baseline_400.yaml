@@ -1,5 +1,5 @@
 experiment:
-  name: "baseline-200-wt2-new"
+  name: "baseline-400-wt2-fix"
   seed: 1337
   variant: "baseline"
   out_dir: "experiments"
@@ -14,12 +14,10 @@ model:
   n_embd: 512
   n_ff: 2048
   dropout: 0.1
-  aah_v2_enabled: false
-  aah_v3_enabled: false
 train:
   batch_size: 8
   grad_accum: 1
-  max_steps: 200
+  max_steps: 400
   lr: 3.0e-4
   weight_decay: 0.1
   warmup_steps: 100

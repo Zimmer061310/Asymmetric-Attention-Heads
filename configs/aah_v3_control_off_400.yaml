@@ -1,7 +1,7 @@
 experiment:
-  name: "aah-v3-control-off-200-wt2-new"
+  name: "aah-v3-control-off-400-wt2-fix"
   seed: 1337
-  variant: "aah_v3_base"
+  variant: "aah_v3_control_off"
   out_dir: "experiments"
 data:
   dataset: "wikitext-2-raw-v1"
@@ -19,7 +19,7 @@ model:
   aah_v3_grouping_enabled: true
   aah_v3_control_enabled: false
   aah_v3_control_dim: 16
-  aah_v3_control_interval: 200
+  aah_v3_control_interval: 100
   aah_v3_sim_threshold: 0.7
   aah_v3_super_threshold: 0.7
   aah_v3_max_depth: 6
@@ -30,7 +30,7 @@ model:
 train:
   batch_size: 8
   grad_accum: 1
-  max_steps: 200
+  max_steps: 400
   lr: 3.0e-4
   weight_decay: 0.1
   warmup_steps: 100

@@ -225,6 +225,15 @@ def main():
             "shadow_logit_mean",
             "group_heads",
             "group_ratios",
+            "lk_mean",
+            "lk_p90",
+            "w_mean",
+            "w_min",
+            "w_max",
+            "control_time_ms",
+            "attn_time_ms",
+            "mask_time_ms",
+            "overhead_time_ms",
             "step_time_ms",
             "eval_time_s",
         ])
@@ -350,6 +359,15 @@ def main():
                 shadow_logit_mean = []
                 group_heads = []
                 group_ratios = []
+                lk_means = []
+                lk_p90s = []
+                w_means = []
+                w_mins = []
+                w_maxs = []
+                control_times = []
+                attn_times = []
+                mask_times = []
+                overhead_times = []
                 if model_cfg.get("aah_v2_enabled", False) or model_cfg.get("aah_v3_enabled", False):
                     total_elements = 0.0
                     baseline_elements = 0.0
@@ -376,12 +394,39 @@ def main():
                                 group_heads.append(attn.last_stats.get("group_heads"))
                             if "group_ratios" in attn.last_stats:
                                 group_ratios.append(attn.last_stats.get("group_ratios"))
+                            if "control_time_ms" in attn.last_stats:
+                                control_times.append(attn.last_stats.get("control_time_ms"))
+                            if "attn_time_ms" in attn.last_stats:
+                                attn_times.append(attn.last_stats.get("attn_time_ms"))
+                            if "mask_time_ms" in attn.last_stats:
+                                mask_times.append(attn.last_stats.get("mask_time_ms"))
+                            if "overhead_time_ms" in attn.last_stats:
+                                overhead_times.append(attn.last_stats.get("overhead_time_ms"))
+                            if "lk_mean" in attn.last_stats:
+                                lk_means.append(attn.last_stats.get("lk_mean"))
+                            if "lk_p90" in attn.last_stats:
+                                lk_p90s.append(attn.last_stats.get("lk_p90"))
+                            if "w_mean" in attn.last_stats:
+                                w_means.append(attn.last_stats.get("w_mean"))
+                            if "w_min" in attn.last_stats:
+                                w_mins.append(attn.last_stats.get("w_min"))
+                            if "w_max" in attn.last_stats:
+                                w_maxs.append(attn.last_stats.get("w_max"))
                     if baseline_elements > 0:
                         attn_elems = total_elements
                         attn_ratio = total_elements / baseline_elements
                 group_change_rates = [v for v in group_change_rates if v is not None]
                 group_change_rate = sum(group_change_rates) / len(group_change_rates) if group_change_rates else None
                 avg_window = sum(avg_windows) / len(avg_windows) if avg_windows else None
+                lk_mean = sum(lk_means) / len(lk_means) if lk_means else None
+                lk_p90 = sum(lk_p90s) / len(lk_p90s) if lk_p90s else None
+                w_mean = sum(w_means) / len(w_means) if w_means else None
+                w_min = min(w_mins) if w_mins else None
+                w_max = max(w_maxs) if w_maxs else None
+                control_time_ms = sum(control_times) / len(control_times) if control_times else None
+                attn_time_ms = sum(attn_times) / len(attn_times) if attn_times else None
+                mask_time_ms = sum(mask_times) / len(mask_times) if mask_times else None
+                overhead_time_ms = sum(overhead_times) / len(overhead_times) if overhead_times else None
                 overlap_rates = []
                 reassign_rates = []
                 if head_groups and prev_head_groups is not None:
@@ -426,6 +471,24 @@ def main():
                         payload["aah/group_change_rate"] = group_change_rate
                     if avg_window is not None:
                         payload["aah/avg_window"] = avg_window
+                    if lk_mean is not None:
+                        payload["aah/Lk_mean"] = lk_mean
+                    if lk_p90 is not None:
+                        payload["aah/Lk_p90"] = lk_p90
+                    if w_mean is not None:
+                        payload["aah/W_mean"] = w_mean
+                    if w_min is not None:
+                        payload["aah/W_min"] = w_min
+                    if w_max is not None:
+                        payload["aah/W_max"] = w_max
+                    if control_time_ms is not None:
+                        payload["aah/time/control_ms"] = control_time_ms
+                    if attn_time_ms is not None:
+                        payload["aah/time/attention_ms"] = attn_time_ms
+                    if mask_time_ms is not None:
+                        payload["aah/time/mask_ms"] = mask_time_ms
+                    if overhead_time_ms is not None:
+                        payload["aah/time/overhead_ms"] = overhead_time_ms
                     if shadow_logit_mean:
                         payload["aah/shadow_logit_mean"] = shadow_logit_mean[0]
                     if group_ratios:
@@ -479,6 +542,15 @@ def main():
                         "|".join([",".join(f"{v:.6f}" for v in g) for g in shadow_logit_mean]) if shadow_logit_mean else "",
                         str(group_heads[0]) if group_heads else "",
                         str(group_ratios[0]) if group_ratios else "",
+                        fmt(lk_mean),
+                        fmt(lk_p90),
+                        fmt(w_mean),
+                        fmt(w_min),
+                        fmt(w_max),
+                        fmt(control_time_ms),
+                        fmt(attn_time_ms),
+                        fmt(mask_time_ms),
+                        fmt(overhead_time_ms),
                         f"{step_time_ms:.2f}",
                         eval_time_s,
                     ])

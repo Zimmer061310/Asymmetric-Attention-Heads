@@ -45,6 +45,23 @@ class CausalSelfAttention(nn.Module):
         y = att @ v
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_drop(self.proj(y))
+        # effective-length stats (full attention)
+        lk_mean = float(T)
+        lk_p90 = float(T)
+        w_mean = float(T)
+        w_min = float(T)
+        w_max = float(T)
+        self.last_stats = {
+            "lq": T,
+            "lk": [T for _ in range(self.n_head)],
+            "total_elements": float(self.n_head * T * T),
+            "baseline_elements": float(self.n_head * T * T),
+            "lk_mean": lk_mean,
+            "lk_p90": lk_p90,
+            "w_mean": w_mean,
+            "w_min": w_min,
+            "w_max": w_max,
+        }
         if return_attn:
             return y, att
         return y

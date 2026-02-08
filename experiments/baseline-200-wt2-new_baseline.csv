@@ -1,0 +1,6 @@
+step,train_loss,tok_s,mem_mb,gpu_alloc_mb,gpu_reserved_mb,cpu_rss_mb,psutil_rss_mb,psutil_vms_mb,psutil_shared_mb,psutil_text_mb,psutil_data_mb,psutil_uss_mb,psutil_pss_mb,psutil_swap_mb,val_loss,val_ppl,attn_elems,attn_ratio,attn_lq,attn_lk_per_layer,head_entropy,group_change_rate,avg_window,group_overlap,head_reassign_rate,group_lifespan_ema,head_groups,shadow_win_idx,shadow_logit_mean,group_heads,group_ratios,lk_mean,lk_p90,w_mean,w_min,w_max,step_time_ms,eval_time_s
+50,51.122349,4276.43,1903.33,,,1903.33,77.31,407168.89,,,,37.52,,,,,,,,,,,,,,,,,,,,,,,,,669.08,
+100,35.772282,4964.05,1903.33,,,1903.33,58.88,407169.55,,,,25.16,,,,,,,,,,,,,,,,,,,,,,,,,649.25,
+150,28.480614,5062.83,1903.33,,,1903.33,88.98,407169.55,,,,47.06,,,,,,,,,,,,,,,,,,,,,,,,,658.65,
+200,26.799530,4862.55,1903.33,,,1903.33,98.98,407170.09,,,,53.16,,,,,,,,,,,,,,,,,,,,,,,,,643.04,
+200,,,,25.372067,104459687670.5784

@@ -1,5 +1,6 @@
 import math
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 import torch
 import torch.nn as nn
@@ -42,6 +43,8 @@ class GPTConfig:
     aah_v3_warmup_steps: int = 0
     aah_v3_control_enabled: bool = True
     aah_v3_grouping_enabled: bool = True
+    aah_v3_W_min_gpu: int = 64
+    aah_v3_mask_cache_size: int = 16
 
 
 class CausalSelfAttention(nn.Module):
@@ -60,7 +63,6 @@ class CausalSelfAttention(nn.Module):
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()
         t_start = time.perf_counter()
-        t_control0 = time.perf_counter()
         with record_function("attn_qkv"):
             qkv = self.qkv(x)
             q, k, v = qkv.split(C, dim=2)
@@ -141,6 +143,7 @@ class AAHV2Attention(nn.Module):
             "full_mask",
             torch.tril(torch.ones(config.seq_len, config.seq_len)).view(1, 1, config.seq_len, config.seq_len),
         )
+        self.mask_cache = OrderedDict()
 
         self.controller = AAHV2Controller(
             feat_dim=6,
@@ -233,7 +236,7 @@ class AAHV2Attention(nn.Module):
             att = F.softmax(att, dim=-1)
             att = self.attn_drop(att)
             y = att @ v
-            return y, att
+            return y, att, 0.0
         chunk = min(self.local_chunk, T)
         y_chunks = []
         att_chunks = []
@@ -450,9 +453,13 @@ class AAHV3Attention(nn.Module):
         self.warmup_steps = max(0, int(config.aah_v3_warmup_steps))
         self.control_enabled = bool(config.aah_v3_control_enabled)
         self.grouping_enabled = bool(config.aah_v3_grouping_enabled)
+        self.w_min_gpu = max(1, int(config.aah_v3_W_min_gpu))
+        self.mask_cache_size = max(0, int(config.aah_v3_mask_cache_size))
         self.eval_mode = False
         self.cached_win_idx = None
         self.cached_head_to_group = None
+        self.cached_group_feats = None
+        self.cached_group_feats_step = None
         self.last_control_step = None
         self.current_step = None
         self.last_stats = {}
@@ -466,6 +473,7 @@ class AAHV3Attention(nn.Module):
             "full_mask",
             torch.tril(torch.ones(config.seq_len, config.seq_len)).view(1, 1, config.seq_len, config.seq_len),
         )
+        self.mask_cache = OrderedDict()
 
         self.controller = AAHV3Controller(
             feat_dim=9,
@@ -478,11 +486,15 @@ class AAHV3Attention(nn.Module):
         if not self.control_enabled:
             self.cached_win_idx = None
             self.cached_head_to_group = None
+            self.cached_group_feats = None
+            self.cached_group_feats_step = None
             self.last_control_step = None
 
     def reset_cache(self):
         self.cached_win_idx = None
         self.cached_head_to_group = None
+        self.cached_group_feats = None
+        self.cached_group_feats_step = None
         self.last_control_step = None
 
     def set_eval_mode(self, enabled: bool):
@@ -520,6 +532,73 @@ class AAHV3Attention(nn.Module):
             dim=-1,
         )
         return feats
+    def _groups_from_head_to_group(self, head_to_group):
+        if head_to_group is None:
+            return None
+        num_groups = int(head_to_group.max().item()) + 1 if head_to_group.numel() > 0 else 0
+        groups = [[] for _ in range(num_groups)]
+        for h in range(self.n_head):
+            g = int(head_to_group[h].item())
+            if g >= 0:
+                groups[g].append(h)
+        return groups
+
+    def _group_features_from_qkv(self, q, k, v, groups0):
+        if not groups0:
+            return torch.zeros((0, 9), device=q.device, dtype=q.dtype)
+        if self.last_stats:
+            last_entropy = torch.tensor(self.last_stats.get("head_entropy", [0.0] * self.n_head), device=q.device)
+            last_norm = torch.tensor(self.last_stats.get("head_norms", [0.0] * self.n_head), device=q.device)
+            last_usage = torch.tensor(self.last_stats.get("head_usage", [0.0] * self.n_head), device=q.device)
+        else:
+            last_entropy = torch.zeros(self.n_head, device=q.device)
+            last_norm = torch.zeros(self.n_head, device=q.device)
+            last_usage = torch.zeros(self.n_head, device=q.device)
+        feats = []
+        for heads in groups0:
+            if not heads:
+                continue
+            qg = q[:, heads]
+            kg = k[:, heads]
+            vg = v[:, heads]
+            q_mean = qg.abs().mean(dim=(0, 1, 2, 3))
+            q_std = qg.std(dim=(0, 1, 2, 3))
+            k_mean = kg.abs().mean(dim=(0, 1, 2, 3))
+            k_std = kg.std(dim=(0, 1, 2, 3))
+            v_mean = vg.abs().mean(dim=(0, 1, 2, 3))
+            v_std = vg.std(dim=(0, 1, 2, 3))
+            h_idx = torch.tensor(heads, device=q.device, dtype=torch.long)
+            ent = last_entropy[h_idx].mean()
+            norm = last_norm[h_idx].mean()
+            usage = last_usage[h_idx].mean()
+            feats.append(torch.stack([q_mean, q_std, k_mean, k_std, v_mean, v_std, ent, norm, usage], dim=0))
+        if not feats:
+            return torch.zeros((0, 9), device=q.device, dtype=q.dtype)
+        return torch.stack(feats, dim=0)
+
+    def _get_cached_group_feats(self, q, k, v, groups0):
+        if self.current_step is not None and self.cached_group_feats is not None and self.cached_group_feats_step is not None:
+            if (self.current_step - self.cached_group_feats_step) < self.control_interval:
+                return self.cached_group_feats
+        group_feats = self._group_features_from_qkv(q, k, v, groups0)
+        self.cached_group_feats = group_feats.detach()
+        self.cached_group_feats_step = self.current_step
+        return group_feats
+
+    def _build_group_hierarchy(self, groups0, group_feats):
+        levels = []
+        levels.append((groups0, group_feats))
+        if len(groups0) == 1:
+            return levels
+        feats_prev = group_feats
+        for _ in range(1, self.max_depth):
+            groups = self._cluster(feats_prev, self.super_threshold)
+            feats = self._aggregate(groups, feats_prev)
+            levels.append((groups, feats))
+            if len(groups) == 1:
+                break
+            feats_prev = feats
+        return levels
 
     def _cluster(self, feats, threshold, prev_groups=None):
         n = feats.size(0)
@@ -640,20 +719,39 @@ class AAHV3Attention(nn.Module):
             att = F.softmax(att, dim=-1)
             att = self.attn_drop(att)
             y = att @ v
-            return y, att
-        q_pos = torch.arange(0, T, device=q.device).unsqueeze(1)
-        k_pos = torch.arange(0, T, device=q.device).unsqueeze(0)
-        causal = k_pos <= q_pos
-        window_ok = k_pos >= (q_pos - W + 1)
+            return y, att, 0.0
+        mask, build_ms = self._get_window_mask(T, W, q.device)
         att = (q @ k.transpose(-2, -1)) * self.scale
-        att = att.masked_fill(~(causal & window_ok), float("-inf"))
+        att = att.masked_fill(~mask, float("-inf"))
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
         y = att @ v
-        return y, att
+        return y, att, build_ms
+
+    def _get_window_mask(self, T, W, device):
+        if not isinstance(self.mask_cache, OrderedDict):
+            self.mask_cache = OrderedDict(self.mask_cache)
+        key = (int(T), int(W), device.type, device.index)
+        cached = self.mask_cache.get(key)
+        if cached is not None:
+            self.mask_cache.move_to_end(key)
+            return cached, 0.0
+        t0 = time.perf_counter()
+        q_pos = torch.arange(0, T, device=device).unsqueeze(1)
+        k_pos = torch.arange(0, T, device=device).unsqueeze(0)
+        mask = (k_pos <= q_pos) & (k_pos >= (q_pos - W + 1))
+        build_ms = (time.perf_counter() - t0) * 1000.0
+        if self.mask_cache_size > 0:
+            self.mask_cache[key] = mask
+            self.mask_cache.move_to_end(key)
+            while len(self.mask_cache) > self.mask_cache_size:
+                self.mask_cache.popitem(last=False)
+        return mask, build_ms
 
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()
+        t_start = time.perf_counter()
+        t_control0 = time.perf_counter()
         with record_function("attn_qkv"):
             qkv = self.qkv(x)
             q, k, v = qkv.split(C, dim=2)
@@ -664,6 +762,7 @@ class AAHV3Attention(nn.Module):
         in_warmup = (self.current_step is not None) and (self.current_step < self.warmup_steps)
         shadow_win_idx = None
         shadow_logit_mean = None
+        t_control0 = time.perf_counter()
         if not self.control_enabled:
             t_attn0 = time.perf_counter()
             att = (q @ k.transpose(-2, -1)) * self.scale
@@ -676,6 +775,15 @@ class AAHV3Attention(nn.Module):
             y = self.resid_drop(self.proj(y))
             attn_time_ms = (time.perf_counter() - t_attn0) * 1000.0
             total_time_ms = (time.perf_counter() - t_start) * 1000.0
+            mask_time_ms = 0.0
+            control_time_ms = 0.0
+            lk_tensor = torch.full((self.n_head,), float(T), device=x.device)
+            w_tensor = lk_tensor.clone()
+            lk_mean = float(lk_tensor.mean().item())
+            lk_p90 = float(torch.quantile(lk_tensor, 0.9).item())
+            w_mean = float(w_tensor.mean().item())
+            w_min = float(w_tensor.min().item())
+            w_max = float(w_tensor.max().item())
             self.last_stats = {
                 "lq": T,
                 "lk": [T for _ in range(self.n_head)],
@@ -693,7 +801,13 @@ class AAHV3Attention(nn.Module):
                 "group_ratios": {},
                 "control_time_ms": 0.0,
                 "attn_time_ms": attn_time_ms,
-                "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
+                "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms - mask_time_ms),
+                "mask_time_ms": mask_time_ms,
+                "lk_mean": lk_mean,
+                "lk_p90": lk_p90,
+                "w_mean": w_mean,
+                "w_min": w_min,
+                "w_max": w_max,
             }
             if return_attn:
                 return y, att
@@ -705,60 +819,86 @@ class AAHV3Attention(nn.Module):
                 head_to_group = self.cached_head_to_group
                 group_change_rate = 0.0
             else:
-                feats = self._head_features(q, k, v)
-                if self.ema_feats is None or self.ema_feats.shape != feats.shape:
-                    self.ema_feats = feats.detach()
-                else:
-                    alpha = max(0.0, min(1.0, self.ema_alpha))
-                    self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
-                prev_groups = None
-                if self.cached_head_to_group is not None:
-                    prev_groups = self.cached_head_to_group
-                levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
-                parent_maps = self._parent_maps(levels)
-                group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
-                groups0 = levels[0][0]
-                head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
-                for gi, heads in enumerate(groups0):
-                    for h in heads:
-                        head_to_group[h] = gi
-                win_idx = group_win_idx[head_to_group]
-                if self.cached_head_to_group is None:
+                if self.cached_head_to_group is not None and self.grouping_enabled:
+                    head_to_group = self.cached_head_to_group
+                    groups0 = self._groups_from_head_to_group(head_to_group)
+                    group_feats = self._get_cached_group_feats(q, k, v, groups0)
+                    levels = self._build_group_hierarchy(groups0, group_feats)
+                    parent_maps = self._parent_maps(levels)
+                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    win_idx = group_win_idx[head_to_group]
                     group_change_rate = 0.0
                 else:
-                    group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
-                self.cached_head_to_group = head_to_group.detach().clone()
+                    feats = self._head_features(q, k, v)
+                    if self.ema_feats is None or self.ema_feats.shape != feats.shape:
+                        self.ema_feats = feats.detach()
+                    else:
+                        alpha = max(0.0, min(1.0, self.ema_alpha))
+                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
+                    prev_groups = None
+                    if self.cached_head_to_group is not None:
+                        prev_groups = self.cached_head_to_group
+                    levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                    parent_maps = self._parent_maps(levels)
+                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    groups0 = levels[0][0]
+                    head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
+                    for gi, heads in enumerate(groups0):
+                        for h in heads:
+                            head_to_group[h] = gi
+                    win_idx = group_win_idx[head_to_group]
+                    if self.cached_head_to_group is None:
+                        group_change_rate = 0.0
+                    else:
+                        group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
+                    self.cached_head_to_group = head_to_group.detach().clone()
+                    self.cached_group_feats = None
+                    self.cached_group_feats_step = None
                 self.cached_win_idx = win_idx.detach().clone()
                 self.last_control_step = self.current_step
         else:
             head_to_group = None
             group_change_rate = None
             if self.grouping_enabled:
-                feats = self._head_features(q, k, v)
-                if self.ema_feats is None or self.ema_feats.shape != feats.shape:
-                    self.ema_feats = feats.detach()
-                else:
-                    alpha = max(0.0, min(1.0, self.ema_alpha))
-                    self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
-                prev_groups = None
                 if self.cached_head_to_group is not None:
-                    prev_groups = self.cached_head_to_group
-                levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
-                parent_maps = self._parent_maps(levels)
-                group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
-                groups0 = levels[0][0]
-                head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
-                for gi, heads in enumerate(groups0):
-                    for h in heads:
-                        head_to_group[h] = gi
-                shadow_win_idx = group_win_idx[head_to_group]
-                logits = self.controller(levels[0][1])
-                shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
-                if self.cached_head_to_group is None:
+                    head_to_group = self.cached_head_to_group
+                    groups0 = self._groups_from_head_to_group(head_to_group)
+                    group_feats = self._get_cached_group_feats(q, k, v, groups0)
+                    levels = self._build_group_hierarchy(groups0, group_feats)
+                    parent_maps = self._parent_maps(levels)
+                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    shadow_win_idx = group_win_idx[head_to_group]
+                    logits = self.controller(levels[0][1])
+                    shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
                 else:
-                    group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
-                self.cached_head_to_group = head_to_group.detach().clone()
+                    feats = self._head_features(q, k, v)
+                    if self.ema_feats is None or self.ema_feats.shape != feats.shape:
+                        self.ema_feats = feats.detach()
+                    else:
+                        alpha = max(0.0, min(1.0, self.ema_alpha))
+                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
+                    prev_groups = None
+                    if self.cached_head_to_group is not None:
+                        prev_groups = self.cached_head_to_group
+                    levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                    parent_maps = self._parent_maps(levels)
+                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    groups0 = levels[0][0]
+                    head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
+                    for gi, heads in enumerate(groups0):
+                        for h in heads:
+                            head_to_group[h] = gi
+                    shadow_win_idx = group_win_idx[head_to_group]
+                    logits = self.controller(levels[0][1])
+                    shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
+                    if self.cached_head_to_group is None:
+                        group_change_rate = 0.0
+                    else:
+                        group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
+                    self.cached_head_to_group = head_to_group.detach().clone()
+                    self.cached_group_feats = None
+                    self.cached_group_feats_step = None
             win_idx = torch.full((self.n_head,), 0, device=x.device, dtype=torch.long)
             if T in self.windows:
                 win_full = self.windows.index(T)
@@ -767,7 +907,7 @@ class AAHV3Attention(nn.Module):
 
         lq = T
         window_vals = torch.tensor(self.windows, device=x.device, dtype=torch.float32)
-        w = window_vals[win_idx]
+        w = torch.clamp(window_vals[win_idx], min=float(self.w_min_gpu), max=float(T))
         lk_tensor = torch.clamp(w, min=1.0, max=float(T))
         total_elements = float((lq * lk_tensor).sum().item())
         baseline_elements = float(self.n_head * lq * lq)
@@ -778,6 +918,7 @@ class AAHV3Attention(nn.Module):
         head_usage = [0.0 for _ in range(self.n_head)]
         attn_maps = [None for _ in range(self.n_head)] if return_attn else None
         t_attn0 = time.perf_counter()
+        mask_time_ms = 0.0
 
         head_groups = {}
         for h in range(self.n_head):
@@ -792,7 +933,8 @@ class AAHV3Attention(nn.Module):
             qf = q_sel.reshape(Bc * Hc, Tc, Dc)
             kf = k_sel.reshape(Bc * Hc, Tc, Dc)
             vf = v_sel.reshape(Bc * Hc, Tc, Dc)
-            y_f, att_f = self._local_attention(qf, kf, vf, window)
+            y_f, att_f, mask_ms = self._local_attention(qf, kf, vf, window)
+            mask_time_ms += mask_ms
             y_h = y_f.view(Bc, Hc, Tc, Dc)
             outputs[:, heads] = y_h
             norms = y_h.norm(dim=-1).mean(dim=(0, 2))
@@ -815,6 +957,12 @@ class AAHV3Attention(nn.Module):
         y = self.resid_drop(self.proj(y))
         avg_window = float(w.mean().item())
         lk_list = lk_tensor.to(torch.int64).tolist()
+        total_time_ms = (time.perf_counter() - t_start) * 1000.0
+        lk_mean = float(lk_tensor.mean().item())
+        lk_p90 = float(torch.quantile(lk_tensor, 0.9).item())
+        w_mean = float(w.mean().item())
+        w_min = float(w.min().item())
+        w_max = float(w.max().item())
         group_heads = {}
         group_ratios = {}
         if head_to_group is not None:
@@ -843,6 +991,11 @@ class AAHV3Attention(nn.Module):
             "control_time_ms": control_time_ms,
             "attn_time_ms": attn_time_ms,
             "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
+            "lk_mean": lk_mean,
+            "lk_p90": lk_p90,
+            "w_mean": w_mean,
+            "w_min": w_min,
+            "w_max": w_max,
         }
         if return_attn:
             return y, attn_maps
