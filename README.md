@@ -99,6 +99,31 @@
 
 * Formalize AAH as an attention generalization.
 * Present empirical trade-offs and mechanistic insights.
+## Implementation Summary (AAH‑v3)
+
+**Baseline (MHA):**
+* Standard causal self‑attention with full context for all heads.
+* No control policy, grouping, or windowing.
+
+**AAH‑v3 core structures:**
+* **AAHV3Controller + AAHV3Attention** in `src/models/transformer.py`.
+* **Hierarchical grouping** of heads (head → group → supergroup) and top‑down window selection.
+* **Group‑level control**: controller operates on group features, window choices broadcast to heads.
+* **Control interval**: window assignments reused across steps to reduce overhead.
+* **Group‑feature caching** for the control interval.
+* **Control‑off fast path** uses full attention when disabled.
+* **Window clamp** (`W_min_gpu`) for GPU‑efficient minimum window size.
+* **Mask cache** for reusable window masks.
+
+**Instrumentation & logging:**
+* Timing metrics: control/attention/mask/overhead time (ms).
+* Effective‑length metrics: `Lk_mean`, `Lk_p90`, `W_mean`, `W_min`, `W_max`.
+* CSV + W&B logging in `scripts/train.py`.
+
+**Explicitly removed (not in current code):**
+* Skip deep hierarchy when few groups.
+* Precompute per‑window masks at init.
+* Disable shadow stats during training.
 
 ## Idea
 
@@ -202,30 +227,13 @@ This head-centric, compute-allocation perspective is not directly addressed in p
 
 ### Current Status
 
-* Research direction **locked** on **Asymmetric Attention Heads (AAH)** as the primary topic.
-* AAH is defined as a **head-level structural modification** of multi-head attention, not a change to the attention formula, KV cache, or sparse indexing.
-* The core hypothesis is that **attention heads do not need uniform computation**, and that uneven allocation of context range and resolution can preserve model quality while reducing cost.
-* **Kickoff execution started:** Phase 0 immediate action items defined (baseline model, datasets, metrics, logging).
+* Research direction **locked** on **Asymmetric Attention Heads (AAH)**.
+* AAH‑v3 implementation is stable with hierarchical group control, caching, and instrumentation.
+* Baseline and AAH‑v3 configs include 400‑step and 10k‑step runs (W&B + CSV).
+* The three experimental optimizations (skip deep hierarchy, precompute masks, disable shadow stats) were tested and removed.
 
-### Structural Progress
+### Next Steps (paper)
 
-* Established a clear baseline: **standard homogeneous Multi-Head Attention (MHA)**.
-* Defined the conceptual transition from homogeneous heads to **explicit head specialization**.
-* Formalized AAH as partitioning heads into functional groups (short-range / long-range / global), while keeping the external Transformer interface unchanged.
-
-### Originality Check
-
-* Compared AAH against:
-
-  * Asymmetric attention *theory* (query–key asymmetry)
-  * Sparse / approximate attention (indexing, LSH, retrieval-based)
-  * KV-cache optimizations (MQA, GQA)
-* Confirmed AAH occupies a **distinct, underexplored design axis**: head-level computational asymmetry.
-
-### Next Steps
-
-* Implement **AAH-v1** with range asymmetry as the minimal, safe starting point.
-* Run controlled ablations against vanilla MHA under equal parameter budgets.
-* Measure accuracy, compute cost, and head-level contribution statistics.
-
-This establishes a clean, original foundation for experimentation and thesis development.
+* Use the 10k baseline vs AAH‑v3 runs as primary results.
+* Summarize speed/accuracy trade‑offs and control overhead with the logged metrics.
+* Write methodology and ablation notes using the Implementation Summary above.
