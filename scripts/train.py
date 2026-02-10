@@ -7,6 +7,7 @@ import argparse
 import yaml
 import platform
 import resource
+from contextlib import nullcontext
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -46,7 +47,7 @@ def linear_warmup_cosine(step, warmup, total):
     return 0.5 * (1.0 + math.cos(math.pi * progress))
 
 
-def evaluate(model, loader, device, max_batches, log_progress=False):
+def evaluate(model, loader, device, max_batches, log_progress=False, use_bf16=False):
     model.eval()
     for block in model.blocks:
         attn = block.attn
@@ -54,7 +55,13 @@ def evaluate(model, loader, device, max_batches, log_progress=False):
             attn.set_eval_mode(True)
     losses = []
     t0 = time.time()
-    with torch.no_grad():
+    autocast_ctx = nullcontext()
+    if use_bf16:
+        if device == "cuda":
+            autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16)
+        elif device == "cpu":
+            autocast_ctx = torch.autocast("cpu", dtype=torch.bfloat16)
+    with torch.no_grad(), autocast_ctx:
         for i, (x, y) in enumerate(loader):
             if i >= max_batches:
                 break
@@ -78,9 +85,13 @@ def evaluate(model, loader, device, max_batches, log_progress=False):
 def get_memory_stats():
     gpu_alloc = None
     gpu_reserved = None
+    gpu_alloc_max = None
+    gpu_reserved_max = None
     if torch.cuda.is_available():
-        gpu_alloc = torch.cuda.max_memory_allocated() / (1024 ** 2)
-        gpu_reserved = torch.cuda.max_memory_reserved() / (1024 ** 2)
+        gpu_alloc = torch.cuda.memory_allocated() / (1024 ** 2)
+        gpu_reserved = torch.cuda.memory_reserved() / (1024 ** 2)
+        gpu_alloc_max = torch.cuda.max_memory_allocated() / (1024 ** 2)
+        gpu_reserved_max = torch.cuda.max_memory_reserved() / (1024 ** 2)
     cpu_rss = None
     try:
         rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -90,7 +101,7 @@ def get_memory_stats():
             cpu_rss = rss / 1024
     except Exception:
         pass
-    return gpu_alloc, gpu_reserved, cpu_rss
+    return gpu_alloc, gpu_reserved, gpu_alloc_max, gpu_reserved_max, cpu_rss
 
 
 def get_psutil_memory_mb():
@@ -100,6 +111,7 @@ def get_psutil_memory_mb():
         proc = psutil.Process(os.getpid())
         info = proc.memory_info()
         full = proc.memory_full_info()
+        vm = psutil.virtual_memory()
         def mb(x):
             return x / (1024 ** 2) if x is not None else None
         return {
@@ -111,6 +123,8 @@ def get_psutil_memory_mb():
             "psutil_uss_mb": mb(getattr(full, "uss", None)),
             "psutil_pss_mb": mb(getattr(full, "pss", None)),
             "psutil_swap_mb": mb(getattr(full, "swap", None)),
+            "psutil_ram_used_mb": mb(getattr(vm, "used", None)),
+            "psutil_ram_total_mb": mb(getattr(vm, "total", None)),
         }
     except Exception:
         return {}
@@ -129,6 +143,15 @@ def main():
     torch.manual_seed(exp["seed"])
 
     device = get_device(train["device"])
+    precision = train.get("precision", "fp32").lower()
+    use_bf16 = precision == "bf16"
+    if use_bf16:
+        if device == "cuda" and not torch.cuda.is_bf16_supported():
+            print("Warning: BF16 requested but not supported on this CUDA device. Falling back to FP32.")
+            use_bf16 = False
+        if device == "mps":
+            print("Warning: BF16 autocast not supported on MPS. Falling back to FP32.")
+            use_bf16 = False
 
     train_loader, val_loader, vocab_size = build_dataloaders(
         data["dataset"],
@@ -197,8 +220,10 @@ def main():
             "train_loss",
             "tok_s",
             "mem_mb",
-            "gpu_alloc_mb",
-            "gpu_reserved_mb",
+            \"gpu_alloc_mb\",
+            \"gpu_reserved_mb\",
+            \"gpu_alloc_max_mb\",
+            \"gpu_reserved_max_mb\",
             "cpu_rss_mb",
             "psutil_rss_mb",
             "psutil_vms_mb",
@@ -208,10 +233,13 @@ def main():
             "psutil_uss_mb",
             "psutil_pss_mb",
             "psutil_swap_mb",
+            \"psutil_ram_used_mb\",
+            \"psutil_ram_total_mb\",
             "val_loss",
             "val_ppl",
             "attn_elems",
             "attn_ratio",
+            \"attn_reduction\",
             "attn_lq",
             "attn_lk_per_layer",
             "head_entropy",
@@ -246,6 +274,11 @@ def main():
     while step < train["max_steps"]:
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
+            if step == 0 and device == "cuda":
+                try:
+                    print(f"autocast gpu dtype: {torch.get_autocast_gpu_dtype()}")
+                except Exception as exc:
+                    print(f"autocast gpu dtype: unavailable ({exc})")
             aah_v2_enabled = model_cfg.get("aah_v2_enabled", False)
             aah_v3_enabled = model_cfg.get("aah_v3_enabled", False)
             warmup_steps = model_cfg.get("aah_v2_warmup_steps", 0)
@@ -287,7 +320,14 @@ def main():
                     if hasattr(attn, "set_step"):
                         attn.set_step(step)
             step_t0 = time.time()
-            logits, loss = model(x, y)
+            autocast_ctx = nullcontext()
+            if use_bf16:
+                if device == "cuda":
+                    autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16)
+                elif device == "cpu":
+                    autocast_ctx = torch.autocast("cpu", dtype=torch.bfloat16)
+            with autocast_ctx:
+                logits, loss = model(x, y)
             if model_cfg.get("aah_v2_enabled", False):
                 if lambda_now > 0:
                     total_elements = 0.0
@@ -339,7 +379,7 @@ def main():
                 elapsed = time.time() - t0
                 tokens = train["batch_size"] * data["seq_len"] * train["log_interval"]
                 tok_per_sec = tokens / max(1e-9, elapsed)
-                gpu_alloc, gpu_reserved, cpu_rss = get_memory_stats()
+                gpu_alloc, gpu_reserved, gpu_alloc_max, gpu_reserved_max, cpu_rss = get_memory_stats()
                 ps_mem = get_psutil_memory_mb()
                 if gpu_alloc is not None:
                     mem = gpu_alloc
@@ -349,6 +389,7 @@ def main():
                     mem = 0.0
                 attn_elems = None
                 attn_ratio = None
+                attn_reduction = None
                 lq = None
                 lk_layers = []
                 head_entropy = []
@@ -415,6 +456,7 @@ def main():
                     if baseline_elements > 0:
                         attn_elems = total_elements
                         attn_ratio = total_elements / baseline_elements
+                        attn_reduction = 1.0 - attn_ratio
                 group_change_rates = [v for v in group_change_rates if v is not None]
                 group_change_rate = sum(group_change_rates) / len(group_change_rates) if group_change_rates else None
                 avg_window = sum(avg_windows) / len(avg_windows) if avg_windows else None
@@ -460,6 +502,10 @@ def main():
                         payload["perf/gpu_alloc_mb"] = gpu_alloc
                     if gpu_reserved is not None:
                         payload["perf/gpu_reserved_mb"] = gpu_reserved
+                    if gpu_alloc_max is not None:
+                        payload["perf/gpu_alloc_max_mb"] = gpu_alloc_max
+                    if gpu_reserved_max is not None:
+                        payload["perf/gpu_reserved_max_mb"] = gpu_reserved_max
                     if cpu_rss is not None:
                         payload["perf/cpu_rss_mb"] = cpu_rss
                     if ps_mem:
@@ -467,6 +513,8 @@ def main():
                     if attn_ratio is not None:
                         payload["perf/attn_elems"] = attn_elems
                         payload["perf/attn_ratio"] = attn_ratio
+                    if attn_reduction is not None:
+                        payload["perf/attn_reduction"] = attn_reduction
                     if group_change_rate is not None:
                         payload["aah/group_change_rate"] = group_change_rate
                     if avg_window is not None:
@@ -514,8 +562,10 @@ def main():
                         f"{loss.item():.6f}",
                         f"{tok_per_sec:.2f}",
                         f"{mem:.2f}",
-                        f"{gpu_alloc:.2f}" if gpu_alloc is not None else "",
-                        f"{gpu_reserved:.2f}" if gpu_reserved is not None else "",
+                        f\"{gpu_alloc:.2f}\" if gpu_alloc is not None else \"\",
+                        f\"{gpu_reserved:.2f}\" if gpu_reserved is not None else \"\",
+                        f\"{gpu_alloc_max:.2f}\" if gpu_alloc_max is not None else \"\",
+                        f\"{gpu_reserved_max:.2f}\" if gpu_reserved_max is not None else \"\",
                         f"{cpu_rss:.2f}" if cpu_rss is not None else "",
                         fmt(ps_mem.get("psutil_rss_mb")) if ps_mem else "",
                         fmt(ps_mem.get("psutil_vms_mb")) if ps_mem else "",
@@ -525,10 +575,13 @@ def main():
                         fmt(ps_mem.get("psutil_uss_mb")) if ps_mem else "",
                         fmt(ps_mem.get("psutil_pss_mb")) if ps_mem else "",
                         fmt(ps_mem.get("psutil_swap_mb")) if ps_mem else "",
+                        fmt(ps_mem.get(\"psutil_ram_used_mb\")) if ps_mem else \"\",
+                        fmt(ps_mem.get(\"psutil_ram_total_mb\")) if ps_mem else \"\",
                         "",
                         "",
                         f"{attn_elems:.2f}" if attn_elems is not None else "",
                         f"{attn_ratio:.6f}" if attn_ratio is not None else "",
+                        f\"{attn_reduction:.6f}\" if attn_reduction is not None else \"\",
                         str(lq) if lq is not None else "",
                         lk_serialized,
                         ent_serialized,
@@ -566,6 +619,7 @@ def main():
                     device,
                     train["eval_batches"],
                     log_progress=train.get("eval_log_progress", False),
+                    use_bf16=use_bf16,
                 )
                 eval_time_s = f"{eval_time:.2f}"
                 print(f"eval step {step} | loss {val_loss:.4f} | ppl {val_ppl:.2f}")

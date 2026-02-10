@@ -188,12 +188,15 @@ class AAHV2Attention(nn.Module):
         return (self.current_step - self.last_control_step) >= self.control_interval
 
     def _head_features(self, q, k, v):
-        q_mean = q.abs().mean(dim=(0, 2, 3))
-        q_std = q.std(dim=(0, 2, 3))
-        k_mean = k.abs().mean(dim=(0, 2, 3))
-        k_std = k.std(dim=(0, 2, 3))
-        v_mean = v.abs().mean(dim=(0, 2, 3))
-        v_std = v.std(dim=(0, 2, 3))
+        q_f = q.float()
+        k_f = k.float()
+        v_f = v.float()
+        q_mean = q_f.abs().mean(dim=(0, 2, 3))
+        q_std = q_f.std(dim=(0, 2, 3))
+        k_mean = k_f.abs().mean(dim=(0, 2, 3))
+        k_std = k_f.std(dim=(0, 2, 3))
+        v_mean = v_f.abs().mean(dim=(0, 2, 3))
+        v_std = v_f.std(dim=(0, 2, 3))
         feats = torch.stack([q_mean, q_std, k_mean, k_std, v_mean, v_std], dim=-1)
         return feats
 
@@ -303,6 +306,9 @@ class AAHV2Attention(nn.Module):
             q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
             k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
             v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        if not self._logged_attn_dtype:
+            self._logged_attn_dtype = True
+            print(f"AAHV3Attention q dtype: {q.dtype}")
 
         if self.control_enabled:
             use_cache = (not self._should_update_control()) and self.cached_win_idx is not None and self.cached_stride_idx is not None
@@ -378,11 +384,12 @@ class AAHV2Attention(nn.Module):
                 y_f, att_f = self._local_attention(qf, kf, vf, window)
             y_h = y_f.view(Bc, Hc, Tc, Dc)
             outputs[:, heads] = y_h
-            norms = y_h.norm(dim=-1).mean(dim=(0, 2))
+            norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
             for i, h in enumerate(heads):
                 head_norms[h] = float(norms[i].item())
             att_h = att_f.view(Bc, Hc, att_f.size(1), att_f.size(2))
-            ent = -(att_h * (att_h + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
+            att_h_f = att_h.float()
+            ent = -(att_h_f * (att_h_f + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
             ent = ent / max(1.0, math.log(att_h.size(-1)))
             for i, h in enumerate(heads):
                 head_entropy[h] = float(ent[i].item())
@@ -464,6 +471,7 @@ class AAHV3Attention(nn.Module):
         self.current_step = None
         self.last_stats = {}
         self.ema_feats = None
+        self._logged_attn_dtype = False
 
         self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
         self.proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
@@ -513,25 +521,28 @@ class AAHV3Attention(nn.Module):
         return (self.current_step - self.last_control_step) >= self.control_interval
 
     def _head_features(self, q, k, v):
-        q_mean = q.abs().mean(dim=(0, 2, 3))
-        q_std = q.std(dim=(0, 2, 3))
-        k_mean = k.abs().mean(dim=(0, 2, 3))
-        k_std = k.std(dim=(0, 2, 3))
-        v_mean = v.abs().mean(dim=(0, 2, 3))
-        v_std = v.std(dim=(0, 2, 3))
+        q_f = q.float()
+        k_f = k.float()
+        v_f = v.float()
+        q_mean = q_f.abs().mean(dim=(0, 2, 3))
+        q_std = q_f.std(dim=(0, 2, 3))
+        k_mean = k_f.abs().mean(dim=(0, 2, 3))
+        k_std = k_f.std(dim=(0, 2, 3))
+        v_mean = v_f.abs().mean(dim=(0, 2, 3))
+        v_std = v_f.std(dim=(0, 2, 3))
         if self.last_stats:
-            last_entropy = torch.tensor(self.last_stats.get("head_entropy", [0.0] * self.n_head), device=q.device)
-            last_norm = torch.tensor(self.last_stats.get("head_norms", [0.0] * self.n_head), device=q.device)
-            last_usage = torch.tensor(self.last_stats.get("head_usage", [0.0] * self.n_head), device=q.device)
+            last_entropy = torch.tensor(self.last_stats.get("head_entropy", [0.0] * self.n_head), device=q.device, dtype=torch.float32)
+            last_norm = torch.tensor(self.last_stats.get("head_norms", [0.0] * self.n_head), device=q.device, dtype=torch.float32)
+            last_usage = torch.tensor(self.last_stats.get("head_usage", [0.0] * self.n_head), device=q.device, dtype=torch.float32)
         else:
-            last_entropy = torch.zeros(self.n_head, device=q.device)
-            last_norm = torch.zeros(self.n_head, device=q.device)
-            last_usage = torch.zeros(self.n_head, device=q.device)
+            last_entropy = torch.zeros(self.n_head, device=q.device, dtype=torch.float32)
+            last_norm = torch.zeros(self.n_head, device=q.device, dtype=torch.float32)
+            last_usage = torch.zeros(self.n_head, device=q.device, dtype=torch.float32)
         feats = torch.stack(
             [q_mean, q_std, k_mean, k_std, v_mean, v_std, last_entropy, last_norm, last_usage],
             dim=-1,
         )
-        return feats
+        return feats.float()
     def _groups_from_head_to_group(self, head_to_group):
         if head_to_group is None:
             return None
@@ -545,22 +556,22 @@ class AAHV3Attention(nn.Module):
 
     def _group_features_from_qkv(self, q, k, v, groups0):
         if not groups0:
-            return torch.zeros((0, 9), device=q.device, dtype=q.dtype)
+            return torch.zeros((0, 9), device=q.device, dtype=torch.float32)
         if self.last_stats:
-            last_entropy = torch.tensor(self.last_stats.get("head_entropy", [0.0] * self.n_head), device=q.device)
-            last_norm = torch.tensor(self.last_stats.get("head_norms", [0.0] * self.n_head), device=q.device)
-            last_usage = torch.tensor(self.last_stats.get("head_usage", [0.0] * self.n_head), device=q.device)
+            last_entropy = torch.tensor(self.last_stats.get("head_entropy", [0.0] * self.n_head), device=q.device, dtype=torch.float32)
+            last_norm = torch.tensor(self.last_stats.get("head_norms", [0.0] * self.n_head), device=q.device, dtype=torch.float32)
+            last_usage = torch.tensor(self.last_stats.get("head_usage", [0.0] * self.n_head), device=q.device, dtype=torch.float32)
         else:
-            last_entropy = torch.zeros(self.n_head, device=q.device)
-            last_norm = torch.zeros(self.n_head, device=q.device)
-            last_usage = torch.zeros(self.n_head, device=q.device)
+            last_entropy = torch.zeros(self.n_head, device=q.device, dtype=torch.float32)
+            last_norm = torch.zeros(self.n_head, device=q.device, dtype=torch.float32)
+            last_usage = torch.zeros(self.n_head, device=q.device, dtype=torch.float32)
         feats = []
         for heads in groups0:
             if not heads:
                 continue
-            qg = q[:, heads]
-            kg = k[:, heads]
-            vg = v[:, heads]
+            qg = q[:, heads].float()
+            kg = k[:, heads].float()
+            vg = v[:, heads].float()
             q_mean = qg.abs().mean(dim=(0, 1, 2, 3))
             q_std = qg.std(dim=(0, 1, 2, 3))
             k_mean = kg.abs().mean(dim=(0, 1, 2, 3))
@@ -573,8 +584,8 @@ class AAHV3Attention(nn.Module):
             usage = last_usage[h_idx].mean()
             feats.append(torch.stack([q_mean, q_std, k_mean, k_std, v_mean, v_std, ent, norm, usage], dim=0))
         if not feats:
-            return torch.zeros((0, 9), device=q.device, dtype=q.dtype)
-        return torch.stack(feats, dim=0)
+            return torch.zeros((0, 9), device=q.device, dtype=torch.float32)
+        return torch.stack(feats, dim=0).float()
 
     def _get_cached_group_feats(self, q, k, v, groups0):
         if self.current_step is not None and self.cached_group_feats is not None and self.cached_group_feats_step is not None:
@@ -696,12 +707,12 @@ class AAHV3Attention(nn.Module):
         n_levels = len(levels)
         win_indices = [None] * n_levels
         top_groups, top_feats = levels[-1]
-        top_logits = self.controller(top_feats)
+        top_logits = self.controller(top_feats.float()).float()
         top_idx = top_logits.argmax(dim=-1)
         win_indices[-1] = top_idx
         for level in range(n_levels - 2, -1, -1):
             groups, feats = levels[level]
-            logits = self.controller(feats)
+            logits = self.controller(feats.float()).float()
             idx = logits.argmax(dim=-1)
             parent_map = parent_maps[level].to(device)
             parent_idx = win_indices[level + 1][parent_map]
@@ -831,10 +842,10 @@ class AAHV3Attention(nn.Module):
                 else:
                     feats = self._head_features(q, k, v)
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
-                        self.ema_feats = feats.detach()
+                        self.ema_feats = feats.detach().float()
                     else:
                         alpha = max(0.0, min(1.0, self.ema_alpha))
-                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
+                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach().float()
                     prev_groups = None
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
@@ -868,16 +879,16 @@ class AAHV3Attention(nn.Module):
                     parent_maps = self._parent_maps(levels)
                     group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
                     shadow_win_idx = group_win_idx[head_to_group]
-                    logits = self.controller(levels[0][1])
+                    logits = self.controller(levels[0][1].float()).float()
                     shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
                 else:
                     feats = self._head_features(q, k, v)
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
-                        self.ema_feats = feats.detach()
+                        self.ema_feats = feats.detach().float()
                     else:
                         alpha = max(0.0, min(1.0, self.ema_alpha))
-                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach()
+                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach().float()
                     prev_groups = None
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
@@ -890,7 +901,7 @@ class AAHV3Attention(nn.Module):
                         for h in heads:
                             head_to_group[h] = gi
                     shadow_win_idx = group_win_idx[head_to_group]
-                    logits = self.controller(levels[0][1])
+                    logits = self.controller(levels[0][1].float()).float()
                     shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     if self.cached_head_to_group is None:
                         group_change_rate = 0.0
@@ -937,13 +948,14 @@ class AAHV3Attention(nn.Module):
             mask_time_ms += mask_ms
             y_h = y_f.view(Bc, Hc, Tc, Dc)
             outputs[:, heads] = y_h
-            norms = y_h.norm(dim=-1).mean(dim=(0, 2))
+            norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
             for i, h in enumerate(heads):
                 head_norms[h] = float(norms[i].item())
             att_h = att_f.view(Bc, Hc, att_f.size(1), att_f.size(2))
-            ent = -(att_h * (att_h + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
+            att_h_f = att_h.float()
+            ent = -(att_h_f * (att_h_f + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
             ent = ent / max(1.0, math.log(att_h.size(-1)))
-            usage = att_h[..., -1].mean(dim=(0, 2))
+            usage = att_h_f[..., -1].mean(dim=(0, 2))
             for i, h in enumerate(heads):
                 head_entropy[h] = float(ent[i].item())
                 head_usage[h] = float(usage[i].item())
