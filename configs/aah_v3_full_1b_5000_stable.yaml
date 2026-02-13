@@ -1,5 +1,5 @@
 experiment:
-  name: "aah-v3-full-1b-30k-wt2"
+  name: "aah-v3-full-1b-5k-stable-wt2"
   seed: 1337
   variant: "aah_v3_full"
   out_dir: "experiments"
@@ -19,18 +19,19 @@ model:
   aah_v3_grouping_enabled: true
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16
-  aah_v3_control_interval: 200
-  aah_v3_sim_threshold: 0.7
-  aah_v3_super_threshold: 0.7
-  aah_v3_max_depth: 6
+  aah_v3_control_interval: 600
+  aah_v3_sim_threshold: 0.75
+  aah_v3_super_threshold: 0.8
+  aah_v3_max_depth: 4
   aah_v3_ema_alpha: 0.9
-  aah_v3_churn_penalty: 0.05
-  aah_v3_min_group_size: 2
-  aah_v3_warmup_steps: 100
+  aah_v3_churn_penalty: 0.02
+  aah_v3_min_group_size: 3
+  aah_v3_warmup_steps: 2000
+  aah_v3_W_min_gpu: 128
 train:
   batch_size: 8
   grad_accum: 1
-  max_steps: 30000
+  max_steps: 5000
   lr: 3.0e-4
   weight_decay: 0.1
   warmup_steps: 100

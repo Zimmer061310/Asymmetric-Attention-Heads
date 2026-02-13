@@ -1,5 +1,5 @@
 experiment:
-  name: "aah-v3-full-1b-30k-wt2"
+  name: "aah-v3-full-1b-5k-wt2"
   seed: 1337
   variant: "aah_v3_full"
   out_dir: "experiments"
@@ -30,7 +30,7 @@ model:
 train:
   batch_size: 8
   grad_accum: 1
-  max_steps: 30000
+  max_steps: 5000
   lr: 3.0e-4
   weight_decay: 0.1
   warmup_steps: 100

@@ -1,5 +1,5 @@
 experiment:
-  name: "aah-v3-control-off-1b-10k-wt2"
+  name: "aah-v3-control-off-1b-30k-wt2"
   seed: 1337
   variant: "aah_v3_control_off"
   out_dir: "experiments"
