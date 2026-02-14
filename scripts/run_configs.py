@@ -23,6 +23,7 @@ def main():
             "configs/aah_v3_control_off_1b_5000.yaml",
             "configs/aah_v3_full_1b_5000.yaml",
             "configs/aah_v3_full_1b_5000_stable.yaml",
+            "configs/aah_v3_full_1b_5000_stable2.yaml",
         ],
         help="List of config paths to run in order",
     )
