@@ -1,0 +1,384 @@
+'[Errno -3] Temporary failure in name resolution' thrown while requesting HEAD https://huggingface.co/datasets/wikitext/resolve/b08601e04326c79dfdd32d625aee71d232d685c3/wikitext.py
+Retrying in 1s [Retry 1/5].
+Using the latest cached version of the dataset since wikitext couldn't be found on the Hugging Face Hub
+Found the latest cached dataset configuration 'wikitext-2-raw-v1' at /home/zimmer/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3 (last modified on Sun Feb  8 13:14:16 2026).
+Token indices sequence length is longer than the specified maximum sequence length for this model (2428601 > 1024). Running this sequence through the model will result in indexing errors
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/zimmer/.netrc.
+wandb: W&B API key is configured. Use `wandb login --relogin` to force relogin
+wandb: Network error (ConnectionError), entering retry loop.
+wandb: setting up run q18alchl
+wandb: Tracking run with wandb version 0.24.2
+wandb: Run data is saved locally in /home/zimmer/Ena-AAH-v3/wandb/run-20260214_033934-q18alchl
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run aah-v3-full-1b-5k-stable-wt2
+wandb: ⭐️ View project at https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: 🚀 View run at https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/q18alchl
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/scripts/train.py:279: DeprecationWarning: torch.get_autocast_gpu_dtype() is deprecated. Please use torch.get_autocast_dtype('cuda') instead. (Triggered internally at /pytorch/torch/csrc/autograd/init.cpp:856.)
+  print(f"autocast gpu dtype: {torch.get_autocast_gpu_dtype()}")
+autocast gpu dtype: torch.float16
+step 50 | loss 59.7703 | tok/s 6143.8 | attn_elems 50331648 | attn_ratio 1.000
+step 100 | loss 60.0970 | tok/s 6613.3 | attn_elems 50331648 | attn_ratio 1.000
+step 150 | loss 45.1898 | tok/s 6528.5 | attn_elems 50331648 | attn_ratio 1.000
+step 200 | loss 31.0583 | tok/s 6657.3 | attn_elems 50331648 | attn_ratio 1.000
+step 250 | loss 23.2284 | tok/s 6669.9 | attn_elems 50331648 | attn_ratio 1.000
+step 300 | loss 19.8018 | tok/s 6516.4 | attn_elems 50331648 | attn_ratio 1.000
+step 350 | loss 17.1546 | tok/s 6752.4 | attn_elems 50331648 | attn_ratio 1.000
+step 400 | loss 17.2052 | tok/s 6529.1 | attn_elems 50331648 | attn_ratio 1.000
+step 450 | loss 15.6280 | tok/s 6517.7 | attn_elems 50331648 | attn_ratio 1.000
+step 500 | loss 16.4486 | tok/s 6627.8 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 500 | loss 13.5526 | ppl 768840.93
+step 550 | loss 13.2249 | tok/s 4138.7 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 600 | loss 12.8934 | tok/s 6579.6 | attn_elems 50331648 | attn_ratio 1.000
+step 650 | loss 11.7692 | tok/s 6429.1 | attn_elems 50331648 | attn_ratio 1.000
+step 700 | loss 11.5006 | tok/s 6500.3 | attn_elems 50331648 | attn_ratio 1.000
+step 750 | loss 10.9073 | tok/s 6749.9 | attn_elems 50331648 | attn_ratio 1.000
+step 800 | loss 10.8114 | tok/s 6469.6 | attn_elems 50331648 | attn_ratio 1.000
+step 850 | loss 11.0656 | tok/s 6487.7 | attn_elems 50331648 | attn_ratio 1.000
+step 900 | loss 10.4249 | tok/s 6474.2 | attn_elems 50331648 | attn_ratio 1.000
+step 950 | loss 10.4810 | tok/s 6472.3 | attn_elems 50331648 | attn_ratio 1.000
+step 1000 | loss 10.4960 | tok/s 6501.9 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 1000 | loss 8.2936 | ppl 3998.37
+step 1050 | loss 9.6243 | tok/s 3992.6 | attn_elems 50331648 | attn_ratio 1.000
+step 1100 | loss 9.8364 | tok/s 6358.6 | attn_elems 50331648 | attn_ratio 1.000
+step 1150 | loss 9.6599 | tok/s 6471.9 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 1200 | loss 9.5202 | tok/s 6437.5 | attn_elems 50331648 | attn_ratio 1.000
+step 1250 | loss 9.6364 | tok/s 6671.7 | attn_elems 50331648 | attn_ratio 1.000
+step 1300 | loss 9.7277 | tok/s 6677.6 | attn_elems 50331648 | attn_ratio 1.000
+step 1350 | loss 9.3247 | tok/s 6741.4 | attn_elems 50331648 | attn_ratio 1.000
+step 1400 | loss 10.1201 | tok/s 6530.2 | attn_elems 50331648 | attn_ratio 1.000
+step 1450 | loss 12.5668 | tok/s 6455.7 | attn_elems 50331648 | attn_ratio 1.000
+step 1500 | loss 9.1336 | tok/s 6679.2 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 1500 | loss 8.3097 | ppl 4063.24
+step 1550 | loss 9.2566 | tok/s 4015.9 | attn_elems 50331648 | attn_ratio 1.000
+step 1600 | loss 9.0256 | tok/s 6713.8 | attn_elems 50331648 | attn_ratio 1.000
+step 1650 | loss 9.1127 | tok/s 6471.3 | attn_elems 50331648 | attn_ratio 1.000
+step 1700 | loss 8.9221 | tok/s 6495.8 | attn_elems 50331648 | attn_ratio 1.000
+step 1750 | loss 9.0021 | tok/s 6480.9 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 1800 | loss 8.7850 | tok/s 6456.0 | attn_elems 50331648 | attn_ratio 1.000
+step 1850 | loss 8.7503 | tok/s 6442.4 | attn_elems 50331648 | attn_ratio 1.000
+step 1900 | loss 8.9245 | tok/s 6493.8 | attn_elems 50331648 | attn_ratio 1.000
+step 1950 | loss 8.6619 | tok/s 6472.8 | attn_elems 50331648 | attn_ratio 1.000
+step 2000 | loss 8.5266 | tok/s 6475.6 | attn_elems 50331648 | attn_ratio 1.000
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 2000 | loss 7.2482 | ppl 1405.57
+step 2050 | loss 8.7938 | tok/s 4271.6 | attn_elems 18481152 | attn_ratio 0.367
+step 2100 | loss 8.5792 | tok/s 7048.6 | attn_elems 18481152 | attn_ratio 0.367
+step 2150 | loss 8.9285 | tok/s 6854.2 | attn_elems 18481152 | attn_ratio 0.367
+step 2200 | loss 8.6232 | tok/s 6940.3 | attn_elems 18481152 | attn_ratio 0.367
+step 2250 | loss 8.4247 | tok/s 6950.8 | attn_elems 18481152 | attn_ratio 0.367
+step 2300 | loss 8.1692 | tok/s 6967.5 | attn_elems 18481152 | attn_ratio 0.367
+step 2350 | loss 8.7672 | tok/s 6944.0 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 2400 | loss 8.4939 | tok/s 6943.2 | attn_elems 18481152 | attn_ratio 0.367
+step 2450 | loss 8.5793 | tok/s 7291.7 | attn_elems 18481152 | attn_ratio 0.367
+step 2500 | loss 8.4818 | tok/s 6910.3 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 2500 | loss 7.1112 | ppl 1225.60
+step 2550 | loss 8.3995 | tok/s 4415.4 | attn_elems 18481152 | attn_ratio 0.367
+step 2600 | loss 8.2343 | tok/s 6889.7 | attn_elems 18481152 | attn_ratio 0.367
+step 2650 | loss 8.5352 | tok/s 7223.8 | attn_elems 18481152 | attn_ratio 0.367
+step 2700 | loss 8.1190 | tok/s 7007.4 | attn_elems 18481152 | attn_ratio 0.367
+step 2750 | loss 8.4479 | tok/s 7074.2 | attn_elems 18481152 | attn_ratio 0.367
+step 2800 | loss 8.3788 | tok/s 7065.5 | attn_elems 18481152 | attn_ratio 0.367
+step 2850 | loss 8.1892 | tok/s 6954.2 | attn_elems 18481152 | attn_ratio 0.367
+step 2900 | loss 8.2508 | tok/s 6843.1 | attn_elems 18481152 | attn_ratio 0.367
+step 2950 | loss 8.5945 | tok/s 7095.3 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 3000 | loss 8.3731 | tok/s 7293.5 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 3000 | loss 6.9540 | ppl 1047.35
+step 3050 | loss 8.0897 | tok/s 4422.0 | attn_elems 18481152 | attn_ratio 0.367
+step 3100 | loss 8.3130 | tok/s 6953.3 | attn_elems 18481152 | attn_ratio 0.367
+step 3150 | loss 8.3748 | tok/s 6936.7 | attn_elems 18481152 | attn_ratio 0.367
+step 3200 | loss 8.1360 | tok/s 7279.2 | attn_elems 18481152 | attn_ratio 0.367
+step 3250 | loss 8.2634 | tok/s 6906.1 | attn_elems 18481152 | attn_ratio 0.367
+step 3300 | loss 8.3301 | tok/s 7077.7 | attn_elems 18481152 | attn_ratio 0.367
+step 3350 | loss 8.1500 | tok/s 7069.1 | attn_elems 18481152 | attn_ratio 0.367
+step 3400 | loss 8.1730 | tok/s 6919.6 | attn_elems 18481152 | attn_ratio 0.367
+step 3450 | loss 8.2193 | tok/s 6948.6 | attn_elems 18481152 | attn_ratio 0.367
+step 3500 | loss 8.0532 | tok/s 6962.7 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 3500 | loss 6.8746 | ppl 967.43
+step 3550 | loss 8.3468 | tok/s 4563.0 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 3600 | loss 7.8807 | tok/s 6907.8 | attn_elems 18481152 | attn_ratio 0.367
+step 3650 | loss 7.7564 | tok/s 6867.9 | attn_elems 18481152 | attn_ratio 0.367
+step 3700 | loss 8.0045 | tok/s 6994.7 | attn_elems 18481152 | attn_ratio 0.367
+step 3750 | loss 8.0841 | tok/s 7601.6 | attn_elems 18481152 | attn_ratio 0.367
+step 3800 | loss 8.0998 | tok/s 6994.8 | attn_elems 18481152 | attn_ratio 0.367
+step 3850 | loss 8.0756 | tok/s 6964.1 | attn_elems 18481152 | attn_ratio 0.367
+step 3900 | loss 7.9134 | tok/s 6975.0 | attn_elems 18481152 | attn_ratio 0.367
+step 3950 | loss 7.8950 | tok/s 6924.2 | attn_elems 18481152 | attn_ratio 0.367
+step 4000 | loss 8.0455 | tok/s 6989.9 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 4000 | loss 6.8167 | ppl 912.95
+step 4050 | loss 7.8901 | tok/s 4610.8 | attn_elems 18481152 | attn_ratio 0.367
+step 4100 | loss 8.0618 | tok/s 6979.0 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 4150 | loss 8.0577 | tok/s 6958.3 | attn_elems 18481152 | attn_ratio 0.367
+step 4200 | loss 7.9877 | tok/s 6948.6 | attn_elems 18481152 | attn_ratio 0.367
+step 4250 | loss 8.0119 | tok/s 6963.4 | attn_elems 18481152 | attn_ratio 0.367
+step 4300 | loss 7.9366 | tok/s 7313.4 | attn_elems 18481152 | attn_ratio 0.367
+step 4350 | loss 7.7983 | tok/s 6956.6 | attn_elems 18481152 | attn_ratio 0.367
+step 4400 | loss 7.9850 | tok/s 6978.9 | attn_elems 18481152 | attn_ratio 0.367
+step 4450 | loss 8.0207 | tok/s 6925.9 | attn_elems 18481152 | attn_ratio 0.367
+step 4500 | loss 8.0179 | tok/s 7017.8 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 4500 | loss 6.7977 | ppl 895.80
+step 4550 | loss 7.7649 | tok/s 4608.4 | attn_elems 18481152 | attn_ratio 0.367
+step 4600 | loss 7.9468 | tok/s 7110.9 | attn_elems 18481152 | attn_ratio 0.367
+step 4650 | loss 7.7066 | tok/s 7090.4 | attn_elems 18481152 | attn_ratio 0.367
+step 4700 | loss 7.8868 | tok/s 7001.7 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+step 4750 | loss 8.1243 | tok/s 7099.3 | attn_elems 18481152 | attn_ratio 0.367
+step 4800 | loss 7.8041 | tok/s 7109.2 | attn_elems 18481152 | attn_ratio 0.367
+step 4850 | loss 8.0551 | tok/s 7496.1 | attn_elems 18481152 | attn_ratio 0.367
+step 4900 | loss 7.8500 | tok/s 7063.0 | attn_elems 18481152 | attn_ratio 0.367
+step 4950 | loss 7.9891 | tok/s 7058.7 | attn_elems 18481152 | attn_ratio 0.367
+step 5000 | loss 7.8642 | tok/s 7053.1 | attn_elems 18481152 | attn_ratio 0.367
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+eval batch 0/50
+eval batch 5/50
+eval batch 10/50
+eval batch 15/50
+eval batch 20/50
+eval batch 25/50
+eval batch 30/50
+eval batch 35/50
+eval batch 40/50
+eval batch 45/50
+eval step 5000 | loss 6.7719 | ppl 873.01
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33maah-v3-full-1b-5k-stable-wt2[0m at: [34mhttps://wandb.ai/zimmer061310-ena/ENA-AAH/runs/q18alchl[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20260214_033934-q18alchl/logs[0m
+Warning: Resource leak detected by SharedSignalPool, 2 Signals leaked.
