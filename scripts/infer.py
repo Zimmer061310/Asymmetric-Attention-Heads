@@ -71,6 +71,25 @@ def build_model(cfg, vocab_size, device):
         aah_v3_mask_cache_size=model_cfg.get("aah_v3_mask_cache_size", 16),
     )
     return GPT(gpt_cfg).to(device)
+def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
+    n_layer = int(model_cfg["n_layer"])
+    n_head = int(model_cfg["n_head"])
+    n_embd = int(model_cfg["n_embd"])
+    n_ff = int(model_cfg["n_ff"])
+    head_dim = n_embd // n_head
+
+    attn_full = float(n_layer * (4.0 * batch_size * seq_len * seq_len * n_embd))
+    if attn_elements_total is None:
+        attn_est = attn_full
+    else:
+        attn_est = float(4.0 * batch_size * head_dim * attn_elements_total)
+
+    non_attn = float(n_layer * (8.0 * batch_size * seq_len * n_embd * n_embd + 4.0 * batch_size * seq_len * n_embd * n_ff))
+    total_est = attn_est + non_attn
+    total_full = attn_full + non_attn
+    ratio = (total_est / total_full) if total_full > 0 else 1.0
+    reduction_pct = (1.0 - ratio) * 100.0
+    return attn_est, total_est, ratio, reduction_pct
 
 
 def evaluate(model, loader, device, max_batches, use_bf16=False):
@@ -86,6 +105,10 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
             autocast_ctx = torch.autocast("cpu", dtype=torch.bfloat16)
     losses = []
     total_tokens = 0
+    total_attn_flops = 0.0
+    total_flops = 0.0
+    total_full_flops = 0.0
+    n = 0
     t0 = time.time()
     with torch.no_grad(), autocast_ctx:
         for i, (x, y) in enumerate(loader):
@@ -95,6 +118,43 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
             _, loss = model(x, y)
             losses.append(loss.item())
             total_tokens += x.numel()
+            attn_elems = None
+            if getattr(model.config, "aah_v2_enabled", False) or getattr(model.config, "aah_v3_enabled", False):
+                te = 0.0
+                be = 0.0
+                for block in model.blocks:
+                    attn = block.attn
+                    if hasattr(attn, "last_stats"):
+                        te += attn.last_stats.get("total_elements", 0.0)
+                        be += attn.last_stats.get("baseline_elements", 0.0)
+                if be > 0:
+                    attn_elems = te
+            fa, ft, fr, _ = estimate_flops(
+                {
+                    "n_layer": model.config.n_layer,
+                    "n_head": model.config.n_head,
+                    "n_embd": model.config.n_embd,
+                    "n_ff": model.config.n_ff,
+                },
+                int(x.size(0)),
+                int(x.size(1)),
+                attn_elements_total=attn_elems,
+            )
+            _, ff_total, _, _ = estimate_flops(
+                {
+                    "n_layer": model.config.n_layer,
+                    "n_head": model.config.n_head,
+                    "n_embd": model.config.n_embd,
+                    "n_ff": model.config.n_ff,
+                },
+                int(x.size(0)),
+                int(x.size(1)),
+                attn_elements_total=None,
+            )
+            total_attn_flops += fa
+            total_flops += ft
+            total_full_flops += ff_total
+            n += 1
     elapsed = time.time() - t0
     for block in model.blocks:
         if hasattr(block.attn, "set_eval_mode"):
@@ -102,7 +162,11 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
     avg_loss = sum(losses) / max(1, len(losses))
     ppl = math.exp(avg_loss) if losses else float("inf")
     tok_s = total_tokens / max(1e-9, elapsed)
-    return avg_loss, ppl, tok_s, elapsed
+    flops_attn_est = total_attn_flops / max(1, n)
+    flops_total_est = total_flops / max(1, n)
+    flops_ratio = (total_flops / total_full_flops) if total_full_flops > 0 else 1.0
+    flops_reduction_pct = (1.0 - flops_ratio) * 100.0
+    return avg_loss, ppl, tok_s, elapsed, flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct
 
 
 def main():
@@ -116,6 +180,7 @@ def main():
     exp = cfg["experiment"]
     train = cfg["train"]
     data = cfg["data"]
+    use_wandb = train.get("use_wandb", False)
 
     device = get_device(train.get("device", "auto"))
     precision = train.get("precision", "fp32").lower()
@@ -135,11 +200,45 @@ def main():
     model.load_state_dict(state, strict=True)
 
     eval_batches = args.eval_batches if args.eval_batches is not None else train.get("eval_batches", 50)
-    val_loss, val_ppl, tok_s, elapsed = evaluate(model, val_loader, device, eval_batches, use_bf16=use_bf16)
+    val_loss, val_ppl, tok_s, elapsed, flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct = evaluate(
+        model, val_loader, device, eval_batches, use_bf16=use_bf16
+    )
     print(f"config={args.config}")
     print(f"checkpoint={ckpt}")
     print(f"device={device} precision={precision}")
     print(f"eval_batches={eval_batches} val_loss={val_loss:.6f} val_ppl={val_ppl:.4f} tok_s={tok_s:.2f} elapsed_s={elapsed:.2f}")
+    print(
+        f"aah/flops_attn_est={flops_attn_est:.2f} aah/flops_total_est={flops_total_est:.2f} "
+        f"aah/flops_ratio={flops_ratio:.6f} aah/flops_reduction_%={flops_reduction_pct:.4f}"
+    )
+    if use_wandb:
+        try:
+            import wandb
+            run = wandb.init(
+                project="ENA-AAH",
+                name=f"{exp['name']}-infer",
+                config=cfg,
+                job_type="inference",
+                reinit=True,
+            )
+            wandb.log(
+                {
+                    "infer/val_loss": val_loss,
+                    "infer/val_ppl": val_ppl,
+                    "infer/tok_s": tok_s,
+                    "infer/elapsed_s": elapsed,
+                    "infer/eval_batches": eval_batches,
+                    "infer/config": args.config,
+                    "infer/checkpoint": ckpt,
+                    "aah/flops_attn_est": flops_attn_est,
+                    "aah/flops_total_est": flops_total_est,
+                    "aah/flops_ratio": flops_ratio,
+                    "aah/flops_reduction_%": flops_reduction_pct,
+                }
+            )
+            run.finish()
+        except Exception as exc:
+            print(f"wandb logging failed: {exc}")
 
 
 if __name__ == "__main__":

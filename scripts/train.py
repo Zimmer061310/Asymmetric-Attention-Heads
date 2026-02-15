@@ -128,6 +128,25 @@ def get_psutil_memory_mb():
         }
     except Exception:
         return {}
+def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
+    n_layer = int(model_cfg["n_layer"])
+    n_head = int(model_cfg["n_head"])
+    n_embd = int(model_cfg["n_embd"])
+    n_ff = int(model_cfg["n_ff"])
+    head_dim = n_embd // n_head
+
+    attn_full = float(n_layer * (4.0 * batch_size * seq_len * seq_len * n_embd))
+    if attn_elements_total is None:
+        attn_est = attn_full
+    else:
+        attn_est = float(4.0 * batch_size * head_dim * attn_elements_total)
+
+    non_attn = float(n_layer * (8.0 * batch_size * seq_len * n_embd * n_embd + 4.0 * batch_size * seq_len * n_embd * n_ff))
+    total_est = attn_est + non_attn
+    total_full = attn_full + non_attn
+    ratio = (total_est / total_full) if total_full > 0 else 1.0
+    reduction_pct = (1.0 - ratio) * 100.0
+    return attn_est, total_est, ratio, reduction_pct
 
 
 def main():
@@ -240,6 +259,10 @@ def main():
             "attn_elems",
             "attn_ratio",
             "attn_reduction",
+            "flops_attn_est",
+            "flops_total_est",
+            "flops_ratio",
+            "flops_reduction_pct",
             "attn_lq",
             "attn_lk_per_layer",
             "head_entropy",
@@ -390,6 +413,10 @@ def main():
                 attn_elems = None
                 attn_ratio = None
                 attn_reduction = None
+                flops_attn_est = None
+                flops_total_est = None
+                flops_ratio = None
+                flops_reduction_pct = None
                 lq = None
                 lk_layers = []
                 head_entropy = []
@@ -457,6 +484,14 @@ def main():
                         attn_elems = total_elements
                         attn_ratio = total_elements / baseline_elements
                         attn_reduction = 1.0 - attn_ratio
+                b_cur = int(x.size(0))
+                t_cur = int(x.size(1))
+                flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct = estimate_flops(
+                    model_cfg,
+                    b_cur,
+                    t_cur,
+                    attn_elements_total=attn_elems,
+                )
                 group_change_rates = [v for v in group_change_rates if v is not None]
                 group_change_rate = sum(group_change_rates) / len(group_change_rates) if group_change_rates else None
                 avg_window = sum(avg_windows) / len(avg_windows) if avg_windows else None
@@ -515,6 +550,14 @@ def main():
                         payload["perf/attn_ratio"] = attn_ratio
                     if attn_reduction is not None:
                         payload["perf/attn_reduction"] = attn_reduction
+                    if flops_attn_est is not None:
+                        payload["aah/flops_attn_est"] = flops_attn_est
+                    if flops_total_est is not None:
+                        payload["aah/flops_total_est"] = flops_total_est
+                    if flops_ratio is not None:
+                        payload["aah/flops_ratio"] = flops_ratio
+                    if flops_reduction_pct is not None:
+                        payload["aah/flops_reduction_%"] = flops_reduction_pct
                     if group_change_rate is not None:
                         payload["aah/group_change_rate"] = group_change_rate
                     if avg_window is not None:
@@ -582,6 +625,10 @@ def main():
                         f"{attn_elems:.2f}" if attn_elems is not None else "",
                         f"{attn_ratio:.6f}" if attn_ratio is not None else "",
                         f"{attn_reduction:.6f}" if attn_reduction is not None else "",
+                        f"{flops_attn_est:.2f}" if flops_attn_est is not None else "",
+                        f"{flops_total_est:.2f}" if flops_total_est is not None else "",
+                        f"{flops_ratio:.6f}" if flops_ratio is not None else "",
+                        f"{flops_reduction_pct:.4f}" if flops_reduction_pct is not None else "",
                         str(lq) if lq is not None else "",
                         lk_serialized,
                         ent_serialized,
