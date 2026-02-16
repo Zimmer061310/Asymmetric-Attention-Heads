@@ -7,3 +7,6 @@ __pycache__/
 # Experiment artifacts
 wandb/
 experiments/*.pt
+
+# Experiment logs
+experiments/*.log
