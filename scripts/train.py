@@ -220,6 +220,10 @@ def main():
 
     use_wandb = train.get("use_wandb", False)
     log_csv = train.get("log_csv", False)
+    effective_log_interval = 50
+    cfg_log_interval = int(train.get("log_interval", 50))
+    if cfg_log_interval != effective_log_interval:
+        print(f"Info: overriding log_interval {cfg_log_interval} -> {effective_log_interval} for unified 50-step logging.")
     out_dir = exp.get("out_dir", "experiments")
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, f"{exp['name']}_{exp.get('variant','run')}.csv")
@@ -398,9 +402,9 @@ def main():
 
             step += 1
 
-            if step % train["log_interval"] == 0:
+            if step % effective_log_interval == 0:
                 elapsed = time.time() - t0
-                tokens = train["batch_size"] * data["seq_len"] * train["log_interval"]
+                tokens = train["batch_size"] * data["seq_len"] * effective_log_interval
                 tok_per_sec = tokens / max(1e-9, elapsed)
                 gpu_alloc, gpu_reserved, gpu_alloc_max, gpu_reserved_max, cpu_rss = get_memory_stats()
                 ps_mem = get_psutil_memory_mb()

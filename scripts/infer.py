@@ -92,7 +92,7 @@ def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
     return attn_est, total_est, ratio, reduction_pct
 
 
-def evaluate(model, loader, device, max_batches, use_bf16=False):
+def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False, wandb_run=None, log_interval=50):
     model.eval()
     for block in model.blocks:
         if hasattr(block.attn, "set_eval_mode"):
@@ -110,6 +110,12 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
     total_full_flops = 0.0
     n = 0
     t0 = time.time()
+    running_loss = 0.0
+    running_tokens = 0
+    running_attn_flops = 0.0
+    running_total_flops = 0.0
+    running_full_flops = 0.0
+    running_n = 0
     with torch.no_grad(), autocast_ctx:
         for i, (x, y) in enumerate(loader):
             if i >= max_batches:
@@ -155,6 +161,33 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
             total_flops += ft
             total_full_flops += ff_total
             n += 1
+            running_loss += loss.item()
+            running_tokens += x.numel()
+            running_attn_flops += fa
+            running_total_flops += ft
+            running_full_flops += ff_total
+            running_n += 1
+            if use_wandb and wandb_run is not None and ((i + 1) % log_interval == 0):
+                batch_elapsed = max(1e-9, time.time() - t0)
+                batch_ratio = (running_total_flops / running_full_flops) if running_full_flops > 0 else 1.0
+                wandb_run.log(
+                    {
+                        "infer/val_loss": running_loss / max(1, running_n),
+                        "infer/tok_s": running_tokens / batch_elapsed,
+                        "aah/flops_attn_est": running_attn_flops / max(1, running_n),
+                        "aah/flops_total_est": running_total_flops / max(1, running_n),
+                        "aah/flops_ratio": batch_ratio,
+                        "aah/flops_reduction_%": (1.0 - batch_ratio) * 100.0,
+                        "infer/step": i + 1,
+                    }
+                )
+                running_loss = 0.0
+                running_tokens = 0
+                running_attn_flops = 0.0
+                running_total_flops = 0.0
+                running_full_flops = 0.0
+                running_n = 0
+                t0 = time.time()
     elapsed = time.time() - t0
     for block in model.blocks:
         if hasattr(block.attn, "set_eval_mode"):
@@ -174,6 +207,7 @@ def main():
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", default=None, help="Override checkpoint path")
     parser.add_argument("--eval-batches", type=int, default=None)
+    parser.add_argument("--log-interval", type=int, default=50)
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -199,18 +233,7 @@ def main():
     state = torch.load(ckpt, map_location=device)
     model.load_state_dict(state, strict=True)
 
-    eval_batches = args.eval_batches if args.eval_batches is not None else train.get("eval_batches", 50)
-    val_loss, val_ppl, tok_s, elapsed, flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct = evaluate(
-        model, val_loader, device, eval_batches, use_bf16=use_bf16
-    )
-    print(f"config={args.config}")
-    print(f"checkpoint={ckpt}")
-    print(f"device={device} precision={precision}")
-    print(f"eval_batches={eval_batches} val_loss={val_loss:.6f} val_ppl={val_ppl:.4f} tok_s={tok_s:.2f} elapsed_s={elapsed:.2f}")
-    print(
-        f"aah/flops_attn_est={flops_attn_est:.2f} aah/flops_total_est={flops_total_est:.2f} "
-        f"aah/flops_ratio={flops_ratio:.6f} aah/flops_reduction_%={flops_reduction_pct:.4f}"
-    )
+    run = None
     if use_wandb:
         try:
             import wandb
@@ -221,7 +244,32 @@ def main():
                 job_type="inference",
                 reinit=True,
             )
-            wandb.log(
+        except Exception as exc:
+            print(f"wandb init failed: {exc}")
+            run = None
+
+    eval_batches = args.eval_batches if args.eval_batches is not None else train.get("eval_batches", 50)
+    val_loss, val_ppl, tok_s, elapsed, flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct = evaluate(
+        model,
+        val_loader,
+        device,
+        eval_batches,
+        use_bf16=use_bf16,
+        use_wandb=(run is not None),
+        wandb_run=run,
+        log_interval=args.log_interval,
+    )
+    print(f"config={args.config}")
+    print(f"checkpoint={ckpt}")
+    print(f"device={device} precision={precision}")
+    print(f"eval_batches={eval_batches} val_loss={val_loss:.6f} val_ppl={val_ppl:.4f} tok_s={tok_s:.2f} elapsed_s={elapsed:.2f}")
+    print(
+        f"aah/flops_attn_est={flops_attn_est:.2f} aah/flops_total_est={flops_total_est:.2f} "
+        f"aah/flops_ratio={flops_ratio:.6f} aah/flops_reduction_%={flops_reduction_pct:.4f}"
+    )
+    if run is not None:
+        try:
+            run.log(
                 {
                     "infer/val_loss": val_loss,
                     "infer/val_ppl": val_ppl,
