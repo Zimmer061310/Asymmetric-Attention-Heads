@@ -7,6 +7,7 @@ import argparse
 import yaml
 import platform
 import resource
+from collections import deque
 from contextlib import nullcontext
 import torch
 import torch.nn as nn
@@ -212,6 +213,12 @@ def main():
         aah_v3_warmup_steps=model_cfg.get("aah_v3_warmup_steps", 0),
         aah_v3_control_enabled=model_cfg.get("aah_v3_control_enabled", True),
         aah_v3_grouping_enabled=model_cfg.get("aah_v3_grouping_enabled", True),
+        aah_v3_W_min_gpu=model_cfg.get("aah_v3_W_min_gpu", 64),
+        aah_v3_mask_cache_size=model_cfg.get("aah_v3_mask_cache_size", 16),
+        aah_v3_resolution_ema_alpha=model_cfg.get("aah_v3_resolution_ema_alpha", 0.0),
+        aah_v3_resolution_collapse_min_frac=model_cfg.get("aah_v3_resolution_collapse_min_frac", 0.95),
+        aah_v3_resolution_collapse_max_frac=model_cfg.get("aah_v3_resolution_collapse_max_frac", 0.95),
+        aah_v3_post_warmup_ramp_steps=model_cfg.get("aah_v3_post_warmup_ramp_steps", 0),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -280,6 +287,16 @@ def main():
             "shadow_logit_mean",
             "group_heads",
             "group_ratios",
+            "resolution_mean",
+            "resolution_std",
+            "resolution_min_frac",
+            "resolution_max_frac",
+            "resolution_collapse_min",
+            "resolution_collapse_max",
+            "resolution_delta",
+            "branch_usage_freq",
+            "attn_ratio_std_ema",
+            "flops_ratio_std_ema",
             "lk_mean",
             "lk_p90",
             "w_mean",
@@ -296,6 +313,8 @@ def main():
     step = 0
     prev_head_groups = None
     lifespan_ema = None
+    ratio_window = deque(maxlen=20)
+    flops_ratio_window = deque(maxlen=20)
     model.train()
     t0 = time.time()
     while step < train["max_steps"]:
@@ -431,6 +450,14 @@ def main():
                 shadow_logit_mean = []
                 group_heads = []
                 group_ratios = []
+                resolution_means = []
+                resolution_stds = []
+                resolution_min_fracs = []
+                resolution_max_fracs = []
+                resolution_collapse_mins = []
+                resolution_collapse_maxs = []
+                resolution_deltas = []
+                branch_usage_freqs = []
                 lk_means = []
                 lk_p90s = []
                 w_means = []
@@ -466,6 +493,22 @@ def main():
                                 group_heads.append(attn.last_stats.get("group_heads"))
                             if "group_ratios" in attn.last_stats:
                                 group_ratios.append(attn.last_stats.get("group_ratios"))
+                            if "resolution_mean" in attn.last_stats:
+                                resolution_means.append(attn.last_stats.get("resolution_mean"))
+                            if "resolution_std" in attn.last_stats:
+                                resolution_stds.append(attn.last_stats.get("resolution_std"))
+                            if "resolution_min_frac" in attn.last_stats:
+                                resolution_min_fracs.append(attn.last_stats.get("resolution_min_frac"))
+                            if "resolution_max_frac" in attn.last_stats:
+                                resolution_max_fracs.append(attn.last_stats.get("resolution_max_frac"))
+                            if "resolution_collapse_min" in attn.last_stats:
+                                resolution_collapse_mins.append(1.0 if attn.last_stats.get("resolution_collapse_min") else 0.0)
+                            if "resolution_collapse_max" in attn.last_stats:
+                                resolution_collapse_maxs.append(1.0 if attn.last_stats.get("resolution_collapse_max") else 0.0)
+                            if "resolution_delta" in attn.last_stats and attn.last_stats.get("resolution_delta") is not None:
+                                resolution_deltas.append(attn.last_stats.get("resolution_delta"))
+                            if "branch_usage_freq" in attn.last_stats:
+                                branch_usage_freqs.append(attn.last_stats.get("branch_usage_freq"))
                             if "control_time_ms" in attn.last_stats:
                                 control_times.append(attn.last_stats.get("control_time_ms"))
                             if "attn_time_ms" in attn.last_stats:
@@ -498,6 +541,22 @@ def main():
                 )
                 group_change_rates = [v for v in group_change_rates if v is not None]
                 group_change_rate = sum(group_change_rates) / len(group_change_rates) if group_change_rates else None
+                resolution_mean = sum(resolution_means) / len(resolution_means) if resolution_means else None
+                resolution_std = sum(resolution_stds) / len(resolution_stds) if resolution_stds else None
+                resolution_min_frac = sum(resolution_min_fracs) / len(resolution_min_fracs) if resolution_min_fracs else None
+                resolution_max_frac = sum(resolution_max_fracs) / len(resolution_max_fracs) if resolution_max_fracs else None
+                resolution_collapse_min = (sum(resolution_collapse_mins) / len(resolution_collapse_mins)) if resolution_collapse_mins else None
+                resolution_collapse_max = (sum(resolution_collapse_maxs) / len(resolution_collapse_maxs)) if resolution_collapse_maxs else None
+                resolution_delta = sum(resolution_deltas) / len(resolution_deltas) if resolution_deltas else None
+                branch_usage_agg = {}
+                if branch_usage_freqs:
+                    for freq_dict in branch_usage_freqs:
+                        for k, v in freq_dict.items():
+                            ks = str(k)
+                            branch_usage_agg[ks] = branch_usage_agg.get(ks, 0.0) + float(v)
+                    denom = float(len(branch_usage_freqs))
+                    for k in list(branch_usage_agg.keys()):
+                        branch_usage_agg[k] = branch_usage_agg[k] / denom
                 avg_window = sum(avg_windows) / len(avg_windows) if avg_windows else None
                 lk_mean = sum(lk_means) / len(lk_means) if lk_means else None
                 lk_p90 = sum(lk_p90s) / len(lk_p90s) if lk_p90s else None
@@ -531,9 +590,17 @@ def main():
                         lifespan_ema = 1.0 - avg_reassign
                     else:
                         lifespan_ema = 0.9 * lifespan_ema + 0.1 * (1.0 - avg_reassign)
+                if attn_ratio is not None:
+                    ratio_window.append(float(attn_ratio))
+                if flops_ratio is not None:
+                    flops_ratio_window.append(float(flops_ratio))
+                attn_ratio_std_ema = float(torch.tensor(list(ratio_window)).std(unbiased=False).item()) if len(ratio_window) >= 2 else 0.0
+                flops_ratio_std_ema = float(torch.tensor(list(flops_ratio_window)).std(unbiased=False).item()) if len(flops_ratio_window) >= 2 else 0.0
                 msg = f"step {step} | loss {loss.item():.4f} | tok/s {tok_per_sec:.1f}"
                 if attn_ratio is not None:
                     msg += f" | attn_elems {attn_elems:.0f} | attn_ratio {attn_ratio:.3f}"
+                if resolution_std is not None:
+                    msg += f" | res_std {resolution_std:.2f}"
                 print(msg)
                 if use_wandb:
                     payload = {"train/loss": loss.item(), "perf/tok_s": tok_per_sec, "perf/mem_mb": mem, "step": step}
@@ -552,6 +619,7 @@ def main():
                     if attn_ratio is not None:
                         payload["perf/attn_elems"] = attn_elems
                         payload["perf/attn_ratio"] = attn_ratio
+                        payload["aah/attn_ratio"] = attn_ratio
                     if attn_reduction is not None:
                         payload["perf/attn_reduction"] = attn_reduction
                     if flops_attn_est is not None:
@@ -560,6 +628,9 @@ def main():
                         payload["aah/flops_total_est"] = flops_total_est
                     if flops_ratio is not None:
                         payload["aah/flops_ratio"] = flops_ratio
+                        payload["aah/flops_ratio_std_ema"] = flops_ratio_std_ema
+                    if attn_ratio is not None:
+                        payload["aah/attn_ratio_std_ema"] = attn_ratio_std_ema
                     if flops_reduction_pct is not None:
                         payload["aah/flops_reduction_%"] = flops_reduction_pct
                     if group_change_rate is not None:
@@ -588,6 +659,22 @@ def main():
                         payload["aah/shadow_logit_mean"] = shadow_logit_mean[0]
                     if group_ratios:
                         payload["aah/group_ratios"] = group_ratios[0]
+                    if resolution_mean is not None:
+                        payload["aah/resolution_mean"] = resolution_mean
+                    if resolution_std is not None:
+                        payload["aah/resolution_std"] = resolution_std
+                    if resolution_min_frac is not None:
+                        payload["aah/resolution_min_frac"] = resolution_min_frac
+                    if resolution_max_frac is not None:
+                        payload["aah/resolution_max_frac"] = resolution_max_frac
+                    if resolution_collapse_min is not None:
+                        payload["aah/resolution_collapse_min"] = resolution_collapse_min
+                    if resolution_collapse_max is not None:
+                        payload["aah/resolution_collapse_max"] = resolution_collapse_max
+                    if resolution_delta is not None:
+                        payload["aah/resolution_delta"] = resolution_delta
+                    if branch_usage_agg:
+                        payload["aah/branch_usage_freq"] = branch_usage_agg
                     if avg_overlap is not None:
                         payload["aah/group_overlap"] = avg_overlap
                     if avg_reassign is not None:
@@ -646,6 +733,16 @@ def main():
                         "|".join([",".join(f"{v:.6f}" for v in g) for g in shadow_logit_mean]) if shadow_logit_mean else "",
                         str(group_heads[0]) if group_heads else "",
                         str(group_ratios[0]) if group_ratios else "",
+                        fmt(resolution_mean),
+                        fmt(resolution_std),
+                        fmt(resolution_min_frac),
+                        fmt(resolution_max_frac),
+                        fmt(resolution_collapse_min),
+                        fmt(resolution_collapse_max),
+                        fmt(resolution_delta),
+                        str(branch_usage_agg) if branch_usage_agg else "",
+                        fmt(attn_ratio_std_ema),
+                        fmt(flops_ratio_std_ema),
                         fmt(lk_mean),
                         fmt(lk_p90),
                         fmt(w_mean),

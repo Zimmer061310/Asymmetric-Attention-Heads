@@ -45,6 +45,10 @@ class GPTConfig:
     aah_v3_grouping_enabled: bool = True
     aah_v3_W_min_gpu: int = 64
     aah_v3_mask_cache_size: int = 16
+    aah_v3_resolution_ema_alpha: float = 0.0
+    aah_v3_resolution_collapse_min_frac: float = 0.95
+    aah_v3_resolution_collapse_max_frac: float = 0.95
+    aah_v3_post_warmup_ramp_steps: int = 0
 
 
 class CausalSelfAttention(nn.Module):
@@ -462,6 +466,10 @@ class AAHV3Attention(nn.Module):
         self.grouping_enabled = bool(config.aah_v3_grouping_enabled)
         self.w_min_gpu = max(1, int(config.aah_v3_W_min_gpu))
         self.mask_cache_size = max(0, int(config.aah_v3_mask_cache_size))
+        self.resolution_ema_alpha = float(config.aah_v3_resolution_ema_alpha)
+        self.resolution_collapse_min_frac = float(config.aah_v3_resolution_collapse_min_frac)
+        self.resolution_collapse_max_frac = float(config.aah_v3_resolution_collapse_max_frac)
+        self.post_warmup_ramp_steps = max(0, int(config.aah_v3_post_warmup_ramp_steps))
         self.eval_mode = False
         self.cached_win_idx = None
         self.cached_head_to_group = None
@@ -471,6 +479,7 @@ class AAHV3Attention(nn.Module):
         self.current_step = None
         self.last_stats = {}
         self.ema_feats = None
+        self.ema_win_idx = None
         self._logged_attn_dtype = False
 
         self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
@@ -497,6 +506,7 @@ class AAHV3Attention(nn.Module):
             self.cached_group_feats = None
             self.cached_group_feats_step = None
             self.last_control_step = None
+            self.ema_win_idx = None
 
     def reset_cache(self):
         self.cached_win_idx = None
@@ -504,6 +514,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_feats = None
         self.cached_group_feats_step = None
         self.last_control_step = None
+        self.ema_win_idx = None
 
     def set_eval_mode(self, enabled: bool):
         self.eval_mode = bool(enabled)
@@ -773,6 +784,7 @@ class AAHV3Attention(nn.Module):
         in_warmup = (self.current_step is not None) and (self.current_step < self.warmup_steps)
         shadow_win_idx = None
         shadow_logit_mean = None
+        resolution_delta = None
         t_control0 = time.perf_counter()
         if not self.control_enabled:
             t_attn0 = time.perf_counter()
@@ -819,6 +831,15 @@ class AAHV3Attention(nn.Module):
                 "w_mean": w_mean,
                 "w_min": w_min,
                 "w_max": w_max,
+                "resolution_per_head": [float(T) for _ in range(self.n_head)],
+                "resolution_mean": float(T),
+                "resolution_std": 0.0,
+                "resolution_min_frac": 0.0,
+                "resolution_max_frac": 1.0,
+                "resolution_collapse_min": False,
+                "resolution_collapse_max": True,
+                "resolution_delta": 0.0,
+                "branch_usage_freq": {int(T): 1.0},
             }
             if return_attn:
                 return y, att
@@ -829,7 +850,9 @@ class AAHV3Attention(nn.Module):
                 win_idx = self.cached_win_idx
                 head_to_group = self.cached_head_to_group
                 group_change_rate = 0.0
+                resolution_delta = 0.0
             else:
+                prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
                 if self.cached_head_to_group is not None and self.grouping_enabled:
                     head_to_group = self.cached_head_to_group
                     groups0 = self._groups_from_head_to_group(head_to_group)
@@ -865,6 +888,8 @@ class AAHV3Attention(nn.Module):
                     self.cached_head_to_group = head_to_group.detach().clone()
                     self.cached_group_feats = None
                     self.cached_group_feats_step = None
+                if prev_win_idx is not None:
+                    resolution_delta = float((win_idx.float() - prev_win_idx.float()).abs().mean().item())
                 self.cached_win_idx = win_idx.detach().clone()
                 self.last_control_step = self.current_step
         else:
@@ -914,6 +939,27 @@ class AAHV3Attention(nn.Module):
             if T in self.windows:
                 win_full = self.windows.index(T)
                 win_idx = torch.full((self.n_head,), win_full, device=x.device, dtype=torch.long)
+        if self.control_enabled and not in_warmup and self.resolution_ema_alpha > 0.0:
+            alpha = max(0.0, min(1.0, self.resolution_ema_alpha))
+            win_idx_f = win_idx.float()
+            if self.ema_win_idx is None or self.ema_win_idx.shape != win_idx_f.shape:
+                self.ema_win_idx = win_idx_f.detach().clone()
+            else:
+                self.ema_win_idx = alpha * self.ema_win_idx + (1.0 - alpha) * win_idx_f.detach()
+            win_idx = self.ema_win_idx.round().clamp(0, len(self.windows) - 1).to(torch.long)
+        if (
+            self.control_enabled
+            and not in_warmup
+            and self.post_warmup_ramp_steps > 0
+            and self.current_step is not None
+        ):
+            ramp_progress = (self.current_step - self.warmup_steps + 1) / max(1, self.post_warmup_ramp_steps)
+            ramp_progress = max(0.0, min(1.0, float(ramp_progress)))
+            if ramp_progress < 1.0:
+                full_idx = self.windows.index(T) if T in self.windows else 0
+                full_idx_f = torch.full_like(win_idx, full_idx, dtype=torch.float32)
+                win_idx_f = win_idx.float()
+                win_idx = (ramp_progress * win_idx_f + (1.0 - ramp_progress) * full_idx_f).round().to(torch.long)
         control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if self.control_enabled else 0.0
 
         lq = T
@@ -975,8 +1021,16 @@ class AAHV3Attention(nn.Module):
         w_mean = float(w.mean().item())
         w_min = float(w.min().item())
         w_max = float(w.max().item())
+        resolution_std = float(w.std(unbiased=False).item()) if w.numel() > 1 else 0.0
+        min_window = float(min(self.windows))
+        max_window = float(max(self.windows))
+        resolution_min_frac = float((w == min_window).float().mean().item())
+        resolution_max_frac = float((w == max_window).float().mean().item())
+        resolution_collapse_min = resolution_min_frac >= self.resolution_collapse_min_frac
+        resolution_collapse_max = resolution_max_frac >= self.resolution_collapse_max_frac
         group_heads = {}
         group_ratios = {}
+        branch_usage_freq = {}
         if head_to_group is not None:
             for h in range(self.n_head):
                 g = int(head_to_group[h].item())
@@ -985,6 +1039,8 @@ class AAHV3Attention(nn.Module):
                 win_vals = [float(w[int(win_idx[h].item())].item()) for h in heads]
                 avg_w = sum(win_vals) / max(1, len(win_vals))
                 group_ratios[g] = avg_w / float(lq)
+        for window, heads in head_groups.items():
+            branch_usage_freq[int(window)] = len(heads) / float(self.n_head)
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
@@ -1000,14 +1056,24 @@ class AAHV3Attention(nn.Module):
             "shadow_logit_mean": shadow_logit_mean if shadow_logit_mean is not None else [],
             "group_heads": group_heads,
             "group_ratios": group_ratios,
+            "branch_usage_freq": branch_usage_freq,
             "control_time_ms": control_time_ms,
             "attn_time_ms": attn_time_ms,
             "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
+            "mask_time_ms": mask_time_ms,
             "lk_mean": lk_mean,
             "lk_p90": lk_p90,
             "w_mean": w_mean,
             "w_min": w_min,
             "w_max": w_max,
+            "resolution_per_head": lk_list,
+            "resolution_mean": w_mean,
+            "resolution_std": resolution_std,
+            "resolution_min_frac": resolution_min_frac,
+            "resolution_max_frac": resolution_max_frac,
+            "resolution_collapse_min": resolution_collapse_min,
+            "resolution_collapse_max": resolution_collapse_max,
+            "resolution_delta": resolution_delta,
         }
         if return_attn:
             return y, attn_maps

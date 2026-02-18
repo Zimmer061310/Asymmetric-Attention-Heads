@@ -69,6 +69,10 @@ def build_model(cfg, vocab_size, device):
         aah_v3_grouping_enabled=model_cfg.get("aah_v3_grouping_enabled", True),
         aah_v3_W_min_gpu=model_cfg.get("aah_v3_W_min_gpu", 64),
         aah_v3_mask_cache_size=model_cfg.get("aah_v3_mask_cache_size", 16),
+        aah_v3_resolution_ema_alpha=model_cfg.get("aah_v3_resolution_ema_alpha", 0.0),
+        aah_v3_resolution_collapse_min_frac=model_cfg.get("aah_v3_resolution_collapse_min_frac", 0.95),
+        aah_v3_resolution_collapse_max_frac=model_cfg.get("aah_v3_resolution_collapse_max_frac", 0.95),
+        aah_v3_post_warmup_ramp_steps=model_cfg.get("aah_v3_post_warmup_ramp_steps", 0),
     )
     return GPT(gpt_cfg).to(device)
 def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
@@ -110,12 +114,10 @@ def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False
     total_full_flops = 0.0
     n = 0
     t0 = time.time()
-    running_loss = 0.0
-    running_tokens = 0
-    running_attn_flops = 0.0
-    running_total_flops = 0.0
-    running_full_flops = 0.0
-    running_n = 0
+    resolution_per_head_sum = None
+    resolution_per_head_count = 0
+    branch_usage_sum = {}
+    branch_usage_count = 0
     with torch.no_grad(), autocast_ctx:
         for i, (x, y) in enumerate(loader):
             if i >= max_batches:
@@ -161,33 +163,25 @@ def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False
             total_flops += ft
             total_full_flops += ff_total
             n += 1
-            running_loss += loss.item()
-            running_tokens += x.numel()
-            running_attn_flops += fa
-            running_total_flops += ft
-            running_full_flops += ff_total
-            running_n += 1
-            if use_wandb and wandb_run is not None and ((i + 1) % log_interval == 0):
-                batch_elapsed = max(1e-9, time.time() - t0)
-                batch_ratio = (running_total_flops / running_full_flops) if running_full_flops > 0 else 1.0
-                wandb_run.log(
-                    {
-                        "infer/val_loss": running_loss / max(1, running_n),
-                        "infer/tok_s": running_tokens / batch_elapsed,
-                        "aah/flops_attn_est": running_attn_flops / max(1, running_n),
-                        "aah/flops_total_est": running_total_flops / max(1, running_n),
-                        "aah/flops_ratio": batch_ratio,
-                        "aah/flops_reduction_%": (1.0 - batch_ratio) * 100.0,
-                        "infer/step": i + 1,
-                    }
-                )
-                running_loss = 0.0
-                running_tokens = 0
-                running_attn_flops = 0.0
-                running_total_flops = 0.0
-                running_full_flops = 0.0
-                running_n = 0
-                t0 = time.time()
+            if getattr(model.config, "aah_v2_enabled", False) or getattr(model.config, "aah_v3_enabled", False):
+                for block in model.blocks:
+                    attn = block.attn
+                    if not hasattr(attn, "last_stats"):
+                        continue
+                    lk = attn.last_stats.get("lk", [])
+                    if lk:
+                        lk_t = torch.tensor(lk, dtype=torch.float32)
+                        if resolution_per_head_sum is None:
+                            resolution_per_head_sum = torch.zeros_like(lk_t)
+                        if resolution_per_head_sum.shape == lk_t.shape:
+                            resolution_per_head_sum += lk_t
+                            resolution_per_head_count += 1
+                    branch_usage = attn.last_stats.get("branch_usage_freq", {})
+                    if branch_usage:
+                        for k, v in branch_usage.items():
+                            ks = str(k)
+                            branch_usage_sum[ks] = branch_usage_sum.get(ks, 0.0) + float(v)
+                        branch_usage_count += 1
     elapsed = time.time() - t0
     for block in model.blocks:
         if hasattr(block.attn, "set_eval_mode"):
@@ -199,7 +193,25 @@ def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False
     flops_total_est = total_flops / max(1, n)
     flops_ratio = (total_flops / total_full_flops) if total_full_flops > 0 else 1.0
     flops_reduction_pct = (1.0 - flops_ratio) * 100.0
-    return avg_loss, ppl, tok_s, elapsed, flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct
+    resolution_per_head_mean = None
+    if resolution_per_head_sum is not None and resolution_per_head_count > 0:
+        resolution_per_head_mean = (resolution_per_head_sum / float(resolution_per_head_count)).tolist()
+    branch_usage_mean = {}
+    if branch_usage_count > 0:
+        for k, v in branch_usage_sum.items():
+            branch_usage_mean[k] = v / float(branch_usage_count)
+    return (
+        avg_loss,
+        ppl,
+        tok_s,
+        elapsed,
+        flops_attn_est,
+        flops_total_est,
+        flops_ratio,
+        flops_reduction_pct,
+        resolution_per_head_mean,
+        branch_usage_mean,
+    )
 
 
 def main():
@@ -249,7 +261,18 @@ def main():
             run = None
 
     eval_batches = args.eval_batches if args.eval_batches is not None else train.get("eval_batches", 50)
-    val_loss, val_ppl, tok_s, elapsed, flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct = evaluate(
+    (
+        val_loss,
+        val_ppl,
+        tok_s,
+        elapsed,
+        flops_attn_est,
+        flops_total_est,
+        flops_ratio,
+        flops_reduction_pct,
+        resolution_per_head_mean,
+        branch_usage_mean,
+    ) = evaluate(
         model,
         val_loader,
         device,
@@ -267,6 +290,10 @@ def main():
         f"aah/flops_attn_est={flops_attn_est:.2f} aah/flops_total_est={flops_total_est:.2f} "
         f"aah/flops_ratio={flops_ratio:.6f} aah/flops_reduction_%={flops_reduction_pct:.4f}"
     )
+    if resolution_per_head_mean is not None:
+        print(f"aah/resolution_per_head_mean={resolution_per_head_mean}")
+    if branch_usage_mean:
+        print(f"aah/branch_usage_freq={branch_usage_mean}")
     if run is not None:
         try:
             run.log(
@@ -282,6 +309,8 @@ def main():
                     "aah/flops_total_est": flops_total_est,
                     "aah/flops_ratio": flops_ratio,
                     "aah/flops_reduction_%": flops_reduction_pct,
+                    "aah/resolution_per_head_mean": resolution_per_head_mean,
+                    "aah/branch_usage_freq": branch_usage_mean,
                 }
             )
             run.finish()
