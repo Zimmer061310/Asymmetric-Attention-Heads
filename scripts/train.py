@@ -7,6 +7,7 @@ import argparse
 import yaml
 import platform
 import resource
+import traceback
 from collections import deque
 from contextlib import nullcontext
 import torch
@@ -236,10 +237,13 @@ def main():
     csv_path = os.path.join(out_dir, f"{exp['name']}_{exp.get('variant','run')}.csv")
     csv_file = None
     csv_writer = None
+    wandb_mod = None
     if use_wandb:
         try:
             import wandb
-            wandb.init(project="ENA-AAH", name=exp["name"], config=cfg)
+            wandb_mod = wandb
+            wandb_mod.init(project="ENA-AAH", name=exp["name"], config=cfg)
+            wandb_mod.log({"run/started": 1, "step": 0})
         except Exception:
             use_wandb = False
     if log_csv:
@@ -317,9 +321,11 @@ def main():
     flops_ratio_window = deque(maxlen=20)
     model.train()
     t0 = time.time()
-    while step < train["max_steps"]:
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+    crash_log_path = os.path.join(out_dir, f"{exp['name']}_crash.log")
+    try:
+        while step < train["max_steps"]:
+            for x, y in train_loader:
+                x, y = x.to(device), y.to(device)
             if step == 0 and device == "cuda":
                 try:
                     print(f"autocast gpu dtype: {torch.get_autocast_gpu_dtype()}")
@@ -776,12 +782,32 @@ def main():
                 if csv_writer:
                     csv_writer.writerow([step, "", "", "", f"{val_loss:.6f}", f"{val_ppl:.4f}"])
 
-            if step >= train["max_steps"]:
-                break
+                if step >= train["max_steps"]:
+                    break
 
-    torch.save(model.state_dict(), os.path.join(out_dir, f"{exp['name']}.pt"))
-    if csv_file:
-        csv_file.close()
+        torch.save(model.state_dict(), os.path.join(out_dir, f"{exp['name']}.pt"))
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(tb)
+        try:
+            with open(crash_log_path, "w") as f:
+                f.write(tb)
+        except Exception:
+            pass
+        if use_wandb and wandb_mod is not None:
+            try:
+                wandb_mod.log({"run/crashed": 1, "run/error": str(exc)[:500], "step": step})
+            except Exception:
+                pass
+        raise
+    finally:
+        if csv_file:
+            csv_file.close()
+        if use_wandb and wandb_mod is not None:
+            try:
+                wandb_mod.finish()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
