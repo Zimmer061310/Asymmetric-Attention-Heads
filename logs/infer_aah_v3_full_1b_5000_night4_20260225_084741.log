@@ -1,0 +1,59 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (2428601 > 1024). Running this sequence through the model will result in indexing errors
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/zimmer/.netrc.
+wandb: Currently logged in as: zimmer061310 (zimmer061310-ena) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Using a boolean value for 'reinit' is deprecated. Use 'return_previous' or 'finish_previous' instead.
+wandb: setting up run kdrle0z8
+wandb: Tracking run with wandb version 0.24.2
+wandb: Run data is saved locally in /home/zimmer/Ena-AAH-v3/wandb/run-20260225_112410-kdrle0z8
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run aah-v3-full-1b-5k-night4-ema010-r4000-wt2-infer
+wandb: ⭐️ View project at https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: 🚀 View run at https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/kdrle0z8
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/zimmer/Ena-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.detach().clone() or sourceTensor.detach().clone().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+wandb: uploading data; updating run metadata
+wandb: uploading wandb-summary.json; uploading config.yaml; uploading output.log
+wandb: uploading history steps 0-0, summary, console lines 0-6
+wandb: 
+wandb: Run history:
+wandb:    aah/flops_attn_est ▁
+wandb:       aah/flops_ratio ▁
+wandb: aah/flops_reduction_% ▁
+wandb:   aah/flops_total_est ▁
+wandb:       infer/elapsed_s ▁
+wandb:    infer/eval_batches ▁
+wandb:           infer/tok_s ▁
+wandb:        infer/val_loss ▁
+wandb:         infer/val_ppl ▁
+wandb: 
+wandb: Run summary:
+wandb:    aah/flops_attn_est 81223200276.48
+wandb:       aah/flops_ratio 0.9681
+wandb: aah/flops_reduction_% 3.18956
+wandb:   aah/flops_total_est 3792074944020.48
+wandb:      infer/checkpoint experiments/aah-v3-f...
+wandb:          infer/config configs/aah_v3_full_...
+wandb:       infer/elapsed_s 22.66165
+wandb:    infer/eval_batches 50
+wandb:           infer/tok_s 9037.29288
+wandb:        infer/val_loss 6.77339
+wandb:                    +1 ...
+wandb: 
+wandb: 🚀 View run aah-v3-full-1b-5k-night4-ema010-r4000-wt2-infer at: https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/kdrle0z8
+wandb: ⭐️ View project at: https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260225_112410-kdrle0z8/logs
+config=configs/aah_v3_full_1b_5000_night4.yaml
+checkpoint=experiments/aah-v3-full-1b-5k-night4-ema010-r4000-wt2.pt
+device=cuda precision=bf16
+eval_batches=50 val_loss=6.773394 val_ppl=874.2741 tok_s=9037.29 elapsed_s=22.66
+aah/flops_attn_est=81223200276.48 aah/flops_total_est=3792074944020.48 aah/flops_ratio=0.968104 aah/flops_reduction_%=3.1896
+aah/resolution_per_head_mean=[201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312, 201.72000122070312]
+aah/branch_usage_freq={'128': 0.25375, '64': 0.43625, '512': 0.1875, '256': 0.1225}
+Warning: Resource leak detected by SharedSignalPool, 2 Signals leaked.
