@@ -34,7 +34,6 @@ def main():
         print(f"Training failed (exit {rc}). Stopping.", flush=True)
         sys.exit(rc)
 
-    ckpt = os.path.join("experiments", "aah-v3-full-1b-10k-night3-ema015-r4000-wt2.pt")
     infer_log = os.path.join(args.log_dir, f"infer_{name}_{ts}.log")
     print(f"=== Inference: {args.config} -> {infer_log} ===", flush=True)
     rc = run_and_log(
@@ -43,8 +42,6 @@ def main():
             "scripts/infer.py",
             "--config",
             args.config,
-            "--checkpoint",
-            ckpt,
             "--eval-batches",
             str(args.eval_batches),
         ],

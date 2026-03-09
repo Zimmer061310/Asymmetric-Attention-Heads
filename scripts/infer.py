@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import glob
 import math
 import os
 import sys
@@ -30,6 +31,34 @@ def get_device(device_pref):
             return "mps"
         return "cpu"
     return device_pref
+
+def resolve_checkpoint(exp, ckpt_arg=None):
+    out_dir = exp.get("out_dir", "experiments")
+    exp_name = exp["name"]
+    expected = os.path.join(out_dir, f"{exp_name}.pt")
+
+    if ckpt_arg and os.path.exists(ckpt_arg):
+        return ckpt_arg
+    if (not ckpt_arg) and os.path.exists(expected):
+        return expected
+
+    pt_files = sorted(glob.glob(os.path.join(out_dir, "*.pt")), key=os.path.getmtime, reverse=True)
+    if not pt_files:
+        missing = ckpt_arg if ckpt_arg else expected
+        raise FileNotFoundError(f"Checkpoint not found: {missing}; no .pt files in {out_dir}")
+
+    # Prefer checkpoints that contain the experiment name
+    name_matches = [p for p in pt_files if exp_name in os.path.basename(p)]
+    if name_matches:
+        chosen = name_matches[0]
+        print(f"Info: checkpoint not found at expected path, using closest name match: {chosen}")
+        return chosen
+
+    # Fallback: use latest checkpoint in out_dir
+    chosen = pt_files[0]
+    missing = ckpt_arg if ckpt_arg else expected
+    print(f"Warning: checkpoint not found: {missing}. Using latest checkpoint in {out_dir}: {chosen}")
+    return chosen
 
 
 def build_model(cfg, vocab_size, device):
@@ -227,6 +256,7 @@ def main():
     train = cfg["train"]
     data = cfg["data"]
     use_wandb = train.get("use_wandb", False)
+    ckpt = resolve_checkpoint(exp, args.checkpoint)
 
     device = get_device(train.get("device", "auto"))
     precision = train.get("precision", "fp32").lower()
@@ -239,9 +269,6 @@ def main():
     )
     model = build_model(cfg, vocab_size, device)
 
-    ckpt = args.checkpoint or os.path.join(exp.get("out_dir", "experiments"), f"{exp['name']}.pt")
-    if not os.path.exists(ckpt):
-        raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
     state = torch.load(ckpt, map_location=device)
     model.load_state_dict(state, strict=True)
 
