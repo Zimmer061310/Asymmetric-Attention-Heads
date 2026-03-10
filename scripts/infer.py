@@ -32,15 +32,20 @@ def get_device(device_pref):
         return "cpu"
     return device_pref
 
-def resolve_checkpoint(exp, ckpt_arg=None):
+def resolve_checkpoint(exp, ckpt_arg=None, strict=False):
     out_dir = exp.get("out_dir", "experiments")
     exp_name = exp["name"]
     expected = os.path.join(out_dir, f"{exp_name}.pt")
 
-    if ckpt_arg and os.path.exists(ckpt_arg):
-        return ckpt_arg
+    if ckpt_arg:
+        if os.path.exists(ckpt_arg):
+            return ckpt_arg
+        if strict:
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_arg}")
     if (not ckpt_arg) and os.path.exists(expected):
         return expected
+    if strict:
+        raise FileNotFoundError(f"Checkpoint not found: {expected}")
 
     pt_files = sorted(glob.glob(os.path.join(out_dir, "*.pt")), key=os.path.getmtime, reverse=True)
     if not pt_files:
@@ -249,6 +254,7 @@ def main():
     parser.add_argument("--checkpoint", default=None, help="Override checkpoint path")
     parser.add_argument("--eval-batches", type=int, default=None)
     parser.add_argument("--log-interval", type=int, default=50)
+    parser.add_argument("--strict-checkpoint", action="store_true", help="Fail if checkpoint path is missing instead of fallback selection")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -256,7 +262,7 @@ def main():
     train = cfg["train"]
     data = cfg["data"]
     use_wandb = train.get("use_wandb", False)
-    ckpt = resolve_checkpoint(exp, args.checkpoint)
+    ckpt = resolve_checkpoint(exp, args.checkpoint, strict=args.strict_checkpoint)
 
     device = get_device(train.get("device", "auto"))
     precision = train.get("precision", "fp32").lower()
@@ -336,6 +342,7 @@ def main():
                     "aah/flops_total_est": flops_total_est,
                     "aah/flops_ratio": flops_ratio,
                     "aah/flops_reduction_%": flops_reduction_pct,
+                    "infer/flops_ratio": flops_ratio,
                     "aah/resolution_per_head_mean": resolution_per_head_mean,
                     "aah/branch_usage_freq": branch_usage_mean,
                 }
