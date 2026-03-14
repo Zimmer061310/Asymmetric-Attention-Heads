@@ -38,6 +38,12 @@ def main():
         "old_v3_full_10k": ["aah-v3-full-1b-10k-wt2"],
         "previous_night3_10k": ["aah-v3-full-1b-10k-night3-ema015-r4000-wt2"],
     }
+    expected_ckpt_substrings = {
+        "v3_final_candidate_E": ["phase2-E-ema015-r2000", "aah-v3-final-candidate.pt"],
+        "baseline_10k": ["baseline-1b-10k-wt2.pt"],
+        "old_v3_full_10k": ["aah-v3-full-1b-10k-wt2.pt"],
+        "previous_night3_10k": ["10k-night3-ema015-r4000", "aah-v3-phase1-winner.pt"],
+    }
 
     rows = []
     for label, names in refs.items():
@@ -46,9 +52,25 @@ def main():
 
         train_f = train[train["State"].astype(str).str.lower() == "finished"]
         infer_f = infer[infer["State"].astype(str).str.lower() == "finished"]
+        if "infer/checkpoint" in infer_f.columns:
+            needles = expected_ckpt_substrings.get(label, [])
+            if needles:
+                mask = infer_f["infer/checkpoint"].astype(str).apply(
+                    lambda s: any(n in s for n in needles)
+                )
+                if mask.any():
+                    infer_f = infer_f[mask]
 
         t = train_f.iloc[-1] if len(train_f) else None
-        i = infer_f.iloc[-1] if len(infer_f) else None
+        if len(infer_f):
+            if "infer/val_loss" in infer_f.columns and infer_f["infer/val_loss"].notna().any():
+                infer_f = infer_f.sort_values(
+                    ["infer/val_loss", "infer/val_ppl", "infer/tok_s"],
+                    ascending=[True, True, False],
+                )
+            i = infer_f.iloc[0]
+        else:
+            i = None
 
         flops_col = "infer/flops_ratio" if i is not None and "infer/flops_ratio" in i.index and pd.notna(i["infer/flops_ratio"]) else "aah/flops_ratio"
         rows.append(
