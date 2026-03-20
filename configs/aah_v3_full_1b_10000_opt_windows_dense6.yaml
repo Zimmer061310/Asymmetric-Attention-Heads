@@ -1,5 +1,5 @@
 experiment:
-  name: "aah-v3-full-1b-10k-v3-final-wmin64-wt2"
+  name: "aah-v3-full-1b-10k-opt-windows-dense6-wmin64-wt2"
   seed: 1337
   variant: "aah_v3_full"
   out_dir: "experiments"
@@ -15,7 +15,7 @@ model:
   n_ff: 6144
   dropout: 0.1
   aah_v3_enabled: true
-  aah_v3_windows: [64, 128, 256, 512]
+  aah_v3_windows: [64, 96, 128, 192, 256, 512]
   aah_v3_grouping_enabled: true
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16

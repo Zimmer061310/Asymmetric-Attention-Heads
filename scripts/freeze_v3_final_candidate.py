@@ -4,8 +4,8 @@ import shutil
 
 
 def main():
-    src_ckpt = "experiments/aah-v3-full-1b-10k-phase2-E-ema015-r2000-wt2.pt"
-    src_cfg = "configs/aah_v3_full_1b_10000_phase2_E.yaml"
+    src_ckpt = "experiments/aah-v3-full-1b-10k-compute-wmin64-wt2.pt"
+    src_cfg = "configs/aah_v3_full_1b_10000_compute_wmin_64.yaml"
     dst_dir = "experiments/final"
     dst_ckpt = os.path.join(dst_dir, "aah-v3-final-candidate.pt")
     dst_cfg = os.path.join(dst_dir, "aah-v3-final-candidate.yaml")

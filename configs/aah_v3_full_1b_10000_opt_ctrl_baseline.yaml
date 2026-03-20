@@ -1,5 +1,5 @@
 experiment:
-  name: "aah-v3-full-1b-10k-v3-final-wmin64-wt2"
+  name: "aah-v3-full-1b-10k-opt-ctrl-baseline-wmin64-wt2"
   seed: 1337
   variant: "aah_v3_full"
   out_dir: "experiments"

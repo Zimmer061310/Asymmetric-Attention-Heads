@@ -1,5 +1,5 @@
 experiment:
-  name: "aah-v3-full-1b-10k-v3-final-wmin64-wt2"
+  name: "aah-v3-full-1b-10k-opt-interval800-wmin64-wt2"
   seed: 1337
   variant: "aah_v3_full"
   out_dir: "experiments"
@@ -19,7 +19,7 @@ model:
   aah_v3_grouping_enabled: true
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16
-  aah_v3_control_interval: 400
+  aah_v3_control_interval: 800
   aah_v3_sim_threshold: 0.72
   aah_v3_super_threshold: 0.76
   aah_v3_max_depth: 4
