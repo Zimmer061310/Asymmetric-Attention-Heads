@@ -1,0 +1,29 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (2428601 > 1024). Running this sequence through the model will result in indexing errors
+Warning: BF16 requested but not supported on this CUDA device. Falling back to FP32.
+Traceback (most recent call last):
+  File "/Users/zimmerzhao/ENA-AAH-v3/scripts/train.py", line 814, in <module>
+    main()
+  File "/Users/zimmerzhao/ENA-AAH-v3/scripts/train.py", line 177, in main
+    train_loader, val_loader, vocab_size = build_dataloaders(
+                                           ^^^^^^^^^^^^^^^^^^
+  File "/Users/zimmerzhao/ENA-AAH-v3/src/data.py", line 47, in build_dataloaders
+    train_tokens = encode_split("train")
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/zimmerzhao/ENA-AAH-v3/src/data.py", line 44, in encode_split
+    enc = tokenizer("\n\n".join(texts), return_tensors="pt")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/transformers/tokenization_utils_base.py", line 2559, in __call__
+    encodings = self._encode_plus(
+                ^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/transformers/tokenization_utils_tokenizers.py", line 894, in _encode_plus
+    batched_output = BatchEncoding(sanitized_tokens, sanitized_encodings, tensor_type=return_tensors)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/transformers/tokenization_utils_base.py", line 240, in __init__
+    self.convert_to_tensors(tensor_type=tensor_type, prepend_batch_axis=prepend_batch_axis)
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/transformers/tokenization_utils_base.py", line 731, in convert_to_tensors
+    tensor = as_tensor(value)
+             ^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/transformers/tokenization_utils_base.py", line 690, in as_tensor
+    return torch.tensor(value, dtype=dtype)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
