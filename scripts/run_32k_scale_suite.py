@@ -39,6 +39,9 @@ def main():
         "configs/baseline_1b_32000.yaml",
         "configs/aah_v3_control_off_final_1b_32000.yaml",
         "configs/aah_v3_final_1b_32000.yaml",
+        "configs/baseline_qwen3b_32000.yaml",
+        "configs/aah_v3_control_off_final_qwen3b_32000.yaml",
+        "configs/aah_v3_final_qwen3b_32000.yaml",
     ]
 
     os.makedirs(args.log_dir, exist_ok=True)
