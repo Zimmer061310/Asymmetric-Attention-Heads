@@ -1,11 +1,11 @@
 experiment:
-  name: "baseline-500m-32k-wt2"
+  name: baseline-500m-32k-wt2
   seed: 1337
-  variant: "baseline"
-  out_dir: "experiments"
+  variant: baseline
+  out_dir: experiments
 data:
-  dataset: "wikitext-2-raw-v1"
-  tokenizer: "gpt2"
+  dataset: wikitext-2-raw-v1
+  tokenizer: gpt2
   seq_len: 512
   num_workers: 2
 model:
@@ -17,15 +17,15 @@ model:
 train:
   batch_size: 8
   grad_accum: 1
-  max_steps: 32000
-  lr: 3.0e-4
+  max_steps: 10000
+  lr: 0.0003
   weight_decay: 0.1
   warmup_steps: 100
   eval_interval: 500
   eval_batches: 50
   eval_log_progress: true
   log_interval: 50
-  device: "cuda"
-  precision: "bf16"
+  device: cuda
+  precision: bf16
   use_wandb: true
   log_csv: true
