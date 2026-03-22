@@ -1,5 +1,5 @@
 experiment:
-  name: aah-v3-final-500m-32k-wt2
+  name: aah-v3-final-200m-10k-wt2
   seed: 1337
   variant: aah_v3_full
   out_dir: experiments
@@ -9,10 +9,10 @@ data:
   seq_len: 512
   num_workers: 2
 model:
-  n_layer: 24
+  n_layer: 16
   n_head: 16
-  n_embd: 1536
-  n_ff: 6144
+  n_embd: 1024
+  n_ff: 4096
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:

@@ -1,5 +1,5 @@
 experiment:
-  name: aah-v3-final-100m-32k-wt2
+  name: aah-v3-final-100m-10k-wt2
   seed: 1337
   variant: aah_v3_full
   out_dir: experiments

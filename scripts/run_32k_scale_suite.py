@@ -27,21 +27,21 @@ def main():
     args = parser.parse_args()
 
     configs = [
-        "configs/baseline_100m_32000.yaml",
-        "configs/aah_v3_control_off_final_100m_32000.yaml",
-        "configs/aah_v3_final_100m_32000.yaml",
-        "configs/baseline_200m_32000.yaml",
-        "configs/aah_v3_control_off_final_200m_32000.yaml",
-        "configs/aah_v3_final_200m_32000.yaml",
-        "configs/baseline_500m_32000.yaml",
-        "configs/aah_v3_control_off_final_500m_32000.yaml",
-        "configs/aah_v3_final_500m_32000.yaml",
-        "configs/baseline_1b_32000.yaml",
-        "configs/aah_v3_control_off_final_1b_32000.yaml",
-        "configs/aah_v3_final_1b_32000.yaml",
-        "configs/baseline_qwen3b_32000.yaml",
-        "configs/aah_v3_control_off_final_qwen3b_32000.yaml",
-        "configs/aah_v3_final_qwen3b_32000.yaml",
+        "configs/baseline_100m_10000.yaml",
+        "configs/aah_v3_control_off_final_100m_10000.yaml",
+        "configs/aah_v3_final_100m_10000.yaml",
+        "configs/baseline_200m_10000.yaml",
+        "configs/aah_v3_control_off_final_200m_10000.yaml",
+        "configs/aah_v3_final_200m_10000.yaml",
+        "configs/baseline_500m_10000.yaml",
+        "configs/aah_v3_control_off_final_500m_10000.yaml",
+        "configs/aah_v3_final_500m_10000.yaml",
+        "configs/baseline_1b_10000.yaml",
+        "configs/aah_v3_control_off_final_1b_10000.yaml",
+        "configs/aah_v3_final_1b_10000.yaml",
+        "configs/baseline_qwen3b_10000.yaml",
+        "configs/aah_v3_control_off_final_qwen3b_10000.yaml",
+        "configs/aah_v3_final_qwen3b_10000.yaml",
     ]
 
     os.makedirs(args.log_dir, exist_ok=True)

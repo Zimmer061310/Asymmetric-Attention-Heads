@@ -1,5 +1,5 @@
 experiment:
-  name: aah-v3-control-off-final-qwen3b-32k-wt2
+  name: aah-v3-control-off-final-500m-10k-wt2
   seed: 1337
   variant: aah_v3_control_off
   out_dir: experiments
@@ -9,10 +9,10 @@ data:
   seq_len: 512
   num_workers: 2
 model:
-  n_layer: 36
-  n_head: 32
-  n_embd: 2560
-  n_ff: 10240
+  n_layer: 24
+  n_head: 16
+  n_embd: 1536
+  n_ff: 6144
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:

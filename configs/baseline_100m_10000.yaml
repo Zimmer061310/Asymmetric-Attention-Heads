@@ -1,5 +1,5 @@
 experiment:
-  name: baseline-1b-32k-wt2
+  name: baseline-100m-10k-wt2
   seed: 1337
   variant: baseline
   out_dir: experiments
@@ -9,10 +9,10 @@ data:
   seq_len: 512
   num_workers: 2
 model:
-  n_layer: 16
+  n_layer: 12
   n_head: 12
-  n_embd: 1536
-  n_ff: 6144
+  n_embd: 768
+  n_ff: 3072
   dropout: 0.1
 train:
   batch_size: 8
