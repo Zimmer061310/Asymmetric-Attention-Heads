@@ -1,5 +1,5 @@
 experiment:
-  name: baseline-qwen3b-10k-wt2
+  name: baseline-qwen2b-10k-wt2
   seed: 1337
   variant: baseline
   out_dir: experiments
@@ -9,10 +9,10 @@ data:
   seq_len: 512
   num_workers: 2
 model:
-  n_layer: 36
+  n_layer: 32
   n_head: 32
-  n_embd: 2560
-  n_ff: 10240
+  n_embd: 2304
+  n_ff: 9216
   dropout: 0.1
 train:
   batch_size: 8

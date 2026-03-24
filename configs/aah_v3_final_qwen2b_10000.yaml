@@ -1,7 +1,7 @@
 experiment:
-  name: aah-v3-control-off-final-qwen3b-10k-wt2
+  name: aah-v3-final-qwen2b-10k-wt2
   seed: 1337
-  variant: aah_v3_control_off
+  variant: aah_v3_full
   out_dir: experiments
 data:
   dataset: wikitext-2-raw-v1
@@ -9,10 +9,10 @@ data:
   seq_len: 512
   num_workers: 2
 model:
-  n_layer: 36
+  n_layer: 32
   n_head: 32
-  n_embd: 2560
-  n_ff: 10240
+  n_embd: 2304
+  n_ff: 9216
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:
@@ -21,7 +21,7 @@ model:
   - 256
   - 512
   aah_v3_grouping_enabled: true
-  aah_v3_control_enabled: false
+  aah_v3_control_enabled: true
   aah_v3_control_dim: 16
   aah_v3_control_interval: 400
   aah_v3_sim_threshold: 0.72
