@@ -1,0 +1,82 @@
+nohup: ignoring input
+Token indices sequence length is longer than the specified maximum sequence length for this model (2428601 > 1024). Running this sequence through the model will result in indexing errors
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/featurize/.netrc.
+wandb: Currently logged in as: zimmer061310 (zimmer061310-ena) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run liaq89st
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /home/featurize/ENA-AAH-v3/wandb/run-20260324_113027-liaq89st
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run baseline-qwen3b-10k-wt2
+wandb: ⭐️ View project at https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: 🚀 View run at https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/liaq89st
+/home/featurize/ENA-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+wandb: updating run metadata
+wandb: uploading wandb-summary.json; uploading config.yaml; uploading output.log
+wandb: uploading history steps 0-1, summary, console lines 0-20
+wandb: 
+wandb: Run history:
+wandb: run/crashed ▁
+wandb: run/started ▁
+wandb:        step ▁▁
+wandb: 
+wandb: Run summary:
+wandb: run/crashed 1
+wandb:   run/error CUDA out of memory. ...
+wandb: run/started 1
+wandb:        step 0
+wandb: 
+wandb: 🚀 View run baseline-qwen3b-10k-wt2 at: https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/liaq89st
+wandb: ⭐️ View project at: https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260324_113027-liaq89st/logs
+autocast gpu dtype: torch.float16
+Traceback (most recent call last):
+  File "/home/featurize/ENA-AAH-v3/scripts/train.py", line 423, in main
+    opt.step()
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/lr_scheduler.py", line 75, in wrapper
+    return wrapped(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/optimizer.py", line 385, in wrapper
+    out = func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/optimizer.py", line 76, in _use_grad
+    ret = func(self, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/adamw.py", line 187, in step
+    adamw(
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/adamw.py", line 339, in adamw
+    func(
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/adamw.py", line 608, in _multi_tensor_adamw
+    exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 100.00 MiB. GPU 0 has a total capacity of 47.43 GiB of which 42.31 MiB is free. Including non-PyTorch memory, this process has 47.38 GiB memory in use. Of the allocated memory 46.87 GiB is allocated by PyTorch, and 196.32 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+Traceback (most recent call last):
+  File "/home/featurize/ENA-AAH-v3/scripts/train.py", line 814, in <module>
+    main()
+  File "/home/featurize/ENA-AAH-v3/scripts/train.py", line 423, in main
+    opt.step()
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/lr_scheduler.py", line 75, in wrapper
+    return wrapped(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/optimizer.py", line 385, in wrapper
+    out = func(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/optimizer.py", line 76, in _use_grad
+    ret = func(self, *args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/adamw.py", line 187, in step
+    adamw(
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/adamw.py", line 339, in adamw
+    func(
+  File "/environment/miniconda3/lib/python3.11/site-packages/torch/optim/adamw.py", line 608, in _multi_tensor_adamw
+    exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 100.00 MiB. GPU 0 has a total capacity of 47.43 GiB of which 42.31 MiB is free. Including non-PyTorch memory, this process has 47.38 GiB memory in use. Of the allocated memory 46.87 GiB is allocated by PyTorch, and 196.32 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
