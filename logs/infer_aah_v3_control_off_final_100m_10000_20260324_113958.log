@@ -1,0 +1,67 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (2428601 > 1024). Running this sequence through the model will result in indexing errors
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/featurize/.netrc.
+wandb: Currently logged in as: zimmer061310 (zimmer061310-ena) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Using a boolean value for 'reinit' is deprecated. Use 'return_previous' or 'finish_previous' instead.
+wandb: setting up run 2ls216d8
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /home/featurize/ENA-AAH-v3/wandb/run-20260324_162658-2ls216d8
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run aah-v3-control-off-final-100m-10k-wt2-infer
+wandb: ⭐️ View project at https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: 🚀 View run at https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/2ls216d8
+/home/featurize/ENA-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:20: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  x = torch.tensor(chunk[:-1], dtype=torch.long)
+/home/featurize/ENA-AAH-v3/src/data.py:21: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  y = torch.tensor(chunk[1:], dtype=torch.long)
+wandb: updating run metadata; uploading console lines 0-1
+wandb: uploading output.log; uploading wandb-summary.json; uploading config.yaml; uploading wandb-metadata.json; uploading requirements.txt
+wandb: uploading history steps 0-0, summary, console lines 1-6
+wandb: 
+wandb: Run history:
+wandb:    aah/flops_attn_est ▁
+wandb:       aah/flops_ratio ▁
+wandb: aah/flops_reduction_% ▁
+wandb:   aah/flops_total_est ▁
+wandb:       infer/elapsed_s ▁
+wandb:    infer/eval_batches ▁
+wandb:     infer/flops_ratio ▁
+wandb:           infer/tok_s ▁
+wandb:        infer/val_loss ▁
+wandb:         infer/val_ppl ▁
+wandb: 
+wandb: Run summary:
+wandb:    aah/flops_attn_est 77309411328.0
+wandb:       aah/flops_ratio 1
+wandb: aah/flops_reduction_% 0
+wandb:   aah/flops_total_est 773094113280.0
+wandb:      infer/checkpoint experiments/aah-v3-c...
+wandb:          infer/config configs/aah_v3_contr...
+wandb:       infer/elapsed_s 2.75446
+wandb:    infer/eval_batches 50
+wandb:     infer/flops_ratio 1
+wandb:           infer/tok_s 74352.25486
+wandb:                    +2 ...
+wandb: 
+wandb: 🚀 View run aah-v3-control-off-final-100m-10k-wt2-infer at: https://wandb.ai/zimmer061310-ena/ENA-AAH/runs/2ls216d8
+wandb: ⭐️ View project at: https://wandb.ai/zimmer061310-ena/ENA-AAH
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260324_162658-2ls216d8/logs
+config=configs/aah_v3_control_off_final_100m_10000.yaml
+checkpoint=experiments/aah-v3-control-off-final-100m-10k-wt2.pt
+device=cuda precision=bf16
+eval_batches=50 val_loss=6.359131 val_ppl=577.7444 tok_s=74352.25 elapsed_s=2.75
+aah/flops_attn_est=77309411328.00 aah/flops_total_est=773094113280.00 aah/flops_ratio=1.000000 aah/flops_reduction_%=0.0000
+aah/resolution_per_head_mean=[512.0, 512.0, 512.0, 512.0, 512.0, 512.0, 512.0, 512.0, 512.0, 512.0, 512.0, 512.0]
+aah/branch_usage_freq={'512': 1.0}
