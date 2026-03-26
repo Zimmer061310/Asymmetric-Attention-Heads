@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import glob
+import hashlib
+import json
 import math
 import os
+import random
+import statistics
+import subprocess
 import sys
 import time
 from contextlib import nullcontext
@@ -23,6 +28,34 @@ def load_config(path):
         return yaml.safe_load(f)
 
 
+def compute_file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def get_git_commit():
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        return out.strip()
+    except Exception:
+        return ""
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def get_device(device_pref):
     if device_pref == "auto":
         if torch.cuda.is_available():
@@ -32,38 +65,38 @@ def get_device(device_pref):
         return "cpu"
     return device_pref
 
-def resolve_checkpoint(exp, ckpt_arg=None, strict=False):
+
+def resolve_checkpoint(exp, ckpt_arg=None, strict=True, allow_fallback=False):
     out_dir = exp.get("out_dir", "experiments")
     exp_name = exp["name"]
     expected = os.path.join(out_dir, f"{exp_name}.pt")
 
     if ckpt_arg:
         if os.path.exists(ckpt_arg):
-            return ckpt_arg
+            return os.path.abspath(ckpt_arg)
         if strict:
             raise FileNotFoundError(f"Checkpoint not found: {ckpt_arg}")
     if (not ckpt_arg) and os.path.exists(expected):
-        return expected
-    if strict:
-        raise FileNotFoundError(f"Checkpoint not found: {expected}")
+        return os.path.abspath(expected)
+    if strict and not allow_fallback:
+        missing = ckpt_arg if ckpt_arg else expected
+        raise FileNotFoundError(f"Checkpoint not found: {missing}")
 
     pt_files = sorted(glob.glob(os.path.join(out_dir, "*.pt")), key=os.path.getmtime, reverse=True)
     if not pt_files:
         missing = ckpt_arg if ckpt_arg else expected
         raise FileNotFoundError(f"Checkpoint not found: {missing}; no .pt files in {out_dir}")
 
-    # Prefer checkpoints that contain the experiment name
     name_matches = [p for p in pt_files if exp_name in os.path.basename(p)]
     if name_matches:
         chosen = name_matches[0]
         print(f"Info: checkpoint not found at expected path, using closest name match: {chosen}")
-        return chosen
+        return os.path.abspath(chosen)
 
-    # Fallback: use latest checkpoint in out_dir
     chosen = pt_files[0]
     missing = ckpt_arg if ckpt_arg else expected
     print(f"Warning: checkpoint not found: {missing}. Using latest checkpoint in {out_dir}: {chosen}")
-    return chosen
+    return os.path.abspath(chosen)
 
 
 def build_model(cfg, vocab_size, device):
@@ -109,6 +142,8 @@ def build_model(cfg, vocab_size, device):
         aah_v3_post_warmup_ramp_steps=model_cfg.get("aah_v3_post_warmup_ramp_steps", 0),
     )
     return GPT(gpt_cfg).to(device)
+
+
 def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
     n_layer = int(model_cfg["n_layer"])
     n_head = int(model_cfg["n_head"])
@@ -130,7 +165,7 @@ def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
     return attn_est, total_est, ratio, reduction_pct
 
 
-def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False, wandb_run=None, log_interval=50):
+def evaluate(model, loader, device, max_batches, use_bf16=False):
     model.eval()
     for block in model.blocks:
         if hasattr(block.attn, "set_eval_mode"):
@@ -171,7 +206,7 @@ def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False
                         be += attn.last_stats.get("baseline_elements", 0.0)
                 if be > 0:
                     attn_elems = te
-            fa, ft, fr, _ = estimate_flops(
+            fa, ft, _, _ = estimate_flops(
                 {
                     "n_layer": model.config.n_layer,
                     "n_head": model.config.n_head,
@@ -248,35 +283,115 @@ def evaluate(model, loader, device, max_batches, use_bf16=False, use_wandb=False
     )
 
 
+def parse_step_from_checkpoint_name(path):
+    base = os.path.basename(path)
+    if "_step" not in base:
+        return None
+    tail = base.split("_step", 1)[1]
+    digits = "".join(ch for ch in tail if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except Exception:
+        return None
+
+
+def load_checkpoint_metadata(ckpt_path):
+    meta_path = f"{ckpt_path}.meta.json"
+    if not os.path.exists(meta_path):
+        return None, meta_path
+    with open(meta_path, "r") as f:
+        return json.load(f), meta_path
+
+
+def validate_checkpoint_metadata(meta, expected_run_name, expected_config_hash, expected_seed):
+    mismatches = []
+    if str(meta.get("run_name", "")) != str(expected_run_name):
+        mismatches.append(f"run_name meta={meta.get('run_name')} expected={expected_run_name}")
+    if str(meta.get("config_hash", "")) != str(expected_config_hash):
+        mismatches.append(f"config_hash meta={meta.get('config_hash')} expected={expected_config_hash}")
+    if int(meta.get("seed", -1)) != int(expected_seed):
+        mismatches.append(f"seed meta={meta.get('seed')} expected={expected_seed}")
+    return mismatches
+
+
+def mean_std(values):
+    vals = [float(v) for v in values if v is not None]
+    if not vals:
+        return None, None
+    if len(vals) == 1:
+        return vals[0], 0.0
+    return sum(vals) / len(vals), statistics.pstdev(vals)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", default=None, help="Override checkpoint path")
+    parser.add_argument("--checkpoints", nargs="+", default=None, help="Explicit checkpoint paths for multi-checkpoint evaluation")
     parser.add_argument("--eval-batches", type=int, default=None)
     parser.add_argument("--log-interval", type=int, default=50)
-    parser.add_argument("--strict-checkpoint", action="store_true", help="Fail if checkpoint path is missing instead of fallback selection")
+    parser.add_argument("--strict-checkpoint", dest="strict_checkpoint", action="store_true", help="Fail if checkpoint path is missing or metadata mismatches")
+    parser.add_argument("--no-strict-checkpoint", dest="strict_checkpoint", action="store_false", help="Allow non-strict checkpoint behavior")
+    parser.add_argument("--allow-fallback", action="store_true", help="Allow fallback checkpoint search when strict mode is off")
+    parser.add_argument("--allow-missing-metadata", action="store_true", help="Allow checkpoint loading without sidecar metadata")
+    parser.add_argument("--allow-metadata-mismatch", action="store_true", help="Allow config/run/seed mismatch between checkpoint metadata and current config")
+    parser.add_argument("--deterministic-eval", dest="deterministic_eval", action="store_true", help="Enable deterministic evaluation controls")
+    parser.add_argument("--no-deterministic-eval", dest="deterministic_eval", action="store_false", help="Disable deterministic evaluation controls")
+    parser.add_argument("--seed", type=int, default=None, help="Override eval seed")
+    parser.add_argument("--summary-json", default=None, help="Write per-checkpoint and aggregate summary JSON")
+    parser.set_defaults(strict_checkpoint=True, deterministic_eval=True)
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
+    if args.checkpoint and args.checkpoints:
+        raise ValueError("Use either --checkpoint or --checkpoints, not both.")
+
+    config_path = os.path.abspath(args.config)
+    cfg = load_config(config_path)
     exp = cfg["experiment"]
     train = cfg["train"]
     data = cfg["data"]
     use_wandb = train.get("use_wandb", False)
-    ckpt = resolve_checkpoint(exp, args.checkpoint, strict=args.strict_checkpoint)
+    config_hash = compute_file_sha256(config_path)
+    expected_seed = int(args.seed) if args.seed is not None else int(exp["seed"])
+    expected_run_name = exp["name"]
+    current_commit = get_git_commit()
+
+    if args.checkpoints:
+        requested_checkpoints = args.checkpoints
+    else:
+        requested_checkpoints = [args.checkpoint]
+    checkpoint_paths = [
+        resolve_checkpoint(
+            exp,
+            ckpt_arg=ckpt_arg,
+            strict=args.strict_checkpoint,
+            allow_fallback=args.allow_fallback,
+        )
+        for ckpt_arg in requested_checkpoints
+    ]
 
     device = get_device(train.get("device", "auto"))
     precision = train.get("precision", "fp32").lower()
     use_bf16 = precision == "bf16" and device in ("cuda", "cpu")
     if use_bf16 and device == "cuda" and not torch.cuda.is_bf16_supported():
         use_bf16 = False
+    if args.deterministic_eval:
+        seed_everything(expected_seed)
+        try:
+            torch.use_deterministic_algorithms(True, warn_only=True)
+        except Exception:
+            pass
+        if torch.cuda.is_available() and hasattr(torch.backends, "cudnn"):
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+    eval_num_workers = 0 if args.deterministic_eval else data["num_workers"]
 
     _, val_loader, vocab_size = build_dataloaders(
-        data["dataset"], data["tokenizer"], data["seq_len"], train["batch_size"], data["num_workers"]
+        data["dataset"], data["tokenizer"], data["seq_len"], train["batch_size"], eval_num_workers
     )
     model = build_model(cfg, vocab_size, device)
-
-    state = torch.load(ckpt, map_location=device)
-    model.load_state_dict(state, strict=True)
 
     run = None
     if use_wandb:
@@ -284,7 +399,7 @@ def main():
             import wandb
             run = wandb.init(
                 project="ENA-AAH",
-                name=f"{exp['name']}-infer",
+                name=f"{exp['name']}-infer" if len(checkpoint_paths) == 1 else f"{exp['name']}-infer-multi",
                 config=cfg,
                 job_type="inference",
                 reinit=True,
@@ -294,62 +409,217 @@ def main():
             run = None
 
     eval_batches = args.eval_batches if args.eval_batches is not None else train.get("eval_batches", 50)
-    (
-        val_loss,
-        val_ppl,
-        tok_s,
-        elapsed,
-        flops_attn_est,
-        flops_total_est,
-        flops_ratio,
-        flops_reduction_pct,
-        resolution_per_head_mean,
-        branch_usage_mean,
-    ) = evaluate(
-        model,
-        val_loader,
-        device,
-        eval_batches,
-        use_bf16=use_bf16,
-        use_wandb=(run is not None),
-        wandb_run=run,
-        log_interval=args.log_interval,
-    )
-    print(f"config={args.config}")
-    print(f"checkpoint={ckpt}")
-    print(f"device={device} precision={precision}")
-    print(f"eval_batches={eval_batches} val_loss={val_loss:.6f} val_ppl={val_ppl:.4f} tok_s={tok_s:.2f} elapsed_s={elapsed:.2f}")
     print(
-        f"aah/flops_attn_est={flops_attn_est:.2f} aah/flops_total_est={flops_total_est:.2f} "
-        f"aah/flops_ratio={flops_ratio:.6f} aah/flops_reduction_%={flops_reduction_pct:.4f}"
+        f"run_name={expected_run_name} config_path={config_path} config_hash={config_hash} "
+        f"git_commit={current_commit or 'unknown'} seed={expected_seed} strict={args.strict_checkpoint}"
     )
-    if resolution_per_head_mean is not None:
-        print(f"aah/resolution_per_head_mean={resolution_per_head_mean}")
-    if branch_usage_mean:
-        print(f"aah/branch_usage_freq={branch_usage_mean}")
+
+    results = []
+    for idx, ckpt in enumerate(checkpoint_paths):
+        meta, meta_path = load_checkpoint_metadata(ckpt)
+        if meta is None and not args.allow_missing_metadata:
+            raise FileNotFoundError(f"Checkpoint metadata missing: {meta_path}")
+        if meta is not None and not args.allow_metadata_mismatch:
+            mismatches = validate_checkpoint_metadata(
+                meta,
+                expected_run_name=expected_run_name,
+                expected_config_hash=config_hash,
+                expected_seed=expected_seed,
+            )
+            if mismatches:
+                raise RuntimeError(
+                    f"Checkpoint metadata mismatch for {ckpt}: " + "; ".join(mismatches)
+                )
+
+        if args.deterministic_eval:
+            seed_everything(expected_seed)
+        state = torch.load(ckpt, map_location=device)
+        model.load_state_dict(state, strict=True)
+
+        (
+            val_loss,
+            val_ppl,
+            tok_s,
+            elapsed,
+            flops_attn_est,
+            flops_total_est,
+            flops_ratio,
+            flops_reduction_pct,
+            resolution_per_head_mean,
+            branch_usage_mean,
+        ) = evaluate(
+            model,
+            val_loader,
+            device,
+            eval_batches,
+            use_bf16=use_bf16,
+        )
+        ckpt_step = None
+        if meta is not None:
+            try:
+                ckpt_step = int(meta.get("step"))
+            except Exception:
+                ckpt_step = None
+        if ckpt_step is None:
+            ckpt_step = parse_step_from_checkpoint_name(ckpt)
+
+        row = {
+            "checkpoint_index": idx,
+            "checkpoint_path": ckpt,
+            "checkpoint_step": ckpt_step,
+            "val_loss": float(val_loss),
+            "val_ppl": float(val_ppl),
+            "tok_s": float(tok_s),
+            "elapsed_s": float(elapsed),
+            "flops_attn_est": float(flops_attn_est),
+            "flops_total_est": float(flops_total_est),
+            "flops_ratio": float(flops_ratio),
+            "flops_reduction_pct": float(flops_reduction_pct),
+            "resolution_per_head_mean": resolution_per_head_mean,
+            "branch_usage_freq": branch_usage_mean,
+            "run_name": meta.get("run_name") if meta else expected_run_name,
+            "seed": int(meta.get("seed")) if meta and "seed" in meta else expected_seed,
+            "config_hash": meta.get("config_hash") if meta else config_hash,
+            "git_commit": meta.get("git_commit") if meta else current_commit,
+            "config_path": config_path,
+            "metadata_path": meta_path if meta else "",
+        }
+        results.append(row)
+        print(
+            f"[{idx+1}/{len(checkpoint_paths)}] checkpoint={ckpt} step={ckpt_step} "
+            f"val_loss={val_loss:.6f} val_ppl={val_ppl:.4f} tok_s={tok_s:.2f} "
+            f"flops_ratio={flops_ratio:.6f}"
+        )
+        if run is not None:
+            try:
+                run.log(
+                    {
+                        "infer/checkpoint_index": idx,
+                        "infer/checkpoint": ckpt,
+                        "infer/checkpoint_step": ckpt_step if ckpt_step is not None else -1,
+                        "infer/val_loss": val_loss,
+                        "infer/val_ppl": val_ppl,
+                        "infer/tok_s": tok_s,
+                        "infer/elapsed_s": elapsed,
+                        "infer/eval_batches": eval_batches,
+                        "infer/config": config_path,
+                        "infer/run_name": row["run_name"],
+                        "infer/seed": row["seed"],
+                        "infer/git_commit": row["git_commit"] or "unknown",
+                        "aah/flops_attn_est": flops_attn_est,
+                        "aah/flops_total_est": flops_total_est,
+                        "aah/flops_ratio": flops_ratio,
+                        "aah/flops_reduction_%": flops_reduction_pct,
+                        "aah/resolution_per_head_mean": resolution_per_head_mean,
+                        "aah/branch_usage_freq": branch_usage_mean,
+                    }
+                )
+            except Exception as exc:
+                print(f"wandb logging failed: {exc}")
+
+    val_loss_mean, val_loss_std = mean_std([r["val_loss"] for r in results])
+    val_ppl_mean, val_ppl_std = mean_std([r["val_ppl"] for r in results])
+    flops_ratio_mean, flops_ratio_std = mean_std([r["flops_ratio"] for r in results])
+    tok_s_mean, tok_s_std = mean_std([r["tok_s"] for r in results])
+    best_row = min(results, key=lambda r: r["val_ppl"])
+    last_row = results[-1]
+    ppl_values = [r["val_ppl"] for r in results]
+    loss_values = [r["val_loss"] for r in results]
+    summary = {
+        "n_checkpoints": len(results),
+        "val_loss_mean": val_loss_mean,
+        "val_loss_std": val_loss_std,
+        "val_ppl_mean": val_ppl_mean,
+        "val_ppl_std": val_ppl_std,
+        "flops_ratio_mean": flops_ratio_mean,
+        "flops_ratio_std": flops_ratio_std,
+        "tok_s_mean": tok_s_mean,
+        "tok_s_std": tok_s_std,
+        "best_checkpoint": best_row["checkpoint_path"],
+        "best_checkpoint_step": best_row["checkpoint_step"],
+        "best_val_ppl": best_row["val_ppl"],
+        "best_val_loss": best_row["val_loss"],
+        "last_checkpoint": last_row["checkpoint_path"],
+        "last_checkpoint_step": last_row["checkpoint_step"],
+        "last_val_ppl": last_row["val_ppl"],
+        "last_val_loss": last_row["val_loss"],
+        "checkpoint_sensitivity_val_ppl": max(ppl_values) - min(ppl_values),
+        "checkpoint_sensitivity_val_loss": max(loss_values) - min(loss_values),
+    }
+
+    print(
+        "summary "
+        f"n={summary['n_checkpoints']} "
+        f"val_ppl_mean={summary['val_ppl_mean']:.4f} val_ppl_std={summary['val_ppl_std']:.4f} "
+        f"val_loss_mean={summary['val_loss_mean']:.6f} val_loss_std={summary['val_loss_std']:.6f} "
+        f"flops_ratio_mean={summary['flops_ratio_mean']:.6f} flops_ratio_std={summary['flops_ratio_std']:.6f} "
+        f"best_val_ppl={summary['best_val_ppl']:.4f} last_val_ppl={summary['last_val_ppl']:.4f} "
+        f"delta_ppl={summary['checkpoint_sensitivity_val_ppl']:.4f} "
+        f"delta_loss={summary['checkpoint_sensitivity_val_loss']:.6f}"
+    )
+
     if run is not None:
         try:
             run.log(
                 {
-                    "infer/val_loss": val_loss,
-                    "infer/val_ppl": val_ppl,
-                    "infer/tok_s": tok_s,
-                    "infer/elapsed_s": elapsed,
-                    "infer/eval_batches": eval_batches,
-                    "infer/config": args.config,
-                    "infer/checkpoint": ckpt,
-                    "aah/flops_attn_est": flops_attn_est,
-                    "aah/flops_total_est": flops_total_est,
-                    "aah/flops_ratio": flops_ratio,
-                    "aah/flops_reduction_%": flops_reduction_pct,
-                    "infer/flops_ratio": flops_ratio,
-                    "aah/resolution_per_head_mean": resolution_per_head_mean,
-                    "aah/branch_usage_freq": branch_usage_mean,
+                    "infer_multi/n_checkpoints": summary["n_checkpoints"],
+                    "infer_multi/val_ppl_mean": summary["val_ppl_mean"],
+                    "infer_multi/val_ppl_std": summary["val_ppl_std"],
+                    "infer_multi/val_loss_mean": summary["val_loss_mean"],
+                    "infer_multi/val_loss_std": summary["val_loss_std"],
+                    "infer_multi/flops_ratio_mean": summary["flops_ratio_mean"],
+                    "infer_multi/flops_ratio_std": summary["flops_ratio_std"],
+                    "infer_multi/tok_s_mean": summary["tok_s_mean"],
+                    "infer_multi/tok_s_std": summary["tok_s_std"],
+                    "infer_multi/best_val_ppl": summary["best_val_ppl"],
+                    "infer_multi/last_val_ppl": summary["last_val_ppl"],
+                    "infer_multi/checkpoint_sensitivity_val_ppl": summary["checkpoint_sensitivity_val_ppl"],
+                    "infer_multi/checkpoint_sensitivity_val_loss": summary["checkpoint_sensitivity_val_loss"],
                 }
             )
             run.finish()
         except Exception as exc:
             print(f"wandb logging failed: {exc}")
+
+    if len(results) == 1:
+        r = results[0]
+        print(f"config={config_path}")
+        print(f"checkpoint={r['checkpoint_path']}")
+        print(f"device={device} precision={precision}")
+        print(
+            f"eval_batches={eval_batches} val_loss={r['val_loss']:.6f} "
+            f"val_ppl={r['val_ppl']:.4f} tok_s={r['tok_s']:.2f} elapsed_s={r['elapsed_s']:.2f}"
+        )
+        print(
+            f"aah/flops_attn_est={r['flops_attn_est']:.2f} aah/flops_total_est={r['flops_total_est']:.2f} "
+            f"aah/flops_ratio={r['flops_ratio']:.6f} aah/flops_reduction_%={r['flops_reduction_pct']:.4f}"
+        )
+
+    if args.summary_json:
+        out_path = os.path.abspath(args.summary_json)
+        out_dir = os.path.dirname(out_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        payload = {
+            "meta": {
+                "config_path": config_path,
+                "config_hash": config_hash,
+                "run_name": expected_run_name,
+                "seed": expected_seed,
+                "git_commit": current_commit,
+                "eval_batches": int(eval_batches),
+                "device": device,
+                "precision": precision,
+                "strict_checkpoint": bool(args.strict_checkpoint),
+                "deterministic_eval": bool(args.deterministic_eval),
+            },
+            "checkpoints": checkpoint_paths,
+            "results": results,
+            "summary": summary,
+        }
+        with open(out_path, "w") as f:
+            json.dump(payload, f, indent=2, sort_keys=True)
+        print(f"summary_json={out_path}")
 
 
 if __name__ == "__main__":

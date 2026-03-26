@@ -4,10 +4,14 @@ import math
 import csv
 import sys
 import argparse
+import json
+import hashlib
+import subprocess
 import yaml
 import platform
 import resource
 import traceback
+from datetime import datetime, timezone
 from collections import deque
 from contextlib import nullcontext
 import torch
@@ -150,18 +154,59 @@ def estimate_flops(model_cfg, batch_size, seq_len, attn_elements_total=None):
     reduction_pct = (1.0 - ratio) * 100.0
     return attn_est, total_est, ratio, reduction_pct
 
+def compute_file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def get_git_commit():
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        return out.strip()
+    except Exception:
+        return ""
+
+
+def default_checkpoint_steps(max_steps):
+    if max_steps <= 1:
+        return [max_steps]
+    s1 = max(1, max_steps - 1000)
+    s2 = max(1, max_steps - 500)
+    return sorted(set([s1, s2, max_steps]))
+
+
+def save_checkpoint_with_metadata(model, ckpt_path, metadata):
+    torch.save(model.state_dict(), ckpt_path)
+    meta_path = f"{ckpt_path}.meta.json"
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f, indent=2, sort_keys=True)
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/small.yaml")
     args = parser.parse_args()
-    cfg = load_config(args.config)
+    config_path = os.path.abspath(args.config)
+    cfg = load_config(config_path)
     exp = cfg["experiment"]
     data = cfg["data"]
     model_cfg = cfg["model"]
     train = cfg["train"]
+    config_hash = compute_file_sha256(config_path)
+    git_commit = get_git_commit()
 
-    torch.manual_seed(exp["seed"])
+    seed = int(exp["seed"])
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
     device = get_device(train["device"])
     precision = train.get("precision", "fp32").lower()
@@ -235,84 +280,153 @@ def main():
     out_dir = exp.get("out_dir", "experiments")
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, f"{exp['name']}_{exp.get('variant','run')}.csv")
+    print(
+        f"run_name={exp['name']} config_path={config_path} "
+        f"config_hash={config_hash} git_commit={git_commit or 'unknown'} seed={seed}"
+    )
+    checkpoint_steps_cfg = train.get("checkpoint_steps")
+    if checkpoint_steps_cfg is None:
+        checkpoint_steps = default_checkpoint_steps(int(train["max_steps"]))
+    else:
+        checkpoint_steps = [int(s) for s in checkpoint_steps_cfg]
+    checkpoint_steps = sorted(
+        set(
+            s
+            for s in checkpoint_steps
+            if 0 < s <= int(train["max_steps"])
+        )
+    )
+    if int(train["max_steps"]) not in checkpoint_steps:
+        checkpoint_steps.append(int(train["max_steps"]))
+    checkpoint_steps_set = set(checkpoint_steps)
+    print(f"checkpoint_steps={checkpoint_steps}")
+
+    checkpoint_meta_base = {
+        "run_name": exp["name"],
+        "variant": exp.get("variant", "run"),
+        "config_path": config_path,
+        "config_hash": config_hash,
+        "seed": seed,
+        "git_commit": git_commit,
+        "max_steps": int(train["max_steps"]),
+        "saved_at_utc": "",
+        "step": -1,
+        "checkpoint_path": "",
+        "checkpoint_role": "",
+    }
+
+    def persist_checkpoint(step_now, role):
+        timestamp_utc = datetime.now(timezone.utc).isoformat()
+        step_ckpt = os.path.join(out_dir, f"{exp['name']}_step{step_now}.pt")
+        step_meta = dict(checkpoint_meta_base)
+        step_meta["saved_at_utc"] = timestamp_utc
+        step_meta["step"] = int(step_now)
+        step_meta["checkpoint_path"] = os.path.abspath(step_ckpt)
+        step_meta["checkpoint_role"] = role
+        save_checkpoint_with_metadata(model, step_ckpt, step_meta)
+        print(
+            f"saved_checkpoint step={step_now} role={role} "
+            f"path={step_meta['checkpoint_path']}"
+        )
+        canonical_ckpt = os.path.join(out_dir, f"{exp['name']}.pt")
+        if int(step_now) == int(train["max_steps"]):
+            final_meta = dict(step_meta)
+            final_meta["checkpoint_path"] = os.path.abspath(canonical_ckpt)
+            final_meta["checkpoint_role"] = "final"
+            save_checkpoint_with_metadata(model, canonical_ckpt, final_meta)
+            print(
+                f"saved_checkpoint step={step_now} role=final "
+                f"path={final_meta['checkpoint_path']}"
+            )
     csv_file = None
     csv_writer = None
+    csv_headers = [
+        "step",
+        "train_loss",
+        "tok_s",
+        "mem_mb",
+        "gpu_alloc_mb",
+        "gpu_reserved_mb",
+        "gpu_alloc_max_mb",
+        "gpu_reserved_max_mb",
+        "cpu_rss_mb",
+        "psutil_rss_mb",
+        "psutil_vms_mb",
+        "psutil_shared_mb",
+        "psutil_text_mb",
+        "psutil_data_mb",
+        "psutil_uss_mb",
+        "psutil_pss_mb",
+        "psutil_swap_mb",
+        "psutil_ram_used_mb",
+        "psutil_ram_total_mb",
+        "val_loss",
+        "val_ppl",
+        "attn_elems",
+        "attn_ratio",
+        "attn_reduction",
+        "flops_attn_est",
+        "flops_total_est",
+        "flops_ratio",
+        "flops_reduction_pct",
+        "attn_lq",
+        "attn_lk_per_layer",
+        "head_entropy",
+        "group_change_rate",
+        "avg_window",
+        "group_overlap",
+        "head_reassign_rate",
+        "group_lifespan_ema",
+        "head_groups",
+        "shadow_win_idx",
+        "shadow_logit_mean",
+        "group_heads",
+        "group_ratios",
+        "resolution_mean",
+        "resolution_std",
+        "resolution_min_frac",
+        "resolution_max_frac",
+        "resolution_collapse_min",
+        "resolution_collapse_max",
+        "resolution_delta",
+        "branch_usage_freq",
+        "attn_ratio_std_ema",
+        "flops_ratio_std_ema",
+        "lk_mean",
+        "lk_p90",
+        "w_mean",
+        "w_min",
+        "w_max",
+        "control_time_ms",
+        "attn_time_ms",
+        "mask_time_ms",
+        "overhead_time_ms",
+        "step_time_ms",
+        "eval_time_s",
+    ]
+    csv_idx = {k: i for i, k in enumerate(csv_headers)}
     wandb_mod = None
     if use_wandb:
         try:
             import wandb
             wandb_mod = wandb
             wandb_mod.init(project="ENA-AAH", name=exp["name"], config=cfg)
-            wandb_mod.log({"run/started": 1, "step": 0})
+            wandb_mod.log(
+                {
+                    "run/started": 1,
+                    "step": 0,
+                    "run/config_path": config_path,
+                    "run/config_hash": config_hash,
+                    "run/git_commit": git_commit or "unknown",
+                    "run/seed": seed,
+                }
+            )
         except Exception:
             use_wandb = False
     if log_csv:
         csv_file = open(csv_path, "w", newline="")
         csv_writer = csv.writer(csv_file)
-        csv_writer.writerow([
-            "step",
-            "train_loss",
-            "tok_s",
-            "mem_mb",
-            "gpu_alloc_mb",
-            "gpu_reserved_mb",
-            "gpu_alloc_max_mb",
-            "gpu_reserved_max_mb",
-            "cpu_rss_mb",
-            "psutil_rss_mb",
-            "psutil_vms_mb",
-            "psutil_shared_mb",
-            "psutil_text_mb",
-            "psutil_data_mb",
-            "psutil_uss_mb",
-            "psutil_pss_mb",
-            "psutil_swap_mb",
-            "psutil_ram_used_mb",
-            "psutil_ram_total_mb",
-            "val_loss",
-            "val_ppl",
-            "attn_elems",
-            "attn_ratio",
-            "attn_reduction",
-            "flops_attn_est",
-            "flops_total_est",
-            "flops_ratio",
-            "flops_reduction_pct",
-            "attn_lq",
-            "attn_lk_per_layer",
-            "head_entropy",
-            "group_change_rate",
-            "avg_window",
-            "group_overlap",
-            "head_reassign_rate",
-            "group_lifespan_ema",
-            "head_groups",
-            "shadow_win_idx",
-            "shadow_logit_mean",
-            "group_heads",
-            "group_ratios",
-            "resolution_mean",
-            "resolution_std",
-            "resolution_min_frac",
-            "resolution_max_frac",
-            "resolution_collapse_min",
-            "resolution_collapse_max",
-            "resolution_delta",
-            "branch_usage_freq",
-            "attn_ratio_std_ema",
-            "flops_ratio_std_ema",
-            "lk_mean",
-            "lk_p90",
-            "w_mean",
-            "w_min",
-            "w_max",
-            "control_time_ms",
-            "attn_time_ms",
-            "mask_time_ms",
-            "overhead_time_ms",
-            "step_time_ms",
-            "eval_time_s",
-        ])
+        csv_writer.writerow(csv_headers)
 
     step = 0
     prev_head_groups = None
@@ -321,11 +435,18 @@ def main():
     flops_ratio_window = deque(maxlen=20)
     model.train()
     t0 = time.time()
+    train_iter = iter(train_loader)
+    last_eval_time_s = ""
+    saved_checkpoint_steps = set()
     crash_log_path = os.path.join(out_dir, f"{exp['name']}_crash.log")
     try:
         while step < train["max_steps"]:
-            for x, y in train_loader:
-                x, y = x.to(device), y.to(device)
+            try:
+                x, y = next(train_iter)
+            except StopIteration:
+                train_iter = iter(train_loader)
+                x, y = next(train_iter)
+            x, y = x.to(device), y.to(device)
             if step == 0 and device == "cuda":
                 try:
                     print(f"autocast gpu dtype: {torch.get_autocast_gpu_dtype()}")
@@ -426,6 +547,9 @@ def main():
             step_time_ms = (time.time() - step_t0) * 1000.0
 
             step += 1
+            if step in checkpoint_steps_set and step not in saved_checkpoint_steps:
+                persist_checkpoint(step, role="near_end")
+                saved_checkpoint_steps.add(step)
 
             if step % effective_log_interval == 0:
                 elapsed = time.time() - t0
@@ -759,7 +883,7 @@ def main():
                         fmt(mask_time_ms),
                         fmt(overhead_time_ms),
                         f"{step_time_ms:.2f}",
-                        eval_time_s,
+                        last_eval_time_s,
                     ])
                 if head_groups:
                     prev_head_groups = [list(g) for g in head_groups]
@@ -775,16 +899,23 @@ def main():
                     log_progress=train.get("eval_log_progress", False),
                     use_bf16=use_bf16,
                 )
-                eval_time_s = f"{eval_time:.2f}"
+                last_eval_time_s = f"{eval_time:.2f}"
                 print(f"eval step {step} | loss {val_loss:.4f} | ppl {val_ppl:.2f}")
                 if use_wandb:
                     wandb.log({"val/loss": val_loss, "val/ppl": val_ppl, "step": step, "perf/eval_time_s": eval_time})
                 if csv_writer:
-                    csv_writer.writerow([step, "", "", "", f"{val_loss:.6f}", f"{val_ppl:.4f}"])
+                    row = [""] * len(csv_headers)
+                    row[csv_idx["step"]] = str(step)
+                    row[csv_idx["val_loss"]] = f"{val_loss:.6f}"
+                    row[csv_idx["val_ppl"]] = f"{val_ppl:.4f}"
+                    row[csv_idx["eval_time_s"]] = f"{eval_time:.2f}"
+                    csv_writer.writerow(row)
 
                 if step >= train["max_steps"]:
                     break
-
+        if int(train["max_steps"]) not in saved_checkpoint_steps:
+            persist_checkpoint(int(train["max_steps"]), role="final")
+            saved_checkpoint_steps.add(int(train["max_steps"]))
         torch.save(model.state_dict(), os.path.join(out_dir, f"{exp['name']}.pt"))
     except Exception as exc:
         tb = traceback.format_exc()
