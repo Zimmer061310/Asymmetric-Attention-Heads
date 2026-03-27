@@ -43,10 +43,10 @@ train:
   lr: 0.0003
   weight_decay: 0.1
   warmup_steps: 100
-  eval_interval: 500
-  eval_batches: 50
+  eval_interval: 100
+  eval_batches: 10
   eval_log_progress: true
-  log_interval: 50
+  log_interval: 20
   device: cuda
   precision: bf16
   use_wandb: true
