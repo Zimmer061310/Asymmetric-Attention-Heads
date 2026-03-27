@@ -1,0 +1,3 @@
+nohup: ignoring input
+=== Training: configs/baseline_500m_10000.yaml -> logs/train_baseline_500m_10000_20260326_171122.log ===
+Training failed for configs/baseline_500m_10000.yaml (exit 1)

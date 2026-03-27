@@ -1,0 +1,13 @@
+{
+  "checkpoint_path": "/home/featurize/work/ENA-AAH-v3/experiments/baseline-1b-10k-wt2.pt",
+  "checkpoint_role": "final",
+  "config_hash": "8052932e1371f8cbf50a9bbdadca348e56d1337c11f74fc1f22fb08dcae391d7",
+  "config_path": "/home/featurize/work/ENA-AAH-v3/configs/baseline_1b_10000.yaml",
+  "git_commit": "24c5fd736fbc063bafae89602381ba06438a0b28",
+  "max_steps": 10000,
+  "run_name": "baseline-1b-10k-wt2",
+  "saved_at_utc": "2026-03-26T20:41:43.473178+00:00",
+  "seed": 1337,
+  "step": 10000,
+  "variant": "baseline"
+}
