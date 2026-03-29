@@ -273,10 +273,8 @@ def main():
 
     use_wandb = train.get("use_wandb", False)
     log_csv = train.get("log_csv", False)
-    effective_log_interval = 50
     cfg_log_interval = int(train.get("log_interval", 50))
-    if cfg_log_interval != effective_log_interval:
-        print(f"Info: overriding log_interval {cfg_log_interval} -> {effective_log_interval} for unified 50-step logging.")
+    effective_log_interval = max(1, cfg_log_interval)
     out_dir = exp.get("out_dir", "experiments")
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, f"{exp['name']}_{exp.get('variant','run')}.csv")
