@@ -1,0 +1,13 @@
+{
+  "checkpoint_path": "/home/featurize/data/ENA-AAH-v3-v3branch/experiments/aah-v3-identity-200m-10k-wt2_step10000.pt",
+  "checkpoint_role": "near_end",
+  "config_hash": "b30432826cccb552a77f46068c04d377694e8013384764272108d73425b36005",
+  "config_path": "/home/featurize/data/ENA-AAH-v3-v3branch/configs/aah_v3_identity_200m_10000.yaml",
+  "git_commit": "aba36522b5be2cccfb580b894ed104481b4188a6",
+  "max_steps": 10000,
+  "run_name": "aah-v3-identity-200m-10k-wt2",
+  "saved_at_utc": "2026-03-30T17:00:45.613069+00:00",
+  "seed": 1337,
+  "step": 10000,
+  "variant": "aah_v3_full"
+}
