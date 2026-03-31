@@ -592,6 +592,21 @@ def main():
                 path_modes = []
                 win_idx_pre_parent_clamps = []
                 win_idx_post_parent_clamps = []
+                cluster_threshold_kind_per_levels = []
+                cluster_threshold_per_levels = []
+                cluster_item_count_per_levels = []
+                cluster_groups_before_merge_per_levels = []
+                cluster_groups_after_merge_per_levels = []
+                cluster_groups_merged_per_levels = []
+                cluster_small_groups_before_merge_per_levels = []
+                cluster_singletons_before_merge_per_levels = []
+                cluster_sim_mean_per_levels = []
+                cluster_sim_std_per_levels = []
+                cluster_sim_min_per_levels = []
+                cluster_sim_max_per_levels = []
+                cluster_min_group_sizes = []
+                cluster_sim_thresholds = []
+                cluster_super_thresholds = []
                 lk_means = []
                 lk_p90s = []
                 w_means = []
@@ -655,6 +670,36 @@ def main():
                                 win_idx_pre_parent_clamps.append(attn.last_stats.get("win_idx_pre_clamp"))
                             if "win_idx_post_clamp" in attn.last_stats:
                                 win_idx_post_parent_clamps.append(attn.last_stats.get("win_idx_post_clamp"))
+                            if "cluster_threshold_kind_per_level" in attn.last_stats:
+                                cluster_threshold_kind_per_levels.append(attn.last_stats.get("cluster_threshold_kind_per_level"))
+                            if "cluster_threshold_per_level" in attn.last_stats:
+                                cluster_threshold_per_levels.append(attn.last_stats.get("cluster_threshold_per_level"))
+                            if "cluster_item_count_per_level" in attn.last_stats:
+                                cluster_item_count_per_levels.append(attn.last_stats.get("cluster_item_count_per_level"))
+                            if "cluster_groups_before_merge_per_level" in attn.last_stats:
+                                cluster_groups_before_merge_per_levels.append(attn.last_stats.get("cluster_groups_before_merge_per_level"))
+                            if "cluster_groups_after_merge_per_level" in attn.last_stats:
+                                cluster_groups_after_merge_per_levels.append(attn.last_stats.get("cluster_groups_after_merge_per_level"))
+                            if "cluster_groups_merged_per_level" in attn.last_stats:
+                                cluster_groups_merged_per_levels.append(attn.last_stats.get("cluster_groups_merged_per_level"))
+                            if "cluster_small_groups_before_merge_per_level" in attn.last_stats:
+                                cluster_small_groups_before_merge_per_levels.append(attn.last_stats.get("cluster_small_groups_before_merge_per_level"))
+                            if "cluster_singletons_before_merge_per_level" in attn.last_stats:
+                                cluster_singletons_before_merge_per_levels.append(attn.last_stats.get("cluster_singletons_before_merge_per_level"))
+                            if "cluster_sim_mean_per_level" in attn.last_stats:
+                                cluster_sim_mean_per_levels.append(attn.last_stats.get("cluster_sim_mean_per_level"))
+                            if "cluster_sim_std_per_level" in attn.last_stats:
+                                cluster_sim_std_per_levels.append(attn.last_stats.get("cluster_sim_std_per_level"))
+                            if "cluster_sim_min_per_level" in attn.last_stats:
+                                cluster_sim_min_per_levels.append(attn.last_stats.get("cluster_sim_min_per_level"))
+                            if "cluster_sim_max_per_level" in attn.last_stats:
+                                cluster_sim_max_per_levels.append(attn.last_stats.get("cluster_sim_max_per_level"))
+                            if "cluster_min_group_size" in attn.last_stats:
+                                cluster_min_group_sizes.append(attn.last_stats.get("cluster_min_group_size"))
+                            if "cluster_sim_threshold" in attn.last_stats:
+                                cluster_sim_thresholds.append(attn.last_stats.get("cluster_sim_threshold"))
+                            if "cluster_super_threshold" in attn.last_stats:
+                                cluster_super_thresholds.append(attn.last_stats.get("cluster_super_threshold"))
                             if "control_time_ms" in attn.last_stats:
                                 control_times.append(attn.last_stats.get("control_time_ms"))
                             if "attn_time_ms" in attn.last_stats:
@@ -695,6 +740,46 @@ def main():
                 resolution_collapse_max = (sum(resolution_collapse_maxs) / len(resolution_collapse_maxs)) if resolution_collapse_maxs else None
                 resolution_delta = sum(resolution_deltas) / len(resolution_deltas) if resolution_deltas else None
                 hierarchy_levels_used = (sum(hierarchy_levels_useds) / len(hierarchy_levels_useds)) if hierarchy_levels_useds else None
+                cluster_sim_mean_level0 = None
+                cluster_sim_std_level0 = None
+                cluster_sim_min_level0 = None
+                cluster_sim_max_level0 = None
+                cluster_item_count_level0 = None
+                cluster_groups_before_merge_level0 = None
+                cluster_groups_after_merge_level0 = None
+                cluster_groups_merged_level0 = None
+                cluster_small_groups_before_merge_level0 = None
+                cluster_singletons_before_merge_level0 = None
+                if cluster_sim_mean_per_levels:
+                    vals = [x[0] for x in cluster_sim_mean_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_sim_mean_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_sim_std_per_levels:
+                    vals = [x[0] for x in cluster_sim_std_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_sim_std_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_sim_min_per_levels:
+                    vals = [x[0] for x in cluster_sim_min_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_sim_min_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_sim_max_per_levels:
+                    vals = [x[0] for x in cluster_sim_max_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_sim_max_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_item_count_per_levels:
+                    vals = [x[0] for x in cluster_item_count_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_item_count_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_groups_before_merge_per_levels:
+                    vals = [x[0] for x in cluster_groups_before_merge_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_groups_before_merge_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_groups_after_merge_per_levels:
+                    vals = [x[0] for x in cluster_groups_after_merge_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_groups_after_merge_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_groups_merged_per_levels:
+                    vals = [x[0] for x in cluster_groups_merged_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_groups_merged_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_small_groups_before_merge_per_levels:
+                    vals = [x[0] for x in cluster_small_groups_before_merge_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_small_groups_before_merge_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_singletons_before_merge_per_levels:
+                    vals = [x[0] for x in cluster_singletons_before_merge_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_singletons_before_merge_level0 = (sum(vals) / len(vals)) if vals else None
                 branch_usage_agg = {}
                 if branch_usage_freqs:
                     for freq_dict in branch_usage_freqs:
@@ -838,6 +923,56 @@ def main():
                         payload["aah/win_idx_pre_parent_clamp"] = win_idx_pre_parent_clamps[0]
                     if win_idx_post_parent_clamps:
                         payload["aah/win_idx_post_parent_clamp"] = win_idx_post_parent_clamps[0]
+                    if cluster_threshold_kind_per_levels:
+                        payload["aah/cluster_threshold_kind_per_level"] = cluster_threshold_kind_per_levels[0]
+                    if cluster_threshold_per_levels:
+                        payload["aah/cluster_threshold_per_level"] = cluster_threshold_per_levels[0]
+                    if cluster_item_count_per_levels:
+                        payload["aah/cluster_item_count_per_level"] = cluster_item_count_per_levels[0]
+                    if cluster_groups_before_merge_per_levels:
+                        payload["aah/cluster_groups_before_merge_per_level"] = cluster_groups_before_merge_per_levels[0]
+                    if cluster_groups_after_merge_per_levels:
+                        payload["aah/cluster_groups_after_merge_per_level"] = cluster_groups_after_merge_per_levels[0]
+                    if cluster_groups_merged_per_levels:
+                        payload["aah/cluster_groups_merged_per_level"] = cluster_groups_merged_per_levels[0]
+                    if cluster_small_groups_before_merge_per_levels:
+                        payload["aah/cluster_small_groups_before_merge_per_level"] = cluster_small_groups_before_merge_per_levels[0]
+                    if cluster_singletons_before_merge_per_levels:
+                        payload["aah/cluster_singletons_before_merge_per_level"] = cluster_singletons_before_merge_per_levels[0]
+                    if cluster_sim_mean_per_levels:
+                        payload["aah/cluster_sim_mean_per_level"] = cluster_sim_mean_per_levels[0]
+                    if cluster_sim_std_per_levels:
+                        payload["aah/cluster_sim_std_per_level"] = cluster_sim_std_per_levels[0]
+                    if cluster_sim_min_per_levels:
+                        payload["aah/cluster_sim_min_per_level"] = cluster_sim_min_per_levels[0]
+                    if cluster_sim_max_per_levels:
+                        payload["aah/cluster_sim_max_per_level"] = cluster_sim_max_per_levels[0]
+                    if cluster_min_group_sizes:
+                        payload["aah/cluster_min_group_size"] = cluster_min_group_sizes[0]
+                    if cluster_sim_thresholds:
+                        payload["aah/cluster_sim_threshold"] = cluster_sim_thresholds[0]
+                    if cluster_super_thresholds:
+                        payload["aah/cluster_super_threshold"] = cluster_super_thresholds[0]
+                    if cluster_sim_mean_level0 is not None:
+                        payload["aah/cluster_sim_mean_level0"] = cluster_sim_mean_level0
+                    if cluster_sim_std_level0 is not None:
+                        payload["aah/cluster_sim_std_level0"] = cluster_sim_std_level0
+                    if cluster_sim_min_level0 is not None:
+                        payload["aah/cluster_sim_min_level0"] = cluster_sim_min_level0
+                    if cluster_sim_max_level0 is not None:
+                        payload["aah/cluster_sim_max_level0"] = cluster_sim_max_level0
+                    if cluster_item_count_level0 is not None:
+                        payload["aah/cluster_item_count_level0"] = cluster_item_count_level0
+                    if cluster_groups_before_merge_level0 is not None:
+                        payload["aah/cluster_groups_before_merge_level0"] = cluster_groups_before_merge_level0
+                    if cluster_groups_after_merge_level0 is not None:
+                        payload["aah/cluster_groups_after_merge_level0"] = cluster_groups_after_merge_level0
+                    if cluster_groups_merged_level0 is not None:
+                        payload["aah/cluster_groups_merged_level0"] = cluster_groups_merged_level0
+                    if cluster_small_groups_before_merge_level0 is not None:
+                        payload["aah/cluster_small_groups_before_merge_level0"] = cluster_small_groups_before_merge_level0
+                    if cluster_singletons_before_merge_level0 is not None:
+                        payload["aah/cluster_singletons_before_merge_level0"] = cluster_singletons_before_merge_level0
                     if branch_usage_agg:
                         payload["aah/branch_usage_freq"] = branch_usage_agg
                     if path_mode_freq:

@@ -607,27 +607,57 @@ class AAHV3Attention(nn.Module):
         self.cached_group_feats_step = self.current_step
         return group_feats
 
-    def _build_group_hierarchy(self, groups0, group_feats):
+    def _build_group_hierarchy(self, groups0, group_feats, return_debug: bool = False):
         levels = []
+        cluster_debug = []
         levels.append((groups0, group_feats))
         if len(groups0) == 1:
+            if return_debug:
+                return levels, cluster_debug
             return levels
         feats_prev = group_feats
-        for _ in range(1, self.max_depth):
-            groups = self._cluster(feats_prev, self.super_threshold)
+        for level_idx in range(1, self.max_depth):
+            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True)
+            dbg["level_idx"] = level_idx
+            dbg["threshold_kind"] = "super_threshold"
+            cluster_debug.append(dbg)
             feats = self._aggregate(groups, feats_prev)
             levels.append((groups, feats))
             if len(groups) == 1:
                 break
             feats_prev = feats
+        if return_debug:
+            return levels, cluster_debug
         return levels
 
-    def _cluster(self, feats, threshold, prev_groups=None):
+    def _cluster(self, feats, threshold, prev_groups=None, return_debug: bool = False):
         n = feats.size(0)
         if n == 1:
-            return [[0]]
+            groups = [[0]]
+            if return_debug:
+                return groups, {
+                    "n_items": 1,
+                    "threshold": float(threshold),
+                    "sim_mean": 1.0,
+                    "sim_std": 0.0,
+                    "sim_min": 1.0,
+                    "sim_max": 1.0,
+                    "groups_before_merge": 1,
+                    "groups_after_merge": 1,
+                    "groups_merged": 0,
+                    "small_groups_before_merge": 0,
+                    "singleton_groups_before_merge": 0,
+                    "min_group_size": int(self.min_group_size),
+                }
+            return groups
         feats = F.normalize(feats, dim=-1, eps=1e-6)
         sim = feats @ feats.transpose(0, 1)
+        offdiag_mask = ~torch.eye(n, dtype=torch.bool, device=sim.device)
+        sim_offdiag = sim[offdiag_mask]
+        sim_mean = float(sim_offdiag.mean().item()) if sim_offdiag.numel() > 0 else 1.0
+        sim_std = float(sim_offdiag.std(unbiased=False).item()) if sim_offdiag.numel() > 1 else 0.0
+        sim_min = float(sim_offdiag.min().item()) if sim_offdiag.numel() > 0 else 1.0
+        sim_max = float(sim_offdiag.max().item()) if sim_offdiag.numel() > 0 else 1.0
         if prev_groups is not None and self.churn_penalty > 0:
             same_group = prev_groups.unsqueeze(0) == prev_groups.unsqueeze(1)
             sim = torch.clamp(sim + (same_group.float() * self.churn_penalty), max=1.0)
@@ -649,8 +679,27 @@ class AAHV3Attention(nn.Module):
                         stack.append(v)
                         comp.append(v)
             groups.append(comp)
+        groups_before_merge = len(groups)
+        small_groups_before_merge = sum(1 for g in groups if len(g) < self.min_group_size)
+        singleton_groups_before_merge = sum(1 for g in groups if len(g) == 1)
         if self.min_group_size > 1 and len(groups) > 1:
             groups = self._merge_small_groups(groups, feats, sim)
+        groups_after_merge = len(groups)
+        if return_debug:
+            return groups, {
+                "n_items": int(n),
+                "threshold": float(threshold),
+                "sim_mean": sim_mean,
+                "sim_std": sim_std,
+                "sim_min": sim_min,
+                "sim_max": sim_max,
+                "groups_before_merge": int(groups_before_merge),
+                "groups_after_merge": int(groups_after_merge),
+                "groups_merged": int(max(0, groups_before_merge - groups_after_merge)),
+                "small_groups_before_merge": int(small_groups_before_merge),
+                "singleton_groups_before_merge": int(singleton_groups_before_merge),
+                "min_group_size": int(self.min_group_size),
+            }
         return groups
 
     def _merge_small_groups(self, groups, feats, sim):
@@ -685,16 +734,25 @@ class AAHV3Attention(nn.Module):
             agg.append(g_feats)
         return torch.stack(agg, dim=0)
 
-    def _build_hierarchy(self, head_feats, prev_head_groups=None):
+    def _build_hierarchy(self, head_feats, prev_head_groups=None, return_debug: bool = False):
         levels = []
-        groups0 = self._cluster(head_feats, self.sim_threshold, prev_groups=prev_head_groups)
+        cluster_debug = []
+        groups0, dbg0 = self._cluster(head_feats, self.sim_threshold, prev_groups=prev_head_groups, return_debug=True)
+        dbg0["level_idx"] = 0
+        dbg0["threshold_kind"] = "sim_threshold"
+        cluster_debug.append(dbg0)
         feats0 = self._aggregate(groups0, head_feats)
         levels.append((groups0, feats0))
         if len(groups0) == 1:
+            if return_debug:
+                return levels, cluster_debug
             return levels
         feats_prev = feats0
-        for _ in range(1, self.max_depth):
-            groups = self._cluster(feats_prev, self.super_threshold)
+        for level_idx in range(1, self.max_depth):
+            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True)
+            dbg["level_idx"] = level_idx
+            dbg["threshold_kind"] = "super_threshold"
+            cluster_debug.append(dbg)
             feats = self._aggregate(groups, feats_prev)
             levels.append((groups, feats))
             if len(groups) == 1:
@@ -805,6 +863,7 @@ class AAHV3Attention(nn.Module):
         group_counts_per_level = []
         controller_logits_std_per_level = []
         path_mode = "unknown"
+        cluster_debug = []
         t_control0 = time.perf_counter()
         if not self.control_enabled:
             path_mode = "control_off_fastpath"
@@ -867,6 +926,21 @@ class AAHV3Attention(nn.Module):
                 "path_mode": path_mode,
                 "win_idx_pre_clamp": [],
                 "win_idx_post_clamp": [],
+                "cluster_threshold_kind_per_level": [],
+                "cluster_threshold_per_level": [],
+                "cluster_item_count_per_level": [],
+                "cluster_groups_before_merge_per_level": [],
+                "cluster_groups_after_merge_per_level": [],
+                "cluster_groups_merged_per_level": [],
+                "cluster_small_groups_before_merge_per_level": [],
+                "cluster_singletons_before_merge_per_level": [],
+                "cluster_sim_mean_per_level": [],
+                "cluster_sim_std_per_level": [],
+                "cluster_sim_min_per_level": [],
+                "cluster_sim_max_per_level": [],
+                "cluster_min_group_size": int(self.min_group_size),
+                "cluster_sim_threshold": float(self.sim_threshold),
+                "cluster_super_threshold": float(self.super_threshold),
             }
             if return_attn:
                 return y, att
@@ -892,7 +966,7 @@ class AAHV3Attention(nn.Module):
                     prev_groups = None
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
-                    levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                    levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
                     parent_maps = self._parent_maps(levels)
@@ -938,7 +1012,7 @@ class AAHV3Attention(nn.Module):
                     head_to_group = self.cached_head_to_group
                     groups0 = self._groups_from_head_to_group(head_to_group)
                     group_feats = self._get_cached_group_feats(q, k, v, groups0)
-                    levels = self._build_group_hierarchy(groups0, group_feats)
+                    levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
                     parent_maps = self._parent_maps(levels)
@@ -958,7 +1032,7 @@ class AAHV3Attention(nn.Module):
                     prev_groups = None
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
-                    levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                    levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
                     parent_maps = self._parent_maps(levels)
@@ -1085,6 +1159,18 @@ class AAHV3Attention(nn.Module):
                 group_ratios[g] = avg_w / float(lq)
         for window, heads in head_groups.items():
             branch_usage_freq[int(window)] = len(heads) / float(self.n_head)
+        cluster_threshold_kind_per_level = [str(d.get("threshold_kind", "")) for d in cluster_debug]
+        cluster_threshold_per_level = [float(d.get("threshold", 0.0)) for d in cluster_debug]
+        cluster_item_count_per_level = [int(d.get("n_items", 0)) for d in cluster_debug]
+        cluster_groups_before_merge_per_level = [int(d.get("groups_before_merge", 0)) for d in cluster_debug]
+        cluster_groups_after_merge_per_level = [int(d.get("groups_after_merge", 0)) for d in cluster_debug]
+        cluster_groups_merged_per_level = [int(d.get("groups_merged", 0)) for d in cluster_debug]
+        cluster_small_groups_before_merge_per_level = [int(d.get("small_groups_before_merge", 0)) for d in cluster_debug]
+        cluster_singletons_before_merge_per_level = [int(d.get("singleton_groups_before_merge", 0)) for d in cluster_debug]
+        cluster_sim_mean_per_level = [float(d.get("sim_mean", 1.0)) for d in cluster_debug]
+        cluster_sim_std_per_level = [float(d.get("sim_std", 0.0)) for d in cluster_debug]
+        cluster_sim_min_per_level = [float(d.get("sim_min", 1.0)) for d in cluster_debug]
+        cluster_sim_max_per_level = [float(d.get("sim_max", 1.0)) for d in cluster_debug]
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
@@ -1124,6 +1210,21 @@ class AAHV3Attention(nn.Module):
             "path_mode": path_mode,
             "win_idx_pre_clamp": win_idx_pre_clamp.detach().cpu().tolist() if win_idx_pre_clamp is not None else [],
             "win_idx_post_clamp": win_idx_post_clamp.detach().cpu().tolist() if win_idx_post_clamp is not None else [],
+            "cluster_threshold_kind_per_level": cluster_threshold_kind_per_level,
+            "cluster_threshold_per_level": cluster_threshold_per_level,
+            "cluster_item_count_per_level": cluster_item_count_per_level,
+            "cluster_groups_before_merge_per_level": cluster_groups_before_merge_per_level,
+            "cluster_groups_after_merge_per_level": cluster_groups_after_merge_per_level,
+            "cluster_groups_merged_per_level": cluster_groups_merged_per_level,
+            "cluster_small_groups_before_merge_per_level": cluster_small_groups_before_merge_per_level,
+            "cluster_singletons_before_merge_per_level": cluster_singletons_before_merge_per_level,
+            "cluster_sim_mean_per_level": cluster_sim_mean_per_level,
+            "cluster_sim_std_per_level": cluster_sim_std_per_level,
+            "cluster_sim_min_per_level": cluster_sim_min_per_level,
+            "cluster_sim_max_per_level": cluster_sim_max_per_level,
+            "cluster_min_group_size": int(self.min_group_size),
+            "cluster_sim_threshold": float(self.sim_threshold),
+            "cluster_super_threshold": float(self.super_threshold),
         }
         if return_attn:
             return y, attn_maps
