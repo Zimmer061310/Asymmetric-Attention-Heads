@@ -586,6 +586,12 @@ def main():
                 resolution_collapse_maxs = []
                 resolution_deltas = []
                 branch_usage_freqs = []
+                hierarchy_levels_useds = []
+                group_counts_per_levels = []
+                controller_logits_std_per_levels = []
+                path_modes = []
+                win_idx_pre_parent_clamps = []
+                win_idx_post_parent_clamps = []
                 lk_means = []
                 lk_p90s = []
                 w_means = []
@@ -637,6 +643,18 @@ def main():
                                 resolution_deltas.append(attn.last_stats.get("resolution_delta"))
                             if "branch_usage_freq" in attn.last_stats:
                                 branch_usage_freqs.append(attn.last_stats.get("branch_usage_freq"))
+                            if "hierarchy_levels_used" in attn.last_stats:
+                                hierarchy_levels_useds.append(attn.last_stats.get("hierarchy_levels_used"))
+                            if "group_counts_per_level" in attn.last_stats:
+                                group_counts_per_levels.append(attn.last_stats.get("group_counts_per_level"))
+                            if "controller_logits_std_per_level" in attn.last_stats:
+                                controller_logits_std_per_levels.append(attn.last_stats.get("controller_logits_std_per_level"))
+                            if "path_mode" in attn.last_stats:
+                                path_modes.append(attn.last_stats.get("path_mode"))
+                            if "win_idx_pre_clamp" in attn.last_stats:
+                                win_idx_pre_parent_clamps.append(attn.last_stats.get("win_idx_pre_clamp"))
+                            if "win_idx_post_clamp" in attn.last_stats:
+                                win_idx_post_parent_clamps.append(attn.last_stats.get("win_idx_post_clamp"))
                             if "control_time_ms" in attn.last_stats:
                                 control_times.append(attn.last_stats.get("control_time_ms"))
                             if "attn_time_ms" in attn.last_stats:
@@ -676,6 +694,7 @@ def main():
                 resolution_collapse_min = (sum(resolution_collapse_mins) / len(resolution_collapse_mins)) if resolution_collapse_mins else None
                 resolution_collapse_max = (sum(resolution_collapse_maxs) / len(resolution_collapse_maxs)) if resolution_collapse_maxs else None
                 resolution_delta = sum(resolution_deltas) / len(resolution_deltas) if resolution_deltas else None
+                hierarchy_levels_used = (sum(hierarchy_levels_useds) / len(hierarchy_levels_useds)) if hierarchy_levels_useds else None
                 branch_usage_agg = {}
                 if branch_usage_freqs:
                     for freq_dict in branch_usage_freqs:
@@ -685,6 +704,14 @@ def main():
                     denom = float(len(branch_usage_freqs))
                     for k in list(branch_usage_agg.keys()):
                         branch_usage_agg[k] = branch_usage_agg[k] / denom
+                path_mode_freq = {}
+                if path_modes:
+                    for mode in path_modes:
+                        ms = str(mode)
+                        path_mode_freq[ms] = path_mode_freq.get(ms, 0.0) + 1.0
+                    denom = float(len(path_modes))
+                    for k in list(path_mode_freq.keys()):
+                        path_mode_freq[k] = path_mode_freq[k] / denom
                 avg_window = sum(avg_windows) / len(avg_windows) if avg_windows else None
                 lk_mean = sum(lk_means) / len(lk_means) if lk_means else None
                 lk_p90 = sum(lk_p90s) / len(lk_p90s) if lk_p90s else None
@@ -801,8 +828,21 @@ def main():
                         payload["aah/resolution_collapse_max"] = resolution_collapse_max
                     if resolution_delta is not None:
                         payload["aah/resolution_delta"] = resolution_delta
+                    if hierarchy_levels_used is not None:
+                        payload["aah/hierarchy_levels_used"] = hierarchy_levels_used
+                    if group_counts_per_levels:
+                        payload["aah/group_counts_per_level"] = group_counts_per_levels[0]
+                    if controller_logits_std_per_levels:
+                        payload["aah/controller_logits_std_per_level"] = controller_logits_std_per_levels[0]
+                    if win_idx_pre_parent_clamps:
+                        payload["aah/win_idx_pre_parent_clamp"] = win_idx_pre_parent_clamps[0]
+                    if win_idx_post_parent_clamps:
+                        payload["aah/win_idx_post_parent_clamp"] = win_idx_post_parent_clamps[0]
                     if branch_usage_agg:
                         payload["aah/branch_usage_freq"] = branch_usage_agg
+                    if path_mode_freq:
+                        for mode, freq in path_mode_freq.items():
+                            payload[f"aah/path_mode_freq/{mode}"] = freq
                     if avg_overlap is not None:
                         payload["aah/group_overlap"] = avg_overlap
                     if avg_reassign is not None:

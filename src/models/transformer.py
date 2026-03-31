@@ -714,21 +714,35 @@ class AAHV3Attention(nn.Module):
             parent_maps.append(parent_map)
         return parent_maps
 
-    def _select_windows(self, levels, parent_maps, device):
+    def _select_windows(self, levels, parent_maps, device, return_debug: bool = False):
         n_levels = len(levels)
         win_indices = [None] * n_levels
-        top_groups, top_feats = levels[-1]
+        _, top_feats = levels[-1]
         top_logits = self.controller(top_feats.float()).float()
         top_idx = top_logits.argmax(dim=-1)
         win_indices[-1] = top_idx
+        logits_std_per_level = [float(top_logits.std(unbiased=False).item())]
+        pre_clamp_level0 = top_idx.detach().clone()
+        post_clamp_level0 = top_idx.detach().clone()
         for level in range(n_levels - 2, -1, -1):
-            groups, feats = levels[level]
+            _, feats = levels[level]
             logits = self.controller(feats.float()).float()
             idx = logits.argmax(dim=-1)
+            idx_pre = idx.detach().clone()
+            logits_std_per_level.insert(0, float(logits.std(unbiased=False).item()))
             parent_map = parent_maps[level].to(device)
             parent_idx = win_indices[level + 1][parent_map]
             idx = torch.minimum(idx, parent_idx)
+            if level == 0:
+                pre_clamp_level0 = idx_pre
+                post_clamp_level0 = idx.detach().clone()
             win_indices[level] = idx
+        if return_debug:
+            return win_indices[0], {
+                "pre_clamp_level0": pre_clamp_level0,
+                "post_clamp_level0": post_clamp_level0,
+                "logits_std_per_level": logits_std_per_level,
+            }
         return win_indices[0]
 
     def _local_attention(self, q, k, v, window):
@@ -785,8 +799,15 @@ class AAHV3Attention(nn.Module):
         shadow_win_idx = None
         shadow_logit_mean = None
         resolution_delta = None
+        win_idx_pre_clamp = None
+        win_idx_post_clamp = None
+        hierarchy_levels_used = 0
+        group_counts_per_level = []
+        controller_logits_std_per_level = []
+        path_mode = "unknown"
         t_control0 = time.perf_counter()
         if not self.control_enabled:
+            path_mode = "control_off_fastpath"
             t_attn0 = time.perf_counter()
             att = (q @ k.transpose(-2, -1)) * self.scale
             mask = self.full_mask[:, :, :T, :T]
@@ -840,6 +861,12 @@ class AAHV3Attention(nn.Module):
                 "resolution_collapse_max": True,
                 "resolution_delta": 0.0,
                 "branch_usage_freq": {int(T): 1.0},
+                "hierarchy_levels_used": 0,
+                "group_counts_per_level": [],
+                "controller_logits_std_per_level": [],
+                "path_mode": path_mode,
+                "win_idx_pre_clamp": [],
+                "win_idx_post_clamp": [],
             }
             if return_attn:
                 return y, att
@@ -847,22 +874,15 @@ class AAHV3Attention(nn.Module):
         elif self.control_enabled and not in_warmup:
             use_cache = (not self._should_update_control()) and self.cached_win_idx is not None
             if use_cache:
+                path_mode = "grouped_control_cached" if (self.grouping_enabled and self.cached_head_to_group is not None) else "ungrouped_control_cached"
                 win_idx = self.cached_win_idx
                 head_to_group = self.cached_head_to_group
                 group_change_rate = 0.0
                 resolution_delta = 0.0
             else:
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
-                if self.cached_head_to_group is not None and self.grouping_enabled:
-                    head_to_group = self.cached_head_to_group
-                    groups0 = self._groups_from_head_to_group(head_to_group)
-                    group_feats = self._get_cached_group_feats(q, k, v, groups0)
-                    levels = self._build_group_hierarchy(groups0, group_feats)
-                    parent_maps = self._parent_maps(levels)
-                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
-                    win_idx = group_win_idx[head_to_group]
-                    group_change_rate = 0.0
-                else:
+                if self.grouping_enabled:
+                    path_mode = "grouped_control_update"
                     feats = self._head_features(q, k, v)
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
                         self.ema_feats = feats.detach().float()
@@ -873,14 +893,19 @@ class AAHV3Attention(nn.Module):
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
                     levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                    hierarchy_levels_used = len(levels)
+                    group_counts_per_level = [len(groups) for groups, _ in levels]
                     parent_maps = self._parent_maps(levels)
-                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                    controller_logits_std_per_level = win_debug["logits_std_per_level"]
                     groups0 = levels[0][0]
                     head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
                     for gi, heads in enumerate(groups0):
                         for h in heads:
                             head_to_group[h] = gi
                     win_idx = group_win_idx[head_to_group]
+                    win_idx_pre_clamp = win_debug["pre_clamp_level0"][head_to_group]
+                    win_idx_post_clamp = win_debug["post_clamp_level0"][head_to_group]
                     if self.cached_head_to_group is None:
                         group_change_rate = 0.0
                     else:
@@ -888,11 +913,24 @@ class AAHV3Attention(nn.Module):
                     self.cached_head_to_group = head_to_group.detach().clone()
                     self.cached_group_feats = None
                     self.cached_group_feats_step = None
+                else:
+                    path_mode = "ungrouped_control_update"
+                    head_to_group = None
+                    group_change_rate = None
+                    feats = self._head_features(q, k, v)
+                    logits = self.controller(feats.float()).float()
+                    controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
+                    win_idx = logits.argmax(dim=-1)
+                    win_idx_pre_clamp = win_idx.detach().clone()
+                    win_idx_post_clamp = win_idx.detach().clone()
+                    hierarchy_levels_used = 1
+                    group_counts_per_level = [int(self.n_head)]
                 if prev_win_idx is not None:
                     resolution_delta = float((win_idx.float() - prev_win_idx.float()).abs().mean().item())
                 self.cached_win_idx = win_idx.detach().clone()
                 self.last_control_step = self.current_step
         else:
+            path_mode = "warmup_or_disabled_control"
             head_to_group = None
             group_change_rate = None
             if self.grouping_enabled:
@@ -901,10 +939,13 @@ class AAHV3Attention(nn.Module):
                     groups0 = self._groups_from_head_to_group(head_to_group)
                     group_feats = self._get_cached_group_feats(q, k, v, groups0)
                     levels = self._build_group_hierarchy(groups0, group_feats)
+                    hierarchy_levels_used = len(levels)
+                    group_counts_per_level = [len(groups) for groups, _ in levels]
                     parent_maps = self._parent_maps(levels)
-                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                     shadow_win_idx = group_win_idx[head_to_group]
                     logits = self.controller(levels[0][1].float()).float()
+                    controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
                 else:
@@ -918,8 +959,10 @@ class AAHV3Attention(nn.Module):
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
                     levels = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups)
+                    hierarchy_levels_used = len(levels)
+                    group_counts_per_level = [len(groups) for groups, _ in levels]
                     parent_maps = self._parent_maps(levels)
-                    group_win_idx = self._select_windows(levels, parent_maps, device=x.device)
+                    group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                     groups0 = levels[0][0]
                     head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
                     for gi, heads in enumerate(groups0):
@@ -927,6 +970,7 @@ class AAHV3Attention(nn.Module):
                             head_to_group[h] = gi
                     shadow_win_idx = group_win_idx[head_to_group]
                     logits = self.controller(levels[0][1].float()).float()
+                    controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     if self.cached_head_to_group is None:
                         group_change_rate = 0.0
@@ -1074,6 +1118,12 @@ class AAHV3Attention(nn.Module):
             "resolution_collapse_min": resolution_collapse_min,
             "resolution_collapse_max": resolution_collapse_max,
             "resolution_delta": resolution_delta,
+            "hierarchy_levels_used": hierarchy_levels_used,
+            "group_counts_per_level": group_counts_per_level,
+            "controller_logits_std_per_level": controller_logits_std_per_level,
+            "path_mode": path_mode,
+            "win_idx_pre_clamp": win_idx_pre_clamp.detach().cpu().tolist() if win_idx_pre_clamp is not None else [],
+            "win_idx_post_clamp": win_idx_post_clamp.detach().cpu().tolist() if win_idx_post_clamp is not None else [],
         }
         if return_attn:
             return y, attn_maps
