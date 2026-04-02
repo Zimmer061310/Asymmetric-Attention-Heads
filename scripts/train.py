@@ -607,6 +607,21 @@ def main():
                 cluster_min_group_sizes = []
                 cluster_sim_thresholds = []
                 cluster_super_thresholds = []
+                feature_dim_var_means = []
+                feature_dim_var_stds = []
+                feature_dim_var_mins = []
+                feature_dim_var_maxs = []
+                feature_cos_sim_means = []
+                feature_cos_sim_stds = []
+                feature_cos_sim_mins = []
+                feature_cos_sim_maxs = []
+                feature_l2_dist_means = []
+                feature_l2_dist_stds = []
+                feature_l2_dist_mins = []
+                feature_l2_dist_maxs = []
+                feature_norm_means = []
+                feature_norm_stds = []
+                feature_top_singular_ratios = []
                 lk_means = []
                 lk_p90s = []
                 w_means = []
@@ -700,6 +715,36 @@ def main():
                                 cluster_sim_thresholds.append(attn.last_stats.get("cluster_sim_threshold"))
                             if "cluster_super_threshold" in attn.last_stats:
                                 cluster_super_thresholds.append(attn.last_stats.get("cluster_super_threshold"))
+                            if "feature_dim_var_mean" in attn.last_stats:
+                                feature_dim_var_means.append(attn.last_stats.get("feature_dim_var_mean"))
+                            if "feature_dim_var_std" in attn.last_stats:
+                                feature_dim_var_stds.append(attn.last_stats.get("feature_dim_var_std"))
+                            if "feature_dim_var_min" in attn.last_stats:
+                                feature_dim_var_mins.append(attn.last_stats.get("feature_dim_var_min"))
+                            if "feature_dim_var_max" in attn.last_stats:
+                                feature_dim_var_maxs.append(attn.last_stats.get("feature_dim_var_max"))
+                            if "feature_cos_sim_mean" in attn.last_stats:
+                                feature_cos_sim_means.append(attn.last_stats.get("feature_cos_sim_mean"))
+                            if "feature_cos_sim_std" in attn.last_stats:
+                                feature_cos_sim_stds.append(attn.last_stats.get("feature_cos_sim_std"))
+                            if "feature_cos_sim_min" in attn.last_stats:
+                                feature_cos_sim_mins.append(attn.last_stats.get("feature_cos_sim_min"))
+                            if "feature_cos_sim_max" in attn.last_stats:
+                                feature_cos_sim_maxs.append(attn.last_stats.get("feature_cos_sim_max"))
+                            if "feature_l2_dist_mean" in attn.last_stats:
+                                feature_l2_dist_means.append(attn.last_stats.get("feature_l2_dist_mean"))
+                            if "feature_l2_dist_std" in attn.last_stats:
+                                feature_l2_dist_stds.append(attn.last_stats.get("feature_l2_dist_std"))
+                            if "feature_l2_dist_min" in attn.last_stats:
+                                feature_l2_dist_mins.append(attn.last_stats.get("feature_l2_dist_min"))
+                            if "feature_l2_dist_max" in attn.last_stats:
+                                feature_l2_dist_maxs.append(attn.last_stats.get("feature_l2_dist_max"))
+                            if "feature_norm_mean" in attn.last_stats:
+                                feature_norm_means.append(attn.last_stats.get("feature_norm_mean"))
+                            if "feature_norm_std" in attn.last_stats:
+                                feature_norm_stds.append(attn.last_stats.get("feature_norm_std"))
+                            if "feature_top_singular_ratio" in attn.last_stats:
+                                feature_top_singular_ratios.append(attn.last_stats.get("feature_top_singular_ratio"))
                             if "control_time_ms" in attn.last_stats:
                                 control_times.append(attn.last_stats.get("control_time_ms"))
                             if "attn_time_ms" in attn.last_stats:
@@ -780,6 +825,21 @@ def main():
                 if cluster_singletons_before_merge_per_levels:
                     vals = [x[0] for x in cluster_singletons_before_merge_per_levels if isinstance(x, list) and len(x) > 0]
                     cluster_singletons_before_merge_level0 = (sum(vals) / len(vals)) if vals else None
+                feature_dim_var_mean = sum(feature_dim_var_means) / len(feature_dim_var_means) if feature_dim_var_means else None
+                feature_dim_var_std = sum(feature_dim_var_stds) / len(feature_dim_var_stds) if feature_dim_var_stds else None
+                feature_dim_var_min = sum(feature_dim_var_mins) / len(feature_dim_var_mins) if feature_dim_var_mins else None
+                feature_dim_var_max = sum(feature_dim_var_maxs) / len(feature_dim_var_maxs) if feature_dim_var_maxs else None
+                feature_cos_sim_mean = sum(feature_cos_sim_means) / len(feature_cos_sim_means) if feature_cos_sim_means else None
+                feature_cos_sim_std = sum(feature_cos_sim_stds) / len(feature_cos_sim_stds) if feature_cos_sim_stds else None
+                feature_cos_sim_min = sum(feature_cos_sim_mins) / len(feature_cos_sim_mins) if feature_cos_sim_mins else None
+                feature_cos_sim_max = sum(feature_cos_sim_maxs) / len(feature_cos_sim_maxs) if feature_cos_sim_maxs else None
+                feature_l2_dist_mean = sum(feature_l2_dist_means) / len(feature_l2_dist_means) if feature_l2_dist_means else None
+                feature_l2_dist_std = sum(feature_l2_dist_stds) / len(feature_l2_dist_stds) if feature_l2_dist_stds else None
+                feature_l2_dist_min = sum(feature_l2_dist_mins) / len(feature_l2_dist_mins) if feature_l2_dist_mins else None
+                feature_l2_dist_max = sum(feature_l2_dist_maxs) / len(feature_l2_dist_maxs) if feature_l2_dist_maxs else None
+                feature_norm_mean = sum(feature_norm_means) / len(feature_norm_means) if feature_norm_means else None
+                feature_norm_std = sum(feature_norm_stds) / len(feature_norm_stds) if feature_norm_stds else None
+                feature_top_singular_ratio = sum(feature_top_singular_ratios) / len(feature_top_singular_ratios) if feature_top_singular_ratios else None
                 branch_usage_agg = {}
                 if branch_usage_freqs:
                     for freq_dict in branch_usage_freqs:
@@ -973,6 +1033,36 @@ def main():
                         payload["aah/cluster_small_groups_before_merge_level0"] = cluster_small_groups_before_merge_level0
                     if cluster_singletons_before_merge_level0 is not None:
                         payload["aah/cluster_singletons_before_merge_level0"] = cluster_singletons_before_merge_level0
+                    if feature_dim_var_mean is not None:
+                        payload["aah/feature_dim_var_mean"] = feature_dim_var_mean
+                    if feature_dim_var_std is not None:
+                        payload["aah/feature_dim_var_std"] = feature_dim_var_std
+                    if feature_dim_var_min is not None:
+                        payload["aah/feature_dim_var_min"] = feature_dim_var_min
+                    if feature_dim_var_max is not None:
+                        payload["aah/feature_dim_var_max"] = feature_dim_var_max
+                    if feature_cos_sim_mean is not None:
+                        payload["aah/feature_cos_sim_mean"] = feature_cos_sim_mean
+                    if feature_cos_sim_std is not None:
+                        payload["aah/feature_cos_sim_std"] = feature_cos_sim_std
+                    if feature_cos_sim_min is not None:
+                        payload["aah/feature_cos_sim_min"] = feature_cos_sim_min
+                    if feature_cos_sim_max is not None:
+                        payload["aah/feature_cos_sim_max"] = feature_cos_sim_max
+                    if feature_l2_dist_mean is not None:
+                        payload["aah/feature_l2_dist_mean"] = feature_l2_dist_mean
+                    if feature_l2_dist_std is not None:
+                        payload["aah/feature_l2_dist_std"] = feature_l2_dist_std
+                    if feature_l2_dist_min is not None:
+                        payload["aah/feature_l2_dist_min"] = feature_l2_dist_min
+                    if feature_l2_dist_max is not None:
+                        payload["aah/feature_l2_dist_max"] = feature_l2_dist_max
+                    if feature_norm_mean is not None:
+                        payload["aah/feature_norm_mean"] = feature_norm_mean
+                    if feature_norm_std is not None:
+                        payload["aah/feature_norm_std"] = feature_norm_std
+                    if feature_top_singular_ratio is not None:
+                        payload["aah/feature_top_singular_ratio"] = feature_top_singular_ratio
                     if branch_usage_agg:
                         payload["aah/branch_usage_freq"] = branch_usage_agg
                     if path_mode_freq:

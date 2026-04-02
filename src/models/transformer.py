@@ -554,6 +554,71 @@ class AAHV3Attention(nn.Module):
             dim=-1,
         )
         return feats.float()
+    def _feature_separability_stats(self, feats):
+        if feats is None or feats.numel() == 0:
+            return {
+                "feature_dim_var_mean": 0.0,
+                "feature_dim_var_std": 0.0,
+                "feature_dim_var_min": 0.0,
+                "feature_dim_var_max": 0.0,
+                "feature_cos_sim_mean": 1.0,
+                "feature_cos_sim_std": 0.0,
+                "feature_cos_sim_min": 1.0,
+                "feature_cos_sim_max": 1.0,
+                "feature_l2_dist_mean": 0.0,
+                "feature_l2_dist_std": 0.0,
+                "feature_l2_dist_min": 0.0,
+                "feature_l2_dist_max": 0.0,
+                "feature_norm_mean": 0.0,
+                "feature_norm_std": 0.0,
+                "feature_top_singular_ratio": 1.0,
+            }
+        f = feats.float()
+        n = f.size(0)
+        dim_var = f.var(dim=0, unbiased=False)
+        norms = f.norm(dim=-1)
+        if n > 1:
+            f_norm = F.normalize(f, dim=-1, eps=1e-6)
+            sim = f_norm @ f_norm.transpose(0, 1)
+            dist = torch.cdist(f, f, p=2)
+            offdiag_mask = ~torch.eye(n, dtype=torch.bool, device=f.device)
+            sim_offdiag = sim[offdiag_mask]
+            dist_offdiag = dist[offdiag_mask]
+            sim_mean = float(sim_offdiag.mean().item()) if sim_offdiag.numel() > 0 else 1.0
+            sim_std = float(sim_offdiag.std(unbiased=False).item()) if sim_offdiag.numel() > 1 else 0.0
+            sim_min = float(sim_offdiag.min().item()) if sim_offdiag.numel() > 0 else 1.0
+            sim_max = float(sim_offdiag.max().item()) if sim_offdiag.numel() > 0 else 1.0
+            l2_mean = float(dist_offdiag.mean().item()) if dist_offdiag.numel() > 0 else 0.0
+            l2_std = float(dist_offdiag.std(unbiased=False).item()) if dist_offdiag.numel() > 1 else 0.0
+            l2_min = float(dist_offdiag.min().item()) if dist_offdiag.numel() > 0 else 0.0
+            l2_max = float(dist_offdiag.max().item()) if dist_offdiag.numel() > 0 else 0.0
+        else:
+            sim_mean, sim_std, sim_min, sim_max = 1.0, 0.0, 1.0, 1.0
+            l2_mean, l2_std, l2_min, l2_max = 0.0, 0.0, 0.0, 0.0
+        f_centered = f - f.mean(dim=0, keepdim=True)
+        total_var = float((f_centered.pow(2).sum()).item())
+        if n > 1 and total_var > 0.0:
+            svals = torch.linalg.svdvals(f_centered)
+            top_singular_ratio = float((svals[0].pow(2) / (svals.pow(2).sum() + 1e-9)).item())
+        else:
+            top_singular_ratio = 1.0
+        return {
+            "feature_dim_var_mean": float(dim_var.mean().item()) if dim_var.numel() > 0 else 0.0,
+            "feature_dim_var_std": float(dim_var.std(unbiased=False).item()) if dim_var.numel() > 1 else 0.0,
+            "feature_dim_var_min": float(dim_var.min().item()) if dim_var.numel() > 0 else 0.0,
+            "feature_dim_var_max": float(dim_var.max().item()) if dim_var.numel() > 0 else 0.0,
+            "feature_cos_sim_mean": sim_mean,
+            "feature_cos_sim_std": sim_std,
+            "feature_cos_sim_min": sim_min,
+            "feature_cos_sim_max": sim_max,
+            "feature_l2_dist_mean": l2_mean,
+            "feature_l2_dist_std": l2_std,
+            "feature_l2_dist_min": l2_min,
+            "feature_l2_dist_max": l2_max,
+            "feature_norm_mean": float(norms.mean().item()) if norms.numel() > 0 else 0.0,
+            "feature_norm_std": float(norms.std(unbiased=False).item()) if norms.numel() > 1 else 0.0,
+            "feature_top_singular_ratio": top_singular_ratio,
+        }
     def _groups_from_head_to_group(self, head_to_group):
         if head_to_group is None:
             return None
@@ -864,6 +929,7 @@ class AAHV3Attention(nn.Module):
         controller_logits_std_per_level = []
         path_mode = "unknown"
         cluster_debug = []
+        feature_probe_stats = {}
         t_control0 = time.perf_counter()
         if not self.control_enabled:
             path_mode = "control_off_fastpath"
@@ -941,6 +1007,21 @@ class AAHV3Attention(nn.Module):
                 "cluster_min_group_size": int(self.min_group_size),
                 "cluster_sim_threshold": float(self.sim_threshold),
                 "cluster_super_threshold": float(self.super_threshold),
+                "feature_dim_var_mean": 0.0,
+                "feature_dim_var_std": 0.0,
+                "feature_dim_var_min": 0.0,
+                "feature_dim_var_max": 0.0,
+                "feature_cos_sim_mean": 1.0,
+                "feature_cos_sim_std": 0.0,
+                "feature_cos_sim_min": 1.0,
+                "feature_cos_sim_max": 1.0,
+                "feature_l2_dist_mean": 0.0,
+                "feature_l2_dist_std": 0.0,
+                "feature_l2_dist_min": 0.0,
+                "feature_l2_dist_max": 0.0,
+                "feature_norm_mean": 0.0,
+                "feature_norm_std": 0.0,
+                "feature_top_singular_ratio": 1.0,
             }
             if return_attn:
                 return y, att
@@ -958,6 +1039,7 @@ class AAHV3Attention(nn.Module):
                 if self.grouping_enabled:
                     path_mode = "grouped_control_update"
                     feats = self._head_features(q, k, v)
+                    feature_probe_stats = self._feature_separability_stats(feats)
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
                         self.ema_feats = feats.detach().float()
                     else:
@@ -992,6 +1074,7 @@ class AAHV3Attention(nn.Module):
                     head_to_group = None
                     group_change_rate = None
                     feats = self._head_features(q, k, v)
+                    feature_probe_stats = self._feature_separability_stats(feats)
                     logits = self.controller(feats.float()).float()
                     controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     win_idx = logits.argmax(dim=-1)
@@ -1024,6 +1107,7 @@ class AAHV3Attention(nn.Module):
                     group_change_rate = 0.0
                 else:
                     feats = self._head_features(q, k, v)
+                    feature_probe_stats = self._feature_separability_stats(feats)
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
                         self.ema_feats = feats.detach().float()
                     else:
@@ -1225,6 +1309,21 @@ class AAHV3Attention(nn.Module):
             "cluster_min_group_size": int(self.min_group_size),
             "cluster_sim_threshold": float(self.sim_threshold),
             "cluster_super_threshold": float(self.super_threshold),
+            "feature_dim_var_mean": float(feature_probe_stats.get("feature_dim_var_mean", 0.0)),
+            "feature_dim_var_std": float(feature_probe_stats.get("feature_dim_var_std", 0.0)),
+            "feature_dim_var_min": float(feature_probe_stats.get("feature_dim_var_min", 0.0)),
+            "feature_dim_var_max": float(feature_probe_stats.get("feature_dim_var_max", 0.0)),
+            "feature_cos_sim_mean": float(feature_probe_stats.get("feature_cos_sim_mean", 1.0)),
+            "feature_cos_sim_std": float(feature_probe_stats.get("feature_cos_sim_std", 0.0)),
+            "feature_cos_sim_min": float(feature_probe_stats.get("feature_cos_sim_min", 1.0)),
+            "feature_cos_sim_max": float(feature_probe_stats.get("feature_cos_sim_max", 1.0)),
+            "feature_l2_dist_mean": float(feature_probe_stats.get("feature_l2_dist_mean", 0.0)),
+            "feature_l2_dist_std": float(feature_probe_stats.get("feature_l2_dist_std", 0.0)),
+            "feature_l2_dist_min": float(feature_probe_stats.get("feature_l2_dist_min", 0.0)),
+            "feature_l2_dist_max": float(feature_probe_stats.get("feature_l2_dist_max", 0.0)),
+            "feature_norm_mean": float(feature_probe_stats.get("feature_norm_mean", 0.0)),
+            "feature_norm_std": float(feature_probe_stats.get("feature_norm_std", 0.0)),
+            "feature_top_singular_ratio": float(feature_probe_stats.get("feature_top_singular_ratio", 1.0)),
         }
         if return_attn:
             return y, attn_maps
