@@ -190,6 +190,23 @@ def save_checkpoint_with_metadata(model, ckpt_path, metadata):
         json.dump(metadata, f, indent=2, sort_keys=True)
 
 
+def get_group_count_metrics(model):
+    level0_counts = []
+    total_counts = []
+    for block in model.blocks:
+        attn = block.attn
+        if not hasattr(attn, "last_stats"):
+            continue
+        counts = attn.last_stats.get("group_counts_per_level")
+        if isinstance(counts, list) and len(counts) > 0:
+            vals = [float(v) for v in counts]
+            level0_counts.append(vals[0])
+            total_counts.append(sum(vals))
+    if not level0_counts:
+        return None, None
+    return (sum(total_counts) / len(total_counts), sum(level0_counts) / len(level0_counts))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/small.yaml")
@@ -401,6 +418,8 @@ def main():
         "overhead_time_ms",
         "step_time_ms",
         "eval_time_s",
+        "val_group_count_total",
+        "val_group_count_level0",
     ]
     csv_idx = {k: i for i, k in enumerate(csv_headers)}
     wandb_mod = None
@@ -1174,14 +1193,24 @@ def main():
                 )
                 last_eval_time_s = f"{eval_time:.2f}"
                 print(f"eval step {step} | loss {val_loss:.4f} | ppl {val_ppl:.2f}")
+                val_group_count_total, val_group_count_level0 = get_group_count_metrics(model)
                 if use_wandb:
-                    wandb.log({"val/loss": val_loss, "val/ppl": val_ppl, "step": step, "perf/eval_time_s": eval_time})
+                    payload = {"val/loss": val_loss, "val/ppl": val_ppl, "step": step, "perf/eval_time_s": eval_time}
+                    if val_group_count_total is not None:
+                        payload["aah/group_count_total"] = val_group_count_total
+                    if val_group_count_level0 is not None:
+                        payload["aah/group_count_level0"] = val_group_count_level0
+                    wandb.log(payload)
                 if csv_writer:
                     row = [""] * len(csv_headers)
                     row[csv_idx["step"]] = str(step)
                     row[csv_idx["val_loss"]] = f"{val_loss:.6f}"
                     row[csv_idx["val_ppl"]] = f"{val_ppl:.4f}"
                     row[csv_idx["eval_time_s"]] = f"{eval_time:.2f}"
+                    if val_group_count_total is not None:
+                        row[csv_idx["val_group_count_total"]] = f"{val_group_count_total:.6f}"
+                    if val_group_count_level0 is not None:
+                        row[csv_idx["val_group_count_level0"]] = f"{val_group_count_level0:.6f}"
                     csv_writer.writerow(row)
 
                 if step >= train["max_steps"]:
