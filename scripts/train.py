@@ -191,8 +191,8 @@ def save_checkpoint_with_metadata(model, ckpt_path, metadata):
 
 
 def get_group_count_metrics(model):
-    level0_counts = []
-    total_counts = []
+    per_level_sums = []
+    per_level_counts = []
     for block in model.blocks:
         attn = block.attn
         if not hasattr(attn, "last_stats"):
@@ -200,11 +200,21 @@ def get_group_count_metrics(model):
         counts = attn.last_stats.get("group_counts_per_level")
         if isinstance(counts, list) and len(counts) > 0:
             vals = [float(v) for v in counts]
-            level0_counts.append(vals[0])
-            total_counts.append(sum(vals))
-    if not level0_counts:
-        return None, None
-    return (sum(total_counts) / len(total_counts), sum(level0_counts) / len(level0_counts))
+            if len(per_level_sums) < len(vals):
+                need = len(vals) - len(per_level_sums)
+                per_level_sums.extend([0.0] * need)
+                per_level_counts.extend([0] * need)
+            for i, v in enumerate(vals):
+                per_level_sums[i] += v
+                per_level_counts[i] += 1
+    if not per_level_sums:
+        return None, None, []
+    per_level_means = []
+    for s, c in zip(per_level_sums, per_level_counts):
+        per_level_means.append((s / c) if c > 0 else 0.0)
+    total_mean = sum(per_level_means)
+    level0_mean = per_level_means[0] if per_level_means else None
+    return total_mean, level0_mean, per_level_means
 
 
 def main():
@@ -420,6 +430,7 @@ def main():
         "eval_time_s",
         "val_group_count_total",
         "val_group_count_level0",
+        "val_group_count_per_level",
     ]
     csv_idx = {k: i for i, k in enumerate(csv_headers)}
     wandb_mod = None
@@ -1193,13 +1204,17 @@ def main():
                 )
                 last_eval_time_s = f"{eval_time:.2f}"
                 print(f"eval step {step} | loss {val_loss:.4f} | ppl {val_ppl:.2f}")
-                val_group_count_total, val_group_count_level0 = get_group_count_metrics(model)
+                val_group_count_total, val_group_count_level0, val_group_count_per_level = get_group_count_metrics(model)
                 if use_wandb:
                     payload = {"val/loss": val_loss, "val/ppl": val_ppl, "step": step, "perf/eval_time_s": eval_time}
                     if val_group_count_total is not None:
                         payload["aah/group_count_total"] = val_group_count_total
                     if val_group_count_level0 is not None:
                         payload["aah/group_count_level0"] = val_group_count_level0
+                    if val_group_count_per_level:
+                        payload["aah/group_count_per_level"] = val_group_count_per_level
+                        for i, v in enumerate(val_group_count_per_level):
+                            payload[f"aah/group_count_level{i}"] = v
                     wandb.log(payload)
                 if csv_writer:
                     row = [""] * len(csv_headers)
@@ -1211,6 +1226,8 @@ def main():
                         row[csv_idx["val_group_count_total"]] = f"{val_group_count_total:.6f}"
                     if val_group_count_level0 is not None:
                         row[csv_idx["val_group_count_level0"]] = f"{val_group_count_level0:.6f}"
+                    if val_group_count_per_level:
+                        row[csv_idx["val_group_count_per_level"]] = ",".join(f"{v:.6f}" for v in val_group_count_per_level)
                     csv_writer.writerow(row)
 
                 if step >= train["max_steps"]:
