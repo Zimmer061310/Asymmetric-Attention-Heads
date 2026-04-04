@@ -823,6 +823,8 @@ class AAHV3Attention(nn.Module):
             if len(groups) == 1:
                 break
             feats_prev = feats
+        if return_debug:
+            return levels, cluster_debug
         return levels
 
     def _parent_maps(self, levels):
