@@ -592,6 +592,8 @@ def main():
                 path_modes = []
                 win_idx_pre_parent_clamps = []
                 win_idx_post_parent_clamps = []
+                hierarchy_head_group_map_per_levels = []
+                hierarchy_group_members_per_levels = []
                 cluster_threshold_kind_per_levels = []
                 cluster_threshold_per_levels = []
                 cluster_item_count_per_levels = []
@@ -685,6 +687,10 @@ def main():
                                 win_idx_pre_parent_clamps.append(attn.last_stats.get("win_idx_pre_clamp"))
                             if "win_idx_post_clamp" in attn.last_stats:
                                 win_idx_post_parent_clamps.append(attn.last_stats.get("win_idx_post_clamp"))
+                            if "hierarchy_head_group_map_per_level" in attn.last_stats:
+                                hierarchy_head_group_map_per_levels.append(attn.last_stats.get("hierarchy_head_group_map_per_level"))
+                            if "hierarchy_group_members_per_level" in attn.last_stats:
+                                hierarchy_group_members_per_levels.append(attn.last_stats.get("hierarchy_group_members_per_level"))
                             if "cluster_threshold_kind_per_level" in attn.last_stats:
                                 cluster_threshold_kind_per_levels.append(attn.last_stats.get("cluster_threshold_kind_per_level"))
                             if "cluster_threshold_per_level" in attn.last_stats:
@@ -983,6 +989,10 @@ def main():
                         payload["aah/win_idx_pre_parent_clamp"] = win_idx_pre_parent_clamps[0]
                     if win_idx_post_parent_clamps:
                         payload["aah/win_idx_post_parent_clamp"] = win_idx_post_parent_clamps[0]
+                    if hierarchy_head_group_map_per_levels:
+                        payload["aah/hierarchy_head_group_map_per_level"] = hierarchy_head_group_map_per_levels[0]
+                    if hierarchy_group_members_per_levels:
+                        payload["aah/hierarchy_group_members_per_level"] = hierarchy_group_members_per_levels[0]
                     if cluster_threshold_kind_per_levels:
                         payload["aah/cluster_threshold_kind_per_level"] = cluster_threshold_kind_per_levels[0]
                     if cluster_threshold_per_levels:

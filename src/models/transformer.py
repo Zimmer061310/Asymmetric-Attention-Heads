@@ -572,6 +572,8 @@ class AAHV3Attention(nn.Module):
                 "feature_norm_mean": 0.0,
                 "feature_norm_std": 0.0,
                 "feature_top_singular_ratio": 1.0,
+                "hierarchy_head_group_map_per_level": [],
+                "hierarchy_group_members_per_level": [],
             }
         f = feats.float()
         n = f.size(0)
@@ -629,6 +631,35 @@ class AAHV3Attention(nn.Module):
             if g >= 0:
                 groups[g].append(h)
         return groups
+    def _head_group_map_per_level(self, levels):
+        if not levels:
+            return []
+        groups0 = levels[0][0]
+        level0 = torch.full((self.n_head,), -1, dtype=torch.long)
+        for gi, heads in enumerate(groups0):
+            for h in heads:
+                level0[h] = gi
+        maps = [level0.tolist()]
+        prev_map = level0
+        for level in range(1, len(levels)):
+            prev_group_count = len(levels[level - 1][0])
+            groups_cur = levels[level][0]
+            parent_of_child = torch.full((prev_group_count,), -1, dtype=torch.long)
+            for parent_idx, children in enumerate(groups_cur):
+                for child_idx in children:
+                    parent_of_child[child_idx] = parent_idx
+            prev_map = parent_of_child[prev_map]
+            maps.append(prev_map.tolist())
+        return maps
+    def _group_members_from_head_maps(self, head_group_map_per_level):
+        members = []
+        for head_map in head_group_map_per_level:
+            by_group = {}
+            for h, g in enumerate(head_map):
+                g = int(g)
+                by_group.setdefault(g, []).append(int(h))
+            members.append([by_group[k] for k in sorted(by_group.keys())])
+        return members
 
     def _group_features_from_qkv(self, q, k, v, groups0):
         if not groups0:
@@ -932,6 +963,8 @@ class AAHV3Attention(nn.Module):
         path_mode = "unknown"
         cluster_debug = []
         feature_probe_stats = {}
+        hierarchy_head_group_map_per_level = []
+        hierarchy_group_members_per_level = []
         t_control0 = time.perf_counter()
         if not self.control_enabled:
             path_mode = "control_off_fastpath"
@@ -1053,6 +1086,8 @@ class AAHV3Attention(nn.Module):
                     levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
+                    hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                    hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     parent_maps = self._parent_maps(levels)
                     group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                     controller_logits_std_per_level = win_debug["logits_std_per_level"]
@@ -1100,6 +1135,8 @@ class AAHV3Attention(nn.Module):
                     levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
+                    hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                    hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     parent_maps = self._parent_maps(levels)
                     group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                     shadow_win_idx = group_win_idx[head_to_group]
@@ -1121,6 +1158,8 @@ class AAHV3Attention(nn.Module):
                     levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
+                    hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                    hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     parent_maps = self._parent_maps(levels)
                     group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                     groups0 = levels[0][0]
@@ -1326,6 +1365,8 @@ class AAHV3Attention(nn.Module):
             "feature_norm_mean": float(feature_probe_stats.get("feature_norm_mean", 0.0)),
             "feature_norm_std": float(feature_probe_stats.get("feature_norm_std", 0.0)),
             "feature_top_singular_ratio": float(feature_probe_stats.get("feature_top_singular_ratio", 1.0)),
+            "hierarchy_head_group_map_per_level": hierarchy_head_group_map_per_level,
+            "hierarchy_group_members_per_level": hierarchy_group_members_per_level,
         }
         if return_attn:
             return y, attn_maps
