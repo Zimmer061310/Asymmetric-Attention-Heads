@@ -198,7 +198,14 @@ def get_group_count_metrics(model):
         if not hasattr(attn, "last_stats"):
             continue
         counts = attn.last_stats.get("group_counts_per_level")
-        if isinstance(counts, list) and len(counts) > 0:
+        if counts is None:
+            continue
+        if not isinstance(counts, (list, tuple)):
+            try:
+                counts = list(counts)
+            except TypeError:
+                continue
+        if len(counts) > 0:
             vals = [float(v) for v in counts]
             if len(per_level_sums) < len(vals):
                 need = len(vals) - len(per_level_sums)

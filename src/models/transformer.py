@@ -475,6 +475,7 @@ class AAHV3Attention(nn.Module):
         self.cached_head_to_group = None
         self.cached_group_feats = None
         self.cached_group_feats_step = None
+        self.cached_group_counts_per_level = None
         self.last_control_step = None
         self.current_step = None
         self.last_stats = {}
@@ -505,6 +506,7 @@ class AAHV3Attention(nn.Module):
             self.cached_head_to_group = None
             self.cached_group_feats = None
             self.cached_group_feats_step = None
+            self.cached_group_counts_per_level = None
             self.last_control_step = None
             self.ema_win_idx = None
 
@@ -513,6 +515,7 @@ class AAHV3Attention(nn.Module):
         self.cached_head_to_group = None
         self.cached_group_feats = None
         self.cached_group_feats_step = None
+        self.cached_group_counts_per_level = None
         self.last_control_step = None
         self.ema_win_idx = None
 
@@ -1069,6 +1072,17 @@ class AAHV3Attention(nn.Module):
                 head_to_group = self.cached_head_to_group
                 group_change_rate = 0.0
                 resolution_delta = 0.0
+                if self.grouping_enabled:
+                    group_counts_per_level = []
+                    if self.cached_group_counts_per_level is not None:
+                        group_counts_per_level = [int(v) for v in self.cached_group_counts_per_level]
+                    elif head_to_group is not None:
+                        group_counts_per_level = [int(torch.unique(head_to_group).numel())]
+                    hierarchy_levels_used = len(group_counts_per_level)
+                else:
+                    hierarchy_levels_used = 1
+                    group_counts_per_level = [int(self.n_head)]
+                    self.cached_group_counts_per_level = list(group_counts_per_level)
             else:
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
                 if self.grouping_enabled:
@@ -1086,6 +1100,7 @@ class AAHV3Attention(nn.Module):
                     levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
+                    self.cached_group_counts_per_level = list(group_counts_per_level)
                     hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
                     hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     parent_maps = self._parent_maps(levels)
@@ -1119,6 +1134,7 @@ class AAHV3Attention(nn.Module):
                     win_idx_post_clamp = win_idx.detach().clone()
                     hierarchy_levels_used = 1
                     group_counts_per_level = [int(self.n_head)]
+                    self.cached_group_counts_per_level = list(group_counts_per_level)
                 if prev_win_idx is not None:
                     resolution_delta = float((win_idx.float() - prev_win_idx.float()).abs().mean().item())
                 self.cached_win_idx = win_idx.detach().clone()
@@ -1135,6 +1151,7 @@ class AAHV3Attention(nn.Module):
                     levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
+                    self.cached_group_counts_per_level = list(group_counts_per_level)
                     hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
                     hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     parent_maps = self._parent_maps(levels)
@@ -1158,6 +1175,7 @@ class AAHV3Attention(nn.Module):
                     levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
+                    self.cached_group_counts_per_level = list(group_counts_per_level)
                     hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
                     hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     parent_maps = self._parent_maps(levels)
