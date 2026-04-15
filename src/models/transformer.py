@@ -760,29 +760,39 @@ class AAHV3Attention(nn.Module):
         if prev_groups is not None and self.churn_penalty > 0:
             same_group = prev_groups.unsqueeze(0) == prev_groups.unsqueeze(1)
             sim = torch.clamp(sim + (same_group.float() * self.churn_penalty), max=1.0)
-        adj = sim >= threshold
-        visited = [False] * n
+        # Use centroid-threshold assignment instead of transitive connected-components.
+        # Connected-components on a thresholded graph behaves like single-linkage and can
+        # collapse into one giant group via similarity chains even when structure exists.
         groups = []
+        centroids = []
         for i in range(n):
-            if visited[i]:
+            fi = feats[i]
+            if not centroids:
+                groups.append([i])
+                centroids.append(fi.clone())
                 continue
-            stack = [i]
-            visited[i] = True
-            comp = [i]
-            while stack:
-                u = stack.pop()
-                neighbors = torch.where(adj[u])[0].tolist()
-                for v in neighbors:
-                    if not visited[v]:
-                        visited[v] = True
-                        stack.append(v)
-                        comp.append(v)
-            groups.append(comp)
+            c_stack = torch.stack(centroids, dim=0)
+            sims = (c_stack @ fi.unsqueeze(1)).squeeze(1)
+            best_sim, best_idx = torch.max(sims, dim=0)
+            if float(best_sim.item()) >= float(threshold):
+                gi = int(best_idx.item())
+                groups[gi].append(i)
+                # running centroid update
+                centroids[gi] = feats[groups[gi]].mean(dim=0)
+                centroids[gi] = F.normalize(centroids[gi], dim=0, eps=1e-6)
+            else:
+                groups.append([i])
+                centroids.append(fi.clone())
+        forced_bipartition = False
+        force_split_anchor_similarity = None
+        if len(groups) == 1 and n >= 2:
+            groups, force_split_anchor_similarity = self._force_bipartition_groups(feats, sim)
+            forced_bipartition = len(groups) > 1
         groups_before_merge = len(groups)
         small_groups_before_merge = sum(1 for g in groups if len(g) < self.min_group_size)
         singleton_groups_before_merge = sum(1 for g in groups if len(g) == 1)
-        if self.min_group_size > 1 and len(groups) > 1:
-            groups = self._merge_small_groups(groups, feats, sim)
+        if self.min_group_size > 1 and len(groups) > 1 and not forced_bipartition:
+            groups = self._merge_small_groups(groups, feats, sim, threshold)
         groups_after_merge = len(groups)
         if return_debug:
             return groups, {
@@ -798,10 +808,58 @@ class AAHV3Attention(nn.Module):
                 "small_groups_before_merge": int(small_groups_before_merge),
                 "singleton_groups_before_merge": int(singleton_groups_before_merge),
                 "min_group_size": int(self.min_group_size),
+                "forced_bipartition": bool(forced_bipartition),
+                "force_split_anchor_similarity": float(force_split_anchor_similarity) if force_split_anchor_similarity is not None else None,
             }
         return groups
 
-    def _merge_small_groups(self, groups, feats, sim):
+    def _force_bipartition_groups(self, feats, sim):
+        n = feats.shape[0]
+        if n < 2:
+            return [[i for i in range(n)]], None
+
+        sim_flat = sim.clone()
+        sim_flat.fill_diagonal_(2.0)
+        min_idx = int(torch.argmin(sim_flat).item())
+        i0 = min_idx // n
+        i1 = min_idx % n
+        if i0 == i1:
+            i1 = (i0 + 1) % n
+
+        a0 = feats[i0]
+        a1 = feats[i1]
+        s0 = feats @ a0
+        s1 = feats @ a1
+
+        g0, g1 = [i0], [i1]
+        for j in range(n):
+            if j == i0 or j == i1:
+                continue
+            d = float(s0[j] - s1[j])
+            if d > 1e-8:
+                g0.append(j)
+            elif d < -1e-8:
+                g1.append(j)
+            else:
+                if len(g0) <= len(g1):
+                    g0.append(j)
+                else:
+                    g1.append(j)
+
+        if len(g0) == 0 or len(g1) == 0:
+            order = torch.argsort((s0 - s1), descending=True).tolist()
+            half = n // 2
+            g0 = order[:half]
+            g1 = order[half:]
+            if len(g0) == 0:
+                g0 = [g1.pop()]
+            if len(g1) == 0:
+                g1 = [g0.pop()]
+
+        anchor_sim = float(sim[i0, i1].item())
+        return [g0, g1], anchor_sim
+
+    def _merge_small_groups(self, groups, feats, sim, threshold):
         groups = [list(g) for g in groups]
         small = [i for i, g in enumerate(groups) if len(g) < self.min_group_size]
         if not small:
@@ -819,7 +877,12 @@ class AAHV3Attention(nn.Module):
             sims = group_feats @ group_feats[gi].unsqueeze(1)
             sims = sims.squeeze(1)
             sims[gi] = -1.0
-            best = int(sims.argmax().item())
+            best_sim, best_idx = torch.max(sims, dim=0)
+            best = int(best_idx.item())
+            if float(best_sim.item()) < float(threshold):
+                continue
+            if len([g for g in groups if len(g) > 0]) <= 2:
+                continue
             groups[best].extend(groups[gi])
             groups[gi] = []
             group_feats[best] = feats[groups[best]].mean(dim=0)
