@@ -646,6 +646,8 @@ def main():
                 cluster_min_group_sizes = []
                 cluster_sim_thresholds = []
                 cluster_super_thresholds = []
+                cluster_forced_bipartition_per_levels = []
+                cluster_force_split_anchor_similarity_per_levels = []
                 feature_dim_var_means = []
                 feature_dim_var_stds = []
                 feature_dim_var_mins = []
@@ -758,6 +760,10 @@ def main():
                                 cluster_sim_thresholds.append(attn.last_stats.get("cluster_sim_threshold"))
                             if "cluster_super_threshold" in attn.last_stats:
                                 cluster_super_thresholds.append(attn.last_stats.get("cluster_super_threshold"))
+                            if "cluster_forced_bipartition_per_level" in attn.last_stats:
+                                cluster_forced_bipartition_per_levels.append(attn.last_stats.get("cluster_forced_bipartition_per_level"))
+                            if "cluster_force_split_anchor_similarity_per_level" in attn.last_stats:
+                                cluster_force_split_anchor_similarity_per_levels.append(attn.last_stats.get("cluster_force_split_anchor_similarity_per_level"))
                             if "feature_dim_var_mean" in attn.last_stats:
                                 feature_dim_var_means.append(attn.last_stats.get("feature_dim_var_mean"))
                             if "feature_dim_var_std" in attn.last_stats:
@@ -838,6 +844,8 @@ def main():
                 cluster_groups_merged_level0 = None
                 cluster_small_groups_before_merge_level0 = None
                 cluster_singletons_before_merge_level0 = None
+                cluster_forced_bipartition_level0 = None
+                cluster_force_split_anchor_similarity_level0 = None
                 if cluster_sim_mean_per_levels:
                     vals = [x[0] for x in cluster_sim_mean_per_levels if isinstance(x, list) and len(x) > 0]
                     cluster_sim_mean_level0 = (sum(vals) / len(vals)) if vals else None
@@ -868,6 +876,12 @@ def main():
                 if cluster_singletons_before_merge_per_levels:
                     vals = [x[0] for x in cluster_singletons_before_merge_per_levels if isinstance(x, list) and len(x) > 0]
                     cluster_singletons_before_merge_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_forced_bipartition_per_levels:
+                    vals = [1.0 if bool(x[0]) else 0.0 for x in cluster_forced_bipartition_per_levels if isinstance(x, list) and len(x) > 0]
+                    cluster_forced_bipartition_level0 = (sum(vals) / len(vals)) if vals else None
+                if cluster_force_split_anchor_similarity_per_levels:
+                    vals = [float(x[0]) for x in cluster_force_split_anchor_similarity_per_levels if isinstance(x, list) and len(x) > 0 and x[0] is not None]
+                    cluster_force_split_anchor_similarity_level0 = (sum(vals) / len(vals)) if vals else None
                 feature_dim_var_mean = sum(feature_dim_var_means) / len(feature_dim_var_means) if feature_dim_var_means else None
                 feature_dim_var_std = sum(feature_dim_var_stds) / len(feature_dim_var_stds) if feature_dim_var_stds else None
                 feature_dim_var_min = sum(feature_dim_var_mins) / len(feature_dim_var_mins) if feature_dim_var_mins else None
@@ -1060,6 +1074,16 @@ def main():
                         payload["aah/cluster_sim_threshold"] = cluster_sim_thresholds[0]
                     if cluster_super_thresholds:
                         payload["aah/cluster_super_threshold"] = cluster_super_thresholds[0]
+                    if cluster_forced_bipartition_per_levels:
+                        payload["aah/cluster_forced_bipartition_per_level"] = cluster_forced_bipartition_per_levels[0]
+                    if cluster_force_split_anchor_similarity_per_levels:
+                        payload["aah/cluster_force_split_anchor_similarity_per_level"] = cluster_force_split_anchor_similarity_per_levels[0]
+                    if cluster_forced_bipartition_level0 is not None:
+                        payload["aah/cluster_forced_bipartition_level0"] = cluster_forced_bipartition_level0
+                        payload["aah/forced_bipartition"] = cluster_forced_bipartition_level0
+                    if cluster_force_split_anchor_similarity_level0 is not None:
+                        payload["aah/cluster_force_split_anchor_similarity_level0"] = cluster_force_split_anchor_similarity_level0
+                        payload["aah/force_split_anchor_similarity"] = cluster_force_split_anchor_similarity_level0
                     if cluster_sim_mean_level0 is not None:
                         payload["aah/cluster_sim_mean_level0"] = cluster_sim_mean_level0
                     if cluster_sim_std_level0 is not None:

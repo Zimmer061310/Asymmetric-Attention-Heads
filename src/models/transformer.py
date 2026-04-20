@@ -1377,6 +1377,11 @@ class AAHV3Attention(nn.Module):
         cluster_sim_std_per_level = [float(d.get("sim_std", 0.0)) for d in cluster_debug]
         cluster_sim_min_per_level = [float(d.get("sim_min", 1.0)) for d in cluster_debug]
         cluster_sim_max_per_level = [float(d.get("sim_max", 1.0)) for d in cluster_debug]
+        cluster_forced_bipartition_per_level = [bool(d.get("forced_bipartition", False)) for d in cluster_debug]
+        cluster_force_split_anchor_similarity_per_level = [
+            float(d.get("force_split_anchor_similarity")) if d.get("force_split_anchor_similarity") is not None else None
+            for d in cluster_debug
+        ]
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
@@ -1428,6 +1433,8 @@ class AAHV3Attention(nn.Module):
             "cluster_sim_std_per_level": cluster_sim_std_per_level,
             "cluster_sim_min_per_level": cluster_sim_min_per_level,
             "cluster_sim_max_per_level": cluster_sim_max_per_level,
+            "cluster_forced_bipartition_per_level": cluster_forced_bipartition_per_level,
+            "cluster_force_split_anchor_similarity_per_level": cluster_force_split_anchor_similarity_per_level,
             "cluster_min_group_size": int(self.min_group_size),
             "cluster_sim_threshold": float(self.sim_threshold),
             "cluster_super_threshold": float(self.super_threshold),
