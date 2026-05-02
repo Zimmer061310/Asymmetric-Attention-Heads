@@ -1,0 +1,58 @@
+experiment:
+  name: aah-v3-longctx-200m-control_off
+  seed: 1337
+  variant: aah_v3_control_off
+  out_dir: experiments
+data:
+  dataset: wikitext-2-raw-v1
+  tokenizer: gpt2
+  seq_len: 1024
+  num_workers: 2
+model:
+  n_layer: 16
+  n_head: 16
+  n_embd: 1024
+  n_ff: 4096
+  dropout: 0.1
+  aah_v3_enabled: true
+  aah_v3_windows:
+  - 128
+  - 256
+  - 512
+  - 1024
+  aah_v3_grouping_enabled: true
+  aah_v3_control_enabled: false
+  aah_v3_control_dim: 16
+  aah_v3_control_interval: 100
+  aah_v3_sim_threshold: 0.72
+  aah_v3_super_threshold: 0.76
+  aah_v3_max_depth: 4
+  aah_v3_ema_alpha: 0.9
+  aah_v3_churn_penalty: 0.02
+  aah_v3_min_group_size: 3
+  aah_v3_warmup_steps: 100
+  aah_v3_W_min_gpu: 64
+  aah_v3_resolution_ema_alpha: 0.15
+  aah_v3_post_warmup_ramp_steps: 100
+  aah_v3_resolution_collapse_min_frac: 0.98
+  aah_v3_resolution_collapse_max_frac: 0.98
+train:
+  batch_size: 2
+  grad_accum: 1
+  max_steps: 1200
+  lr: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 200
+  eval_batches: 20
+  eval_log_progress: true
+  log_interval: 20
+  checkpoint_steps:
+  - 1
+  - 200
+  - 700
+  - 1200
+  device: cuda
+  precision: bf16
+  use_wandb: true
+  log_csv: true

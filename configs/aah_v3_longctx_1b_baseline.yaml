@@ -1,0 +1,36 @@
+experiment:
+  name: baseline-longctx-1b
+  seed: 1337
+  variant: baseline
+  out_dir: experiments
+data:
+  dataset: wikitext-2-raw-v1
+  tokenizer: gpt2
+  seq_len: 1024
+  num_workers: 2
+model:
+  n_layer: 16
+  n_head: 12
+  n_embd: 1536
+  n_ff: 6144
+  dropout: 0.1
+train:
+  batch_size: 2
+  grad_accum: 1
+  max_steps: 1200
+  lr: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 200
+  eval_batches: 20
+  eval_log_progress: true
+  log_interval: 20
+  checkpoint_steps:
+  - 1
+  - 200
+  - 700
+  - 1200
+  device: cuda
+  precision: bf16
+  use_wandb: true
+  log_csv: true
