@@ -443,6 +443,17 @@ def main():
         "val_group_count_total",
         "val_group_count_level0",
         "val_group_count_per_level",
+        "path_mode_freq",
+        "train_group_counts_per_level",
+        "controller_logits_std_per_level",
+        "win_idx_pre_clamp",
+        "win_idx_post_clamp",
+        "hierarchy_head_group_map_per_level",
+        "hierarchy_group_members_per_level",
+        "cluster_forced_bipartition_per_level",
+        "cluster_force_split_anchor_similarity_per_level",
+        "cluster_forced_bipartition_level0",
+        "cluster_force_split_anchor_similarity_level0",
     ]
     csv_idx = {k: i for i, k in enumerate(csv_headers)}
     wandb_mod = None
@@ -1223,6 +1234,17 @@ def main():
                         fmt(overhead_time_ms),
                         f"{step_time_ms:.2f}",
                         last_eval_time_s,
+                        str(path_mode_freq) if path_mode_freq else "",
+                        str(group_counts_per_levels[0]) if group_counts_per_levels else "",
+                        str(controller_logits_std_per_levels[0]) if controller_logits_std_per_levels else "",
+                        str(win_idx_pre_parent_clamps[0]) if win_idx_pre_parent_clamps else "",
+                        str(win_idx_post_parent_clamps[0]) if win_idx_post_parent_clamps else "",
+                        str(hierarchy_head_group_map_per_levels[0]) if hierarchy_head_group_map_per_levels else "",
+                        str(hierarchy_group_members_per_levels[0]) if hierarchy_group_members_per_levels else "",
+                        str(cluster_forced_bipartition_per_levels[0]) if cluster_forced_bipartition_per_levels else "",
+                        str(cluster_force_split_anchor_similarity_per_levels[0]) if cluster_force_split_anchor_similarity_per_levels else "",
+                        str(cluster_forced_bipartition_level0) if cluster_forced_bipartition_level0 is not None else "",
+                        f"{cluster_force_split_anchor_similarity_level0:.6f}" if cluster_force_split_anchor_similarity_level0 is not None else "",
                     ])
                 if head_groups:
                     prev_head_groups = [list(g) for g in head_groups]
