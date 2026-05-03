@@ -43,6 +43,8 @@ class GPTConfig:
     aah_v3_warmup_steps: int = 0
     aah_v3_control_enabled: bool = True
     aah_v3_grouping_enabled: bool = True
+    aah_v3_build_hierarchy: bool = True
+    aah_v3_apply_window_control: bool = True
     aah_v3_W_min_gpu: int = 64
     aah_v3_mask_cache_size: int = 16
     aah_v3_resolution_ema_alpha: float = 0.0
@@ -462,8 +464,11 @@ class AAHV3Attention(nn.Module):
         self.churn_penalty = float(config.aah_v3_churn_penalty)
         self.min_group_size = max(1, int(config.aah_v3_min_group_size))
         self.warmup_steps = max(0, int(config.aah_v3_warmup_steps))
-        self.control_enabled = bool(config.aah_v3_control_enabled)
-        self.grouping_enabled = bool(config.aah_v3_grouping_enabled)
+        self.build_hierarchy = bool(getattr(config, "aah_v3_build_hierarchy", config.aah_v3_grouping_enabled))
+        self.apply_window_control = bool(getattr(config, "aah_v3_apply_window_control", config.aah_v3_control_enabled))
+        # Backward-compatible internal aliases for older code paths/configs.
+        self.control_enabled = self.apply_window_control
+        self.grouping_enabled = self.build_hierarchy
         self.w_min_gpu = max(1, int(config.aah_v3_W_min_gpu))
         self.mask_cache_size = max(0, int(config.aah_v3_mask_cache_size))
         self.resolution_ema_alpha = float(config.aah_v3_resolution_ema_alpha)
@@ -1032,8 +1037,8 @@ class AAHV3Attention(nn.Module):
         hierarchy_head_group_map_per_level = []
         hierarchy_group_members_per_level = []
         t_control0 = time.perf_counter()
-        if not self.control_enabled:
-            path_mode = "control_off_fastpath"
+        if not self.apply_window_control and not self.build_hierarchy:
+            path_mode = "full_attention_fastpath"
             t_attn0 = time.perf_counter()
             att = (q @ k.transpose(-2, -1)) * self.scale
             mask = self.full_mask[:, :, :T, :T]
@@ -1127,15 +1132,15 @@ class AAHV3Attention(nn.Module):
             if return_attn:
                 return y, att
             return y
-        elif self.control_enabled and not in_warmup:
+        elif self.apply_window_control and not in_warmup:
             use_cache = (not self._should_update_control()) and self.cached_win_idx is not None
             if use_cache:
-                path_mode = "grouped_control_cached" if (self.grouping_enabled and self.cached_head_to_group is not None) else "ungrouped_control_cached"
+                path_mode = "grouped_control_cached" if (self.build_hierarchy and self.cached_head_to_group is not None) else "ungrouped_control_cached"
                 win_idx = self.cached_win_idx
                 head_to_group = self.cached_head_to_group
                 group_change_rate = 0.0
                 resolution_delta = 0.0
-                if self.grouping_enabled:
+                if self.build_hierarchy:
                     group_counts_per_level = []
                     if self.cached_group_counts_per_level is not None:
                         group_counts_per_level = [int(v) for v in self.cached_group_counts_per_level]
@@ -1148,7 +1153,7 @@ class AAHV3Attention(nn.Module):
                     self.cached_group_counts_per_level = list(group_counts_per_level)
             else:
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
-                if self.grouping_enabled:
+                if self.build_hierarchy:
                     path_mode = "grouped_control_update"
                     feats = self._head_features(q, k, v)
                     feature_probe_stats = self._feature_separability_stats(feats)
@@ -1203,10 +1208,10 @@ class AAHV3Attention(nn.Module):
                 self.cached_win_idx = win_idx.detach().clone()
                 self.last_control_step = self.current_step
         else:
-            path_mode = "warmup_or_disabled_control"
+            path_mode = "warmup_or_disabled_control" if self.apply_window_control else "grouping_only_full_attention"
             head_to_group = None
             group_change_rate = None
-            if self.grouping_enabled:
+            if self.build_hierarchy:
                 if self.cached_head_to_group is not None:
                     head_to_group = self.cached_head_to_group
                     groups0 = self._groups_from_head_to_group(head_to_group)
@@ -1217,12 +1222,13 @@ class AAHV3Attention(nn.Module):
                     self.cached_group_counts_per_level = list(group_counts_per_level)
                     hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
                     hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
-                    parent_maps = self._parent_maps(levels)
-                    group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
-                    shadow_win_idx = group_win_idx[head_to_group]
-                    logits = self.controller(levels[0][1].float()).float()
-                    controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
-                    shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
+                    if self.apply_window_control:
+                        parent_maps = self._parent_maps(levels)
+                        group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                        shadow_win_idx = group_win_idx[head_to_group]
+                        logits = self.controller(levels[0][1].float()).float()
+                        controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
+                        shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
                 else:
                     feats = self._head_features(q, k, v)
@@ -1241,17 +1247,21 @@ class AAHV3Attention(nn.Module):
                     self.cached_group_counts_per_level = list(group_counts_per_level)
                     hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
                     hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
-                    parent_maps = self._parent_maps(levels)
-                    group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                    if self.apply_window_control:
+                        parent_maps = self._parent_maps(levels)
+                        group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                    else:
+                        group_win_idx = None
                     groups0 = levels[0][0]
                     head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
                     for gi, heads in enumerate(groups0):
                         for h in heads:
                             head_to_group[h] = gi
-                    shadow_win_idx = group_win_idx[head_to_group]
-                    logits = self.controller(levels[0][1].float()).float()
-                    controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
-                    shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
+                    if self.apply_window_control and group_win_idx is not None:
+                        shadow_win_idx = group_win_idx[head_to_group]
+                        logits = self.controller(levels[0][1].float()).float()
+                        controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
+                        shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     if self.cached_head_to_group is None:
                         group_change_rate = 0.0
                     else:
@@ -1284,7 +1294,7 @@ class AAHV3Attention(nn.Module):
                 full_idx_f = torch.full_like(win_idx, full_idx, dtype=torch.float32)
                 win_idx_f = win_idx.float()
                 win_idx = (ramp_progress * win_idx_f + (1.0 - ramp_progress) * full_idx_f).round().to(torch.long)
-        control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if self.control_enabled else 0.0
+        control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if (self.apply_window_control or self.build_hierarchy) else 0.0
 
         lq = T
         window_vals = torch.tensor(self.windows, device=x.device, dtype=torch.float32)

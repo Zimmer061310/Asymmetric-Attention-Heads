@@ -293,6 +293,8 @@ def main():
         aah_v3_warmup_steps=model_cfg.get("aah_v3_warmup_steps", 0),
         aah_v3_control_enabled=model_cfg.get("aah_v3_control_enabled", True),
         aah_v3_grouping_enabled=model_cfg.get("aah_v3_grouping_enabled", True),
+        aah_v3_build_hierarchy=model_cfg.get("aah_v3_build_hierarchy", model_cfg.get("aah_v3_grouping_enabled", True)),
+        aah_v3_apply_window_control=model_cfg.get("aah_v3_apply_window_control", model_cfg.get("aah_v3_control_enabled", True)),
         aah_v3_W_min_gpu=model_cfg.get("aah_v3_W_min_gpu", 64),
         aah_v3_mask_cache_size=model_cfg.get("aah_v3_mask_cache_size", 16),
         aah_v3_resolution_ema_alpha=model_cfg.get("aah_v3_resolution_ema_alpha", 0.0),
