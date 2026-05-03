@@ -49,12 +49,9 @@ train:
   eval_batches: 20
   eval_log_progress: true
   log_interval: 20
-  checkpoint_steps:
-  - 1
-  - 200
-  - 1000
-  - 2000
+  checkpoint_steps: []
   device: cuda
   precision: bf16
   use_wandb: true
   log_csv: true
+  save_checkpoints: false

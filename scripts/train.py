@@ -318,8 +318,11 @@ def main():
         f"run_name={exp['name']} config_path={config_path} "
         f"config_hash={config_hash} git_commit={git_commit or 'unknown'} seed={seed}"
     )
+    save_checkpoints = bool(train.get("save_checkpoints", True))
     checkpoint_steps_cfg = train.get("checkpoint_steps")
-    if checkpoint_steps_cfg is None:
+    if not save_checkpoints:
+        checkpoint_steps = []
+    elif checkpoint_steps_cfg is None:
         checkpoint_steps = default_checkpoint_steps(int(train["max_steps"]))
     else:
         checkpoint_steps = [int(s) for s in checkpoint_steps_cfg]
@@ -330,7 +333,7 @@ def main():
             if 0 < s <= int(train["max_steps"])
         )
     )
-    if int(train["max_steps"]) not in checkpoint_steps:
+    if save_checkpoints and int(train["max_steps"]) not in checkpoint_steps:
         checkpoint_steps.append(int(train["max_steps"]))
     checkpoint_steps_set = set(checkpoint_steps)
     print(f"checkpoint_steps={checkpoint_steps}")
@@ -1265,10 +1268,11 @@ def main():
 
                 if step >= train["max_steps"]:
                     break
-        if int(train["max_steps"]) not in saved_checkpoint_steps:
-            persist_checkpoint(int(train["max_steps"]), role="final")
-            saved_checkpoint_steps.add(int(train["max_steps"]))
-        torch.save(model.state_dict(), os.path.join(out_dir, f"{exp['name']}.pt"))
+        if save_checkpoints:
+            if int(train["max_steps"]) not in saved_checkpoint_steps:
+                persist_checkpoint(int(train["max_steps"]), role="final")
+                saved_checkpoint_steps.add(int(train["max_steps"]))
+            torch.save(model.state_dict(), os.path.join(out_dir, f"{exp['name']}.pt"))
     except Exception as exc:
         tb = traceback.format_exc()
         print(tb)
