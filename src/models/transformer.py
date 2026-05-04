@@ -1033,11 +1033,22 @@ class AAHV3Attention(nn.Module):
     def _select_windows(self, levels, parent_maps, device, return_debug: bool = False):
         n_levels = len(levels)
         win_indices = [None] * n_levels
+        raw_idx_per_level = [None] * n_levels
+        parent_idx_per_level = [None] * n_levels
+        post_parent_idx_per_level = [None] * n_levels
+        logits_per_level = [None] * n_levels
+        logits_std_per_level = [0.0] * n_levels
+        logits_var_per_level = [0.0] * n_levels
+        differ_from_parent_frac_per_level = [None] * n_levels
         _, top_feats = levels[-1]
         top_logits = self.controller(top_feats.float()).float()
         top_idx = top_logits.argmax(dim=-1)
         win_indices[-1] = top_idx
-        logits_std_per_level = [float(top_logits.std(unbiased=False).item())]
+        raw_idx_per_level[-1] = top_idx.detach().clone()
+        post_parent_idx_per_level[-1] = top_idx.detach().clone()
+        logits_per_level[-1] = top_logits.detach().cpu().tolist()
+        logits_std_per_level[-1] = float(top_logits.std(unbiased=False).item())
+        logits_var_per_level[-1] = float(top_logits.var(unbiased=False).item())
         pre_clamp_level0 = top_idx.detach().clone()
         post_clamp_level0 = top_idx.detach().clone()
         for level in range(n_levels - 2, -1, -1):
@@ -1045,19 +1056,42 @@ class AAHV3Attention(nn.Module):
             logits = self.controller(feats.float()).float()
             idx = logits.argmax(dim=-1)
             idx_pre = idx.detach().clone()
-            logits_std_per_level.insert(0, float(logits.std(unbiased=False).item()))
+            logits_per_level[level] = logits.detach().cpu().tolist()
+            logits_std_per_level[level] = float(logits.std(unbiased=False).item())
+            logits_var_per_level[level] = float(logits.var(unbiased=False).item())
             parent_map = parent_maps[level].to(device)
             parent_idx = win_indices[level + 1][parent_map]
             idx = torch.minimum(idx, parent_idx)
+            raw_idx_per_level[level] = idx_pre.detach().clone()
+            parent_idx_per_level[level] = parent_idx.detach().clone()
+            post_parent_idx_per_level[level] = idx.detach().clone()
+            differ_from_parent_frac_per_level[level] = float((idx_pre != parent_idx).float().mean().item()) if idx_pre.numel() > 0 else 0.0
             if level == 0:
                 pre_clamp_level0 = idx_pre
                 post_clamp_level0 = idx.detach().clone()
             win_indices[level] = idx
         if return_debug:
+            raw_lists = [v.detach().cpu().tolist() if v is not None else None for v in raw_idx_per_level]
+            parent_lists = [v.detach().cpu().tolist() if v is not None else None for v in parent_idx_per_level]
+            post_parent_lists = [v.detach().cpu().tolist() if v is not None else None for v in post_parent_idx_per_level]
+            unique_raw = [sorted(set(v)) if v is not None else [] for v in raw_lists]
+            unique_post_parent = [sorted(set(v)) if v is not None else [] for v in post_parent_lists]
+            non_one_raw = [sum(1 for x in v if x != 1) if v is not None else 0 for v in raw_lists]
+            non_one_post_parent = [sum(1 for x in v if x != 1) if v is not None else 0 for v in post_parent_lists]
             return win_indices[0], {
                 "pre_clamp_level0": pre_clamp_level0,
                 "post_clamp_level0": post_clamp_level0,
                 "logits_std_per_level": logits_std_per_level,
+                "logits_var_per_level": logits_var_per_level,
+                "logits_per_level": logits_per_level,
+                "raw_idx_per_level": raw_lists,
+                "parent_idx_per_level": parent_lists,
+                "post_parent_idx_per_level": post_parent_lists,
+                "differ_from_parent_frac_per_level": differ_from_parent_frac_per_level,
+                "unique_raw_idx_per_level": unique_raw,
+                "unique_post_parent_idx_per_level": unique_post_parent,
+                "non_one_raw_count_per_level": non_one_raw,
+                "non_one_post_parent_count_per_level": non_one_post_parent,
             }
         return win_indices[0]
 
@@ -1125,6 +1159,9 @@ class AAHV3Attention(nn.Module):
         feature_probe_stats = {}
         hierarchy_head_group_map_per_level = []
         hierarchy_group_members_per_level = []
+        decision_debug = {}
+        win_idx_before_execution_mapping = None
+        win_idx_after_execution_mapping = None
         t_control0 = time.perf_counter()
         if not self.apply_window_control and not self.build_hierarchy:
             path_mode = "full_attention_fastpath"
@@ -1264,6 +1301,7 @@ class AAHV3Attention(nn.Module):
                     parent_maps = self._parent_maps(levels)
                     group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                     controller_logits_std_per_level = win_debug["logits_std_per_level"]
+                    decision_debug = win_debug
                     groups0 = levels[0][0]
                     head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
                     for gi, heads in enumerate(groups0):
@@ -1272,6 +1310,7 @@ class AAHV3Attention(nn.Module):
                     win_idx = group_win_idx[head_to_group]
                     win_idx_pre_clamp = win_debug["pre_clamp_level0"][head_to_group]
                     win_idx_post_clamp = win_debug["post_clamp_level0"][head_to_group]
+                    win_idx_before_execution_mapping = win_idx.detach().clone()
                     if self.cached_head_to_group is None:
                         group_change_rate = 0.0
                     else:
@@ -1290,6 +1329,7 @@ class AAHV3Attention(nn.Module):
                     win_idx = logits.argmax(dim=-1)
                     win_idx_pre_clamp = win_idx.detach().clone()
                     win_idx_post_clamp = win_idx.detach().clone()
+                    win_idx_before_execution_mapping = win_idx.detach().clone()
                     hierarchy_levels_used = 1
                     group_counts_per_level = [int(self.n_head)]
                     self.cached_group_counts_per_level = list(group_counts_per_level)
@@ -1384,6 +1424,9 @@ class AAHV3Attention(nn.Module):
                 full_idx_f = torch.full_like(win_idx, full_idx, dtype=torch.float32)
                 win_idx_f = win_idx.float()
                 win_idx = (ramp_progress * win_idx_f + (1.0 - ramp_progress) * full_idx_f).round().to(torch.long)
+        if win_idx_before_execution_mapping is None:
+            win_idx_before_execution_mapping = win_idx.detach().clone()
+        win_idx_after_execution_mapping = win_idx.detach().clone()
         control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if (self.apply_window_control or self.build_hierarchy) else 0.0
 
         lq = T
@@ -1535,6 +1578,21 @@ class AAHV3Attention(nn.Module):
             "path_mode": path_mode,
             "win_idx_pre_clamp": win_idx_pre_clamp.detach().cpu().tolist() if win_idx_pre_clamp is not None else [],
             "win_idx_post_clamp": win_idx_post_clamp.detach().cpu().tolist() if win_idx_post_clamp is not None else [],
+            "decision_logits_per_level": decision_debug.get("logits_per_level", []),
+            "decision_logits_var_per_level": decision_debug.get("logits_var_per_level", []),
+            "decision_raw_idx_per_level": decision_debug.get("raw_idx_per_level", []),
+            "decision_parent_idx_per_level": decision_debug.get("parent_idx_per_level", []),
+            "decision_post_parent_idx_per_level": decision_debug.get("post_parent_idx_per_level", []),
+            "decision_differ_from_parent_frac_per_level": decision_debug.get("differ_from_parent_frac_per_level", []),
+            "decision_unique_raw_idx_per_level": decision_debug.get("unique_raw_idx_per_level", []),
+            "decision_unique_post_parent_idx_per_level": decision_debug.get("unique_post_parent_idx_per_level", []),
+            "decision_non_one_raw_count_per_level": decision_debug.get("non_one_raw_count_per_level", []),
+            "decision_non_one_post_parent_count_per_level": decision_debug.get("non_one_post_parent_count_per_level", []),
+            "decision_head_idx_before_execution_mapping": win_idx_before_execution_mapping.detach().cpu().tolist() if win_idx_before_execution_mapping is not None else [],
+            "decision_head_idx_after_execution_mapping": win_idx_after_execution_mapping.detach().cpu().tolist() if win_idx_after_execution_mapping is not None else [],
+            "decision_unique_head_idx_before_execution_mapping": sorted(set(win_idx_before_execution_mapping.detach().cpu().tolist())) if win_idx_before_execution_mapping is not None else [],
+            "decision_unique_head_idx_after_execution_mapping": sorted(set(win_idx_after_execution_mapping.detach().cpu().tolist())) if win_idx_after_execution_mapping is not None else [],
+            "decision_head_idx_changed_by_execution_mapping_frac": float((win_idx_before_execution_mapping != win_idx_after_execution_mapping).float().mean().item()) if (win_idx_before_execution_mapping is not None and win_idx_after_execution_mapping is not None and win_idx_before_execution_mapping.shape == win_idx_after_execution_mapping.shape) else 0.0,
             "cluster_metric_per_level": cluster_metric_per_level,
             "cluster_threshold_kind_per_level": cluster_threshold_kind_per_level,
             "cluster_threshold_per_level": cluster_threshold_per_level,

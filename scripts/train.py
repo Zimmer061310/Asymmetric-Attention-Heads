@@ -452,6 +452,21 @@ def main():
         "controller_logits_std_per_level",
         "win_idx_pre_clamp",
         "win_idx_post_clamp",
+        "decision_logits_per_level",
+        "decision_logits_var_per_level",
+        "decision_raw_idx_per_level",
+        "decision_parent_idx_per_level",
+        "decision_post_parent_idx_per_level",
+        "decision_differ_from_parent_frac_per_level",
+        "decision_unique_raw_idx_per_level",
+        "decision_unique_post_parent_idx_per_level",
+        "decision_non_one_raw_count_per_level",
+        "decision_non_one_post_parent_count_per_level",
+        "decision_head_idx_before_execution_mapping",
+        "decision_head_idx_after_execution_mapping",
+        "decision_unique_head_idx_before_execution_mapping",
+        "decision_unique_head_idx_after_execution_mapping",
+        "decision_head_idx_changed_by_execution_mapping_frac",
         "hierarchy_head_group_map_per_level",
         "hierarchy_group_members_per_level",
         "cluster_metric_per_level",
@@ -673,6 +688,21 @@ def main():
                 path_modes = []
                 win_idx_pre_parent_clamps = []
                 win_idx_post_parent_clamps = []
+                decision_logits_per_levels = []
+                decision_logits_var_per_levels = []
+                decision_raw_idx_per_levels = []
+                decision_parent_idx_per_levels = []
+                decision_post_parent_idx_per_levels = []
+                decision_differ_from_parent_frac_per_levels = []
+                decision_unique_raw_idx_per_levels = []
+                decision_unique_post_parent_idx_per_levels = []
+                decision_non_one_raw_count_per_levels = []
+                decision_non_one_post_parent_count_per_levels = []
+                decision_head_idx_before_execution_mappings = []
+                decision_head_idx_after_execution_mappings = []
+                decision_unique_head_idx_before_execution_mappings = []
+                decision_unique_head_idx_after_execution_mappings = []
+                decision_head_idx_changed_by_execution_mapping_fracs = []
                 hierarchy_head_group_map_per_levels = []
                 hierarchy_group_members_per_levels = []
                 cluster_metric_per_levels = []
@@ -784,6 +814,36 @@ def main():
                                 win_idx_pre_parent_clamps.append(attn.last_stats.get("win_idx_pre_clamp"))
                             if "win_idx_post_clamp" in attn.last_stats:
                                 win_idx_post_parent_clamps.append(attn.last_stats.get("win_idx_post_clamp"))
+                            if "decision_logits_per_level" in attn.last_stats:
+                                decision_logits_per_levels.append(attn.last_stats.get("decision_logits_per_level"))
+                            if "decision_logits_var_per_level" in attn.last_stats:
+                                decision_logits_var_per_levels.append(attn.last_stats.get("decision_logits_var_per_level"))
+                            if "decision_raw_idx_per_level" in attn.last_stats:
+                                decision_raw_idx_per_levels.append(attn.last_stats.get("decision_raw_idx_per_level"))
+                            if "decision_parent_idx_per_level" in attn.last_stats:
+                                decision_parent_idx_per_levels.append(attn.last_stats.get("decision_parent_idx_per_level"))
+                            if "decision_post_parent_idx_per_level" in attn.last_stats:
+                                decision_post_parent_idx_per_levels.append(attn.last_stats.get("decision_post_parent_idx_per_level"))
+                            if "decision_differ_from_parent_frac_per_level" in attn.last_stats:
+                                decision_differ_from_parent_frac_per_levels.append(attn.last_stats.get("decision_differ_from_parent_frac_per_level"))
+                            if "decision_unique_raw_idx_per_level" in attn.last_stats:
+                                decision_unique_raw_idx_per_levels.append(attn.last_stats.get("decision_unique_raw_idx_per_level"))
+                            if "decision_unique_post_parent_idx_per_level" in attn.last_stats:
+                                decision_unique_post_parent_idx_per_levels.append(attn.last_stats.get("decision_unique_post_parent_idx_per_level"))
+                            if "decision_non_one_raw_count_per_level" in attn.last_stats:
+                                decision_non_one_raw_count_per_levels.append(attn.last_stats.get("decision_non_one_raw_count_per_level"))
+                            if "decision_non_one_post_parent_count_per_level" in attn.last_stats:
+                                decision_non_one_post_parent_count_per_levels.append(attn.last_stats.get("decision_non_one_post_parent_count_per_level"))
+                            if "decision_head_idx_before_execution_mapping" in attn.last_stats:
+                                decision_head_idx_before_execution_mappings.append(attn.last_stats.get("decision_head_idx_before_execution_mapping"))
+                            if "decision_head_idx_after_execution_mapping" in attn.last_stats:
+                                decision_head_idx_after_execution_mappings.append(attn.last_stats.get("decision_head_idx_after_execution_mapping"))
+                            if "decision_unique_head_idx_before_execution_mapping" in attn.last_stats:
+                                decision_unique_head_idx_before_execution_mappings.append(attn.last_stats.get("decision_unique_head_idx_before_execution_mapping"))
+                            if "decision_unique_head_idx_after_execution_mapping" in attn.last_stats:
+                                decision_unique_head_idx_after_execution_mappings.append(attn.last_stats.get("decision_unique_head_idx_after_execution_mapping"))
+                            if "decision_head_idx_changed_by_execution_mapping_frac" in attn.last_stats:
+                                decision_head_idx_changed_by_execution_mapping_fracs.append(attn.last_stats.get("decision_head_idx_changed_by_execution_mapping_frac"))
                             if "hierarchy_head_group_map_per_level" in attn.last_stats:
                                 hierarchy_head_group_map_per_levels.append(attn.last_stats.get("hierarchy_head_group_map_per_level"))
                             if "hierarchy_group_members_per_level" in attn.last_stats:
@@ -1340,6 +1400,21 @@ def main():
                         str(controller_logits_std_per_levels[0]) if controller_logits_std_per_levels else "",
                         str(win_idx_pre_parent_clamps[0]) if win_idx_pre_parent_clamps else "",
                         str(win_idx_post_parent_clamps[0]) if win_idx_post_parent_clamps else "",
+                        str(decision_logits_per_levels[0]) if decision_logits_per_levels else "",
+                        str(decision_logits_var_per_levels[0]) if decision_logits_var_per_levels else "",
+                        str(decision_raw_idx_per_levels[0]) if decision_raw_idx_per_levels else "",
+                        str(decision_parent_idx_per_levels[0]) if decision_parent_idx_per_levels else "",
+                        str(decision_post_parent_idx_per_levels[0]) if decision_post_parent_idx_per_levels else "",
+                        str(decision_differ_from_parent_frac_per_levels[0]) if decision_differ_from_parent_frac_per_levels else "",
+                        str(decision_unique_raw_idx_per_levels[0]) if decision_unique_raw_idx_per_levels else "",
+                        str(decision_unique_post_parent_idx_per_levels[0]) if decision_unique_post_parent_idx_per_levels else "",
+                        str(decision_non_one_raw_count_per_levels[0]) if decision_non_one_raw_count_per_levels else "",
+                        str(decision_non_one_post_parent_count_per_levels[0]) if decision_non_one_post_parent_count_per_levels else "",
+                        str(decision_head_idx_before_execution_mappings[0]) if decision_head_idx_before_execution_mappings else "",
+                        str(decision_head_idx_after_execution_mappings[0]) if decision_head_idx_after_execution_mappings else "",
+                        str(decision_unique_head_idx_before_execution_mappings[0]) if decision_unique_head_idx_before_execution_mappings else "",
+                        str(decision_unique_head_idx_after_execution_mappings[0]) if decision_unique_head_idx_after_execution_mappings else "",
+                        str(decision_head_idx_changed_by_execution_mapping_fracs[0]) if decision_head_idx_changed_by_execution_mapping_fracs else "",
                         str(hierarchy_head_group_map_per_levels[0]) if hierarchy_head_group_map_per_levels else "",
                         str(hierarchy_group_members_per_levels[0]) if hierarchy_group_members_per_levels else "",
                         str(cluster_metric_per_levels[0]) if cluster_metric_per_levels else "",
