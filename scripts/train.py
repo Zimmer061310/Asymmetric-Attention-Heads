@@ -309,6 +309,7 @@ def main():
         aah_v3_controller_arch=model_cfg.get("aah_v3_controller_arch", "mlp"),
         aah_v3_controller_logit_scale=model_cfg.get("aah_v3_controller_logit_scale", 1.0),
         aah_v3_controller_rng_reference_dim=model_cfg.get("aah_v3_controller_rng_reference_dim", 16),
+        aah_v3_controller_choice_mode=model_cfg.get("aah_v3_controller_choice_mode", "learned"),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -466,6 +467,18 @@ def main():
         "decision_logits_margin_mean_per_level",
         "decision_logits_margin_min_per_level",
         "decision_argmax_diversity_frac_per_level",
+        "sibling_feature_delta_norm_mean_per_level",
+        "sibling_feature_delta_norm_min_per_level",
+        "sibling_feature_delta_norm_max_per_level",
+        "sibling_feature_cos_mean_per_level",
+        "sibling_feature_cos_min_per_level",
+        "sibling_logit_delta_l2_mean_per_level",
+        "sibling_logit_delta_l2_max_per_level",
+        "sibling_logit_delta_abs_mean_per_level",
+        "sibling_logit_delta_abs_max_per_level",
+        "sibling_ranking_diff_frac_per_level",
+        "sibling_top1_differ_frac_per_level",
+        "sibling_top1_ids_per_level",
         "decision_raw_idx_per_level",
         "decision_parent_idx_per_level",
         "decision_post_parent_idx_per_level",
@@ -715,6 +728,18 @@ def main():
                 decision_logits_margin_mean_per_levels = []
                 decision_logits_margin_min_per_levels = []
                 decision_argmax_diversity_frac_per_levels = []
+                sibling_feature_delta_norm_mean_per_levels = []
+                sibling_feature_delta_norm_min_per_levels = []
+                sibling_feature_delta_norm_max_per_levels = []
+                sibling_feature_cos_mean_per_levels = []
+                sibling_feature_cos_min_per_levels = []
+                sibling_logit_delta_l2_mean_per_levels = []
+                sibling_logit_delta_l2_max_per_levels = []
+                sibling_logit_delta_abs_mean_per_levels = []
+                sibling_logit_delta_abs_max_per_levels = []
+                sibling_ranking_diff_frac_per_levels = []
+                sibling_top1_differ_frac_per_levels = []
+                sibling_top1_ids_per_levels = []
                 decision_raw_idx_per_levels = []
                 decision_parent_idx_per_levels = []
                 decision_post_parent_idx_per_levels = []
@@ -859,6 +884,30 @@ def main():
                                 decision_logits_margin_min_per_levels.append(attn.last_stats.get("decision_logits_margin_min_per_level"))
                             if "decision_argmax_diversity_frac_per_level" in attn.last_stats:
                                 decision_argmax_diversity_frac_per_levels.append(attn.last_stats.get("decision_argmax_diversity_frac_per_level"))
+                            if "sibling_feature_delta_norm_mean_per_level" in attn.last_stats:
+                                sibling_feature_delta_norm_mean_per_levels.append(attn.last_stats.get("sibling_feature_delta_norm_mean_per_level"))
+                            if "sibling_feature_delta_norm_min_per_level" in attn.last_stats:
+                                sibling_feature_delta_norm_min_per_levels.append(attn.last_stats.get("sibling_feature_delta_norm_min_per_level"))
+                            if "sibling_feature_delta_norm_max_per_level" in attn.last_stats:
+                                sibling_feature_delta_norm_max_per_levels.append(attn.last_stats.get("sibling_feature_delta_norm_max_per_level"))
+                            if "sibling_feature_cos_mean_per_level" in attn.last_stats:
+                                sibling_feature_cos_mean_per_levels.append(attn.last_stats.get("sibling_feature_cos_mean_per_level"))
+                            if "sibling_feature_cos_min_per_level" in attn.last_stats:
+                                sibling_feature_cos_min_per_levels.append(attn.last_stats.get("sibling_feature_cos_min_per_level"))
+                            if "sibling_logit_delta_l2_mean_per_level" in attn.last_stats:
+                                sibling_logit_delta_l2_mean_per_levels.append(attn.last_stats.get("sibling_logit_delta_l2_mean_per_level"))
+                            if "sibling_logit_delta_l2_max_per_level" in attn.last_stats:
+                                sibling_logit_delta_l2_max_per_levels.append(attn.last_stats.get("sibling_logit_delta_l2_max_per_level"))
+                            if "sibling_logit_delta_abs_mean_per_level" in attn.last_stats:
+                                sibling_logit_delta_abs_mean_per_levels.append(attn.last_stats.get("sibling_logit_delta_abs_mean_per_level"))
+                            if "sibling_logit_delta_abs_max_per_level" in attn.last_stats:
+                                sibling_logit_delta_abs_max_per_levels.append(attn.last_stats.get("sibling_logit_delta_abs_max_per_level"))
+                            if "sibling_ranking_diff_frac_per_level" in attn.last_stats:
+                                sibling_ranking_diff_frac_per_levels.append(attn.last_stats.get("sibling_ranking_diff_frac_per_level"))
+                            if "sibling_top1_differ_frac_per_level" in attn.last_stats:
+                                sibling_top1_differ_frac_per_levels.append(attn.last_stats.get("sibling_top1_differ_frac_per_level"))
+                            if "sibling_top1_ids_per_level" in attn.last_stats:
+                                sibling_top1_ids_per_levels.append(attn.last_stats.get("sibling_top1_ids_per_level"))
                             if "decision_raw_idx_per_level" in attn.last_stats:
                                 decision_raw_idx_per_levels.append(attn.last_stats.get("decision_raw_idx_per_level"))
                             if "decision_parent_idx_per_level" in attn.last_stats:
@@ -1451,6 +1500,18 @@ def main():
                         str(decision_logits_margin_mean_per_levels[0]) if decision_logits_margin_mean_per_levels else "",
                         str(decision_logits_margin_min_per_levels[0]) if decision_logits_margin_min_per_levels else "",
                         str(decision_argmax_diversity_frac_per_levels[0]) if decision_argmax_diversity_frac_per_levels else "",
+                        str(sibling_feature_delta_norm_mean_per_levels[0]) if sibling_feature_delta_norm_mean_per_levels else "",
+                        str(sibling_feature_delta_norm_min_per_levels[0]) if sibling_feature_delta_norm_min_per_levels else "",
+                        str(sibling_feature_delta_norm_max_per_levels[0]) if sibling_feature_delta_norm_max_per_levels else "",
+                        str(sibling_feature_cos_mean_per_levels[0]) if sibling_feature_cos_mean_per_levels else "",
+                        str(sibling_feature_cos_min_per_levels[0]) if sibling_feature_cos_min_per_levels else "",
+                        str(sibling_logit_delta_l2_mean_per_levels[0]) if sibling_logit_delta_l2_mean_per_levels else "",
+                        str(sibling_logit_delta_l2_max_per_levels[0]) if sibling_logit_delta_l2_max_per_levels else "",
+                        str(sibling_logit_delta_abs_mean_per_levels[0]) if sibling_logit_delta_abs_mean_per_levels else "",
+                        str(sibling_logit_delta_abs_max_per_levels[0]) if sibling_logit_delta_abs_max_per_levels else "",
+                        str(sibling_ranking_diff_frac_per_levels[0]) if sibling_ranking_diff_frac_per_levels else "",
+                        str(sibling_top1_differ_frac_per_levels[0]) if sibling_top1_differ_frac_per_levels else "",
+                        str(sibling_top1_ids_per_levels[0]) if sibling_top1_ids_per_levels else "",
                         str(decision_raw_idx_per_levels[0]) if decision_raw_idx_per_levels else "",
                         str(decision_parent_idx_per_levels[0]) if decision_parent_idx_per_levels else "",
                         str(decision_post_parent_idx_per_levels[0]) if decision_post_parent_idx_per_levels else "",

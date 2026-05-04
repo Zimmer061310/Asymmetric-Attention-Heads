@@ -150,6 +150,7 @@ def build_model(cfg, vocab_size, device):
         aah_v3_controller_arch=model_cfg.get("aah_v3_controller_arch", "mlp"),
         aah_v3_controller_logit_scale=model_cfg.get("aah_v3_controller_logit_scale", 1.0),
         aah_v3_controller_rng_reference_dim=model_cfg.get("aah_v3_controller_rng_reference_dim", 16),
+        aah_v3_controller_choice_mode=model_cfg.get("aah_v3_controller_choice_mode", "learned"),
     )
     return GPT(gpt_cfg).to(device)
 

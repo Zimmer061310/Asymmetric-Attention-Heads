@@ -59,6 +59,7 @@ class GPTConfig:
     aah_v3_controller_arch: str = "mlp"
     aah_v3_controller_logit_scale: float = 1.0
     aah_v3_controller_rng_reference_dim: int = 16
+    aah_v3_controller_choice_mode: str = "learned"
 
 
 class CausalSelfAttention(nn.Module):
@@ -501,6 +502,7 @@ class AAHV3Attention(nn.Module):
         self.controller_input_mode = str(getattr(config, "aah_v3_controller_input_mode", "base"))
         self.controller_arch = str(getattr(config, "aah_v3_controller_arch", "mlp"))
         self.controller_logit_scale = float(getattr(config, "aah_v3_controller_logit_scale", 1.0))
+        self.controller_choice_mode = str(getattr(config, "aah_v3_controller_choice_mode", "learned"))
         self.controller_feat_dim = 29 if self.controller_input_mode == "enriched" else 9
         self.eval_mode = False
         self.cached_win_idx = None
@@ -1080,6 +1082,60 @@ class AAHV3Attention(nn.Module):
             logits = logits * self.controller_logit_scale
         return logits
 
+    def _oracle_window_indices(self, n: int, device):
+        if self.controller_choice_mode == "oracle_alternating":
+            lo = 1 if len(self.windows) > 1 else 0
+            hi = 2 if len(self.windows) > 2 else len(self.windows) - 1
+            vals = torch.arange(n, device=device, dtype=torch.long) % 2
+            return torch.where(vals == 0, torch.full_like(vals, lo), torch.full_like(vals, hi))
+        return None
+
+    def _sibling_contrast_stats(self, feats, logits):
+        n = int(feats.size(0))
+        if n < 2:
+            return {
+                "feature_delta_norm_mean": 0.0,
+                "feature_delta_norm_min": 0.0,
+                "feature_delta_norm_max": 0.0,
+                "feature_cos_mean": 1.0,
+                "feature_cos_min": 1.0,
+                "logit_delta_l2_mean": 0.0,
+                "logit_delta_l2_max": 0.0,
+                "logit_delta_abs_mean": 0.0,
+                "logit_delta_abs_max": 0.0,
+                "ranking_diff_frac": 0.0,
+                "top1_differ_frac": 0.0,
+                "top1_ids": logits.argmax(dim=-1).detach().cpu().tolist() if logits.numel() > 0 else [],
+            }
+        f = feats.float()
+        l = logits.float()
+        idx_i, idx_j = torch.triu_indices(n, n, offset=1, device=f.device)
+        fd = f[idx_i] - f[idx_j]
+        ld = l[idx_i] - l[idx_j]
+        f_delta_norm = fd.norm(dim=-1)
+        f_norm = F.normalize(f, dim=-1)
+        f_cos = (f_norm[idx_i] * f_norm[idx_j]).sum(dim=-1)
+        l_delta_l2 = ld.norm(dim=-1)
+        l_delta_abs = ld.abs()
+        ranks = torch.argsort(l, dim=-1, descending=True)
+        ranking_diff = (ranks[idx_i] != ranks[idx_j]).any(dim=-1).float()
+        top1 = l.argmax(dim=-1)
+        top1_diff = (top1[idx_i] != top1[idx_j]).float()
+        return {
+            "feature_delta_norm_mean": float(f_delta_norm.mean().item()),
+            "feature_delta_norm_min": float(f_delta_norm.min().item()),
+            "feature_delta_norm_max": float(f_delta_norm.max().item()),
+            "feature_cos_mean": float(f_cos.mean().item()),
+            "feature_cos_min": float(f_cos.min().item()),
+            "logit_delta_l2_mean": float(l_delta_l2.mean().item()),
+            "logit_delta_l2_max": float(l_delta_l2.max().item()),
+            "logit_delta_abs_mean": float(l_delta_abs.mean().item()),
+            "logit_delta_abs_max": float(l_delta_abs.max().item()),
+            "ranking_diff_frac": float(ranking_diff.mean().item()),
+            "top1_differ_frac": float(top1_diff.mean().item()),
+            "top1_ids": top1.detach().cpu().tolist(),
+        }
+
     def _controller_input_features(self, levels, parent_maps, level, device):
         groups, feats = levels[level]
         base = feats.float()
@@ -1114,11 +1170,16 @@ class AAHV3Attention(nn.Module):
         argmax_diversity_frac_per_level = [0.0] * n_levels
         logits_std_per_level = [0.0] * n_levels
         logits_var_per_level = [0.0] * n_levels
+        sibling_contrast_per_level = [None] * n_levels
         differ_from_parent_frac_per_level = [None] * n_levels
         top_feats = self._controller_input_features(levels, parent_maps, n_levels - 1, device)
         top_input_stats = self._feature_separability_stats(top_feats)
         top_logits = self._controller_logits(top_feats)
+        sibling_contrast_per_level[-1] = self._sibling_contrast_stats(top_feats, top_logits)
         top_idx = top_logits.argmax(dim=-1)
+        oracle_idx = self._oracle_window_indices(top_idx.numel(), device)
+        if oracle_idx is not None:
+            top_idx = oracle_idx
         win_indices[-1] = top_idx
         raw_idx_per_level[-1] = top_idx.detach().clone()
         post_parent_idx_per_level[-1] = top_idx.detach().clone()
@@ -1138,7 +1199,11 @@ class AAHV3Attention(nn.Module):
             feats = self._controller_input_features(levels, parent_maps, level, device)
             input_stats = self._feature_separability_stats(feats)
             logits = self._controller_logits(feats)
+            sibling_contrast_per_level[level] = self._sibling_contrast_stats(feats, logits)
             idx = logits.argmax(dim=-1)
+            oracle_idx = self._oracle_window_indices(idx.numel(), device)
+            if oracle_idx is not None:
+                idx = oracle_idx
             idx_pre = idx.detach().clone()
             logits_per_level[level] = logits.detach().cpu().tolist()
             controller_input_per_level[level] = feats.detach().cpu().tolist()
@@ -1171,6 +1236,7 @@ class AAHV3Attention(nn.Module):
             non_one_post_parent = [sum(1 for x in v if x != 1) if v is not None else 0 for v in post_parent_lists]
             input_stats = controller_input_stats_per_level
             stat_list = lambda key, default: [float(st.get(key, default)) if st is not None else default for st in input_stats]
+            sibling_stat_list = lambda key, default: [st.get(key, default) if st is not None else default for st in sibling_contrast_per_level]
             return win_indices[0], {
                 "pre_clamp_level0": pre_clamp_level0,
                 "post_clamp_level0": post_clamp_level0,
@@ -1185,6 +1251,18 @@ class AAHV3Attention(nn.Module):
                 "controller_input_cos_sim_min_per_level": stat_list("feature_cos_sim_min", 1.0),
                 "controller_input_l2_dist_mean_per_level": stat_list("feature_l2_dist_mean", 0.0),
                 "controller_input_dim_var_mean_per_level": stat_list("feature_dim_var_mean", 0.0),
+                "sibling_feature_delta_norm_mean_per_level": sibling_stat_list("feature_delta_norm_mean", 0.0),
+                "sibling_feature_delta_norm_min_per_level": sibling_stat_list("feature_delta_norm_min", 0.0),
+                "sibling_feature_delta_norm_max_per_level": sibling_stat_list("feature_delta_norm_max", 0.0),
+                "sibling_feature_cos_mean_per_level": sibling_stat_list("feature_cos_mean", 1.0),
+                "sibling_feature_cos_min_per_level": sibling_stat_list("feature_cos_min", 1.0),
+                "sibling_logit_delta_l2_mean_per_level": sibling_stat_list("logit_delta_l2_mean", 0.0),
+                "sibling_logit_delta_l2_max_per_level": sibling_stat_list("logit_delta_l2_max", 0.0),
+                "sibling_logit_delta_abs_mean_per_level": sibling_stat_list("logit_delta_abs_mean", 0.0),
+                "sibling_logit_delta_abs_max_per_level": sibling_stat_list("logit_delta_abs_max", 0.0),
+                "sibling_ranking_diff_frac_per_level": sibling_stat_list("ranking_diff_frac", 0.0),
+                "sibling_top1_differ_frac_per_level": sibling_stat_list("top1_differ_frac", 0.0),
+                "sibling_top1_ids_per_level": sibling_stat_list("top1_ids", []),
                 "raw_idx_per_level": raw_lists,
                 "parent_idx_per_level": parent_lists,
                 "post_parent_idx_per_level": post_parent_lists,
@@ -1693,6 +1771,18 @@ class AAHV3Attention(nn.Module):
             "decision_logits_margin_mean_per_level": decision_debug.get("logits_margin_mean_per_level", []),
             "decision_logits_margin_min_per_level": decision_debug.get("logits_margin_min_per_level", []),
             "decision_argmax_diversity_frac_per_level": decision_debug.get("argmax_diversity_frac_per_level", []),
+            "sibling_feature_delta_norm_mean_per_level": decision_debug.get("sibling_feature_delta_norm_mean_per_level", []),
+            "sibling_feature_delta_norm_min_per_level": decision_debug.get("sibling_feature_delta_norm_min_per_level", []),
+            "sibling_feature_delta_norm_max_per_level": decision_debug.get("sibling_feature_delta_norm_max_per_level", []),
+            "sibling_feature_cos_mean_per_level": decision_debug.get("sibling_feature_cos_mean_per_level", []),
+            "sibling_feature_cos_min_per_level": decision_debug.get("sibling_feature_cos_min_per_level", []),
+            "sibling_logit_delta_l2_mean_per_level": decision_debug.get("sibling_logit_delta_l2_mean_per_level", []),
+            "sibling_logit_delta_l2_max_per_level": decision_debug.get("sibling_logit_delta_l2_max_per_level", []),
+            "sibling_logit_delta_abs_mean_per_level": decision_debug.get("sibling_logit_delta_abs_mean_per_level", []),
+            "sibling_logit_delta_abs_max_per_level": decision_debug.get("sibling_logit_delta_abs_max_per_level", []),
+            "sibling_ranking_diff_frac_per_level": decision_debug.get("sibling_ranking_diff_frac_per_level", []),
+            "sibling_top1_differ_frac_per_level": decision_debug.get("sibling_top1_differ_frac_per_level", []),
+            "sibling_top1_ids_per_level": decision_debug.get("sibling_top1_ids_per_level", []),
             "decision_raw_idx_per_level": decision_debug.get("raw_idx_per_level", []),
             "decision_parent_idx_per_level": decision_debug.get("parent_idx_per_level", []),
             "decision_post_parent_idx_per_level": decision_debug.get("post_parent_idx_per_level", []),
