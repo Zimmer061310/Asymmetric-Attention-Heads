@@ -146,6 +146,7 @@ def build_model(cfg, vocab_size, device):
         aah_v3_upper_cluster_metric=model_cfg.get("aah_v3_upper_cluster_metric", "cosine"),
         aah_v3_upper_l2_threshold=model_cfg.get("aah_v3_upper_l2_threshold", 0.0),
         aah_v3_cosine_normdiff_scale=model_cfg.get("aah_v3_cosine_normdiff_scale", 16.0),
+        aah_v3_controller_input_mode=model_cfg.get("aah_v3_controller_input_mode", "base"),
     )
     return GPT(gpt_cfg).to(device)
 

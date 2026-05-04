@@ -305,6 +305,7 @@ def main():
         aah_v3_upper_cluster_metric=model_cfg.get("aah_v3_upper_cluster_metric", "cosine"),
         aah_v3_upper_l2_threshold=model_cfg.get("aah_v3_upper_l2_threshold", 0.0),
         aah_v3_cosine_normdiff_scale=model_cfg.get("aah_v3_cosine_normdiff_scale", 16.0),
+        aah_v3_controller_input_mode=model_cfg.get("aah_v3_controller_input_mode", "base"),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -454,6 +455,14 @@ def main():
         "win_idx_post_clamp",
         "decision_logits_per_level",
         "decision_logits_var_per_level",
+        "controller_input_per_level",
+        "controller_input_cos_sim_mean_per_level",
+        "controller_input_cos_sim_min_per_level",
+        "controller_input_l2_dist_mean_per_level",
+        "controller_input_dim_var_mean_per_level",
+        "decision_logits_margin_mean_per_level",
+        "decision_logits_margin_min_per_level",
+        "decision_argmax_diversity_frac_per_level",
         "decision_raw_idx_per_level",
         "decision_parent_idx_per_level",
         "decision_post_parent_idx_per_level",
@@ -695,6 +704,14 @@ def main():
                 win_idx_post_parent_clamps = []
                 decision_logits_per_levels = []
                 decision_logits_var_per_levels = []
+                controller_input_per_levels = []
+                controller_input_cos_sim_mean_per_levels = []
+                controller_input_cos_sim_min_per_levels = []
+                controller_input_l2_dist_mean_per_levels = []
+                controller_input_dim_var_mean_per_levels = []
+                decision_logits_margin_mean_per_levels = []
+                decision_logits_margin_min_per_levels = []
+                decision_argmax_diversity_frac_per_levels = []
                 decision_raw_idx_per_levels = []
                 decision_parent_idx_per_levels = []
                 decision_post_parent_idx_per_levels = []
@@ -823,6 +840,22 @@ def main():
                                 decision_logits_per_levels.append(attn.last_stats.get("decision_logits_per_level"))
                             if "decision_logits_var_per_level" in attn.last_stats:
                                 decision_logits_var_per_levels.append(attn.last_stats.get("decision_logits_var_per_level"))
+                            if "controller_input_per_level" in attn.last_stats:
+                                controller_input_per_levels.append(attn.last_stats.get("controller_input_per_level"))
+                            if "controller_input_cos_sim_mean_per_level" in attn.last_stats:
+                                controller_input_cos_sim_mean_per_levels.append(attn.last_stats.get("controller_input_cos_sim_mean_per_level"))
+                            if "controller_input_cos_sim_min_per_level" in attn.last_stats:
+                                controller_input_cos_sim_min_per_levels.append(attn.last_stats.get("controller_input_cos_sim_min_per_level"))
+                            if "controller_input_l2_dist_mean_per_level" in attn.last_stats:
+                                controller_input_l2_dist_mean_per_levels.append(attn.last_stats.get("controller_input_l2_dist_mean_per_level"))
+                            if "controller_input_dim_var_mean_per_level" in attn.last_stats:
+                                controller_input_dim_var_mean_per_levels.append(attn.last_stats.get("controller_input_dim_var_mean_per_level"))
+                            if "decision_logits_margin_mean_per_level" in attn.last_stats:
+                                decision_logits_margin_mean_per_levels.append(attn.last_stats.get("decision_logits_margin_mean_per_level"))
+                            if "decision_logits_margin_min_per_level" in attn.last_stats:
+                                decision_logits_margin_min_per_levels.append(attn.last_stats.get("decision_logits_margin_min_per_level"))
+                            if "decision_argmax_diversity_frac_per_level" in attn.last_stats:
+                                decision_argmax_diversity_frac_per_levels.append(attn.last_stats.get("decision_argmax_diversity_frac_per_level"))
                             if "decision_raw_idx_per_level" in attn.last_stats:
                                 decision_raw_idx_per_levels.append(attn.last_stats.get("decision_raw_idx_per_level"))
                             if "decision_parent_idx_per_level" in attn.last_stats:
@@ -1407,6 +1440,14 @@ def main():
                         str(win_idx_post_parent_clamps[0]) if win_idx_post_parent_clamps else "",
                         str(decision_logits_per_levels[0]) if decision_logits_per_levels else "",
                         str(decision_logits_var_per_levels[0]) if decision_logits_var_per_levels else "",
+                        str(controller_input_per_levels[0]) if controller_input_per_levels else "",
+                        str(controller_input_cos_sim_mean_per_levels[0]) if controller_input_cos_sim_mean_per_levels else "",
+                        str(controller_input_cos_sim_min_per_levels[0]) if controller_input_cos_sim_min_per_levels else "",
+                        str(controller_input_l2_dist_mean_per_levels[0]) if controller_input_l2_dist_mean_per_levels else "",
+                        str(controller_input_dim_var_mean_per_levels[0]) if controller_input_dim_var_mean_per_levels else "",
+                        str(decision_logits_margin_mean_per_levels[0]) if decision_logits_margin_mean_per_levels else "",
+                        str(decision_logits_margin_min_per_levels[0]) if decision_logits_margin_min_per_levels else "",
+                        str(decision_argmax_diversity_frac_per_levels[0]) if decision_argmax_diversity_frac_per_levels else "",
                         str(decision_raw_idx_per_levels[0]) if decision_raw_idx_per_levels else "",
                         str(decision_parent_idx_per_levels[0]) if decision_parent_idx_per_levels else "",
                         str(decision_post_parent_idx_per_levels[0]) if decision_post_parent_idx_per_levels else "",

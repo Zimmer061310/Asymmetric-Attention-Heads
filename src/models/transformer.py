@@ -55,6 +55,7 @@ class GPTConfig:
     aah_v3_upper_cluster_metric: str = "cosine"
     aah_v3_upper_l2_threshold: float = 0.0
     aah_v3_cosine_normdiff_scale: float = 16.0
+    aah_v3_controller_input_mode: str = "base"
 
 
 class CausalSelfAttention(nn.Module):
@@ -483,6 +484,8 @@ class AAHV3Attention(nn.Module):
         self.upper_cluster_metric = str(getattr(config, "aah_v3_upper_cluster_metric", "cosine"))
         self.upper_l2_threshold = float(getattr(config, "aah_v3_upper_l2_threshold", 0.0))
         self.cosine_normdiff_scale = float(getattr(config, "aah_v3_cosine_normdiff_scale", 16.0))
+        self.controller_input_mode = str(getattr(config, "aah_v3_controller_input_mode", "base"))
+        self.controller_feat_dim = 29 if self.controller_input_mode == "enriched" else 9
         self.eval_mode = False
         self.cached_win_idx = None
         self.cached_head_to_group = None
@@ -507,7 +510,7 @@ class AAHV3Attention(nn.Module):
         self.mask_cache = OrderedDict()
 
         self.controller = AAHV3Controller(
-            feat_dim=9,
+            feat_dim=self.controller_feat_dim,
             hidden_dim=max(4, int(config.aah_v3_control_dim)),
             n_windows=len(self.windows),
         )
@@ -1030,6 +1033,26 @@ class AAHV3Attention(nn.Module):
             parent_maps.append(parent_map)
         return parent_maps
 
+    def _controller_input_features(self, levels, parent_maps, level, device):
+        groups, feats = levels[level]
+        base = feats.float()
+        if self.controller_input_mode != "enriched":
+            return base
+        n = base.size(0)
+        n_levels = len(levels)
+        level_value = float(level) / max(1.0, float(n_levels - 1))
+        level_feat = torch.full((n, 1), level_value, device=base.device, dtype=base.dtype)
+        if level < n_levels - 1 and parent_maps:
+            parent_map = parent_maps[level].to(base.device)
+            parent_feats = levels[level + 1][1].float()[parent_map]
+            parent_diff = base - parent_feats
+        else:
+            parent_diff = torch.zeros_like(base)
+        global_offset = base - base.mean(dim=0, keepdim=True)
+        denom = max(1.0, float(sum(len(g) for g in groups)))
+        size_feat = torch.tensor([len(g) / denom for g in groups], device=base.device, dtype=base.dtype).unsqueeze(1)
+        return torch.cat([base, level_feat, parent_diff, global_offset, size_feat], dim=-1)
+
     def _select_windows(self, levels, parent_maps, device, return_debug: bool = False):
         n_levels = len(levels)
         win_indices = [None] * n_levels
@@ -1037,26 +1060,47 @@ class AAHV3Attention(nn.Module):
         parent_idx_per_level = [None] * n_levels
         post_parent_idx_per_level = [None] * n_levels
         logits_per_level = [None] * n_levels
+        controller_input_per_level = [None] * n_levels
+        controller_input_stats_per_level = [None] * n_levels
+        logits_margin_mean_per_level = [0.0] * n_levels
+        logits_margin_min_per_level = [0.0] * n_levels
+        argmax_diversity_frac_per_level = [0.0] * n_levels
         logits_std_per_level = [0.0] * n_levels
         logits_var_per_level = [0.0] * n_levels
         differ_from_parent_frac_per_level = [None] * n_levels
-        _, top_feats = levels[-1]
+        top_feats = self._controller_input_features(levels, parent_maps, n_levels - 1, device)
+        top_input_stats = self._feature_separability_stats(top_feats)
         top_logits = self.controller(top_feats.float()).float()
         top_idx = top_logits.argmax(dim=-1)
         win_indices[-1] = top_idx
         raw_idx_per_level[-1] = top_idx.detach().clone()
         post_parent_idx_per_level[-1] = top_idx.detach().clone()
         logits_per_level[-1] = top_logits.detach().cpu().tolist()
+        controller_input_per_level[-1] = top_feats.detach().cpu().tolist()
+        controller_input_stats_per_level[-1] = top_input_stats
+        top_vals = torch.topk(top_logits, k=min(2, top_logits.size(-1)), dim=-1).values
+        top_margins = top_vals[:, 0] - top_vals[:, 1] if top_vals.size(-1) > 1 else torch.zeros(top_logits.size(0), device=top_logits.device)
+        logits_margin_mean_per_level[-1] = float(top_margins.mean().item()) if top_margins.numel() > 0 else 0.0
+        logits_margin_min_per_level[-1] = float(top_margins.min().item()) if top_margins.numel() > 0 else 0.0
+        argmax_diversity_frac_per_level[-1] = float(torch.unique(top_idx).numel()) / max(1.0, float(top_idx.numel()))
         logits_std_per_level[-1] = float(top_logits.std(unbiased=False).item())
         logits_var_per_level[-1] = float(top_logits.var(unbiased=False).item())
         pre_clamp_level0 = top_idx.detach().clone()
         post_clamp_level0 = top_idx.detach().clone()
         for level in range(n_levels - 2, -1, -1):
-            _, feats = levels[level]
+            feats = self._controller_input_features(levels, parent_maps, level, device)
+            input_stats = self._feature_separability_stats(feats)
             logits = self.controller(feats.float()).float()
             idx = logits.argmax(dim=-1)
             idx_pre = idx.detach().clone()
             logits_per_level[level] = logits.detach().cpu().tolist()
+            controller_input_per_level[level] = feats.detach().cpu().tolist()
+            controller_input_stats_per_level[level] = input_stats
+            vals = torch.topk(logits, k=min(2, logits.size(-1)), dim=-1).values
+            margins = vals[:, 0] - vals[:, 1] if vals.size(-1) > 1 else torch.zeros(logits.size(0), device=logits.device)
+            logits_margin_mean_per_level[level] = float(margins.mean().item()) if margins.numel() > 0 else 0.0
+            logits_margin_min_per_level[level] = float(margins.min().item()) if margins.numel() > 0 else 0.0
+            argmax_diversity_frac_per_level[level] = float(torch.unique(idx).numel()) / max(1.0, float(idx.numel()))
             logits_std_per_level[level] = float(logits.std(unbiased=False).item())
             logits_var_per_level[level] = float(logits.var(unbiased=False).item())
             parent_map = parent_maps[level].to(device)
@@ -1078,12 +1122,22 @@ class AAHV3Attention(nn.Module):
             unique_post_parent = [sorted(set(v)) if v is not None else [] for v in post_parent_lists]
             non_one_raw = [sum(1 for x in v if x != 1) if v is not None else 0 for v in raw_lists]
             non_one_post_parent = [sum(1 for x in v if x != 1) if v is not None else 0 for v in post_parent_lists]
+            input_stats = controller_input_stats_per_level
+            stat_list = lambda key, default: [float(st.get(key, default)) if st is not None else default for st in input_stats]
             return win_indices[0], {
                 "pre_clamp_level0": pre_clamp_level0,
                 "post_clamp_level0": post_clamp_level0,
                 "logits_std_per_level": logits_std_per_level,
                 "logits_var_per_level": logits_var_per_level,
+                "logits_margin_mean_per_level": logits_margin_mean_per_level,
+                "logits_margin_min_per_level": logits_margin_min_per_level,
+                "argmax_diversity_frac_per_level": argmax_diversity_frac_per_level,
                 "logits_per_level": logits_per_level,
+                "controller_input_per_level": controller_input_per_level,
+                "controller_input_cos_sim_mean_per_level": stat_list("feature_cos_sim_mean", 1.0),
+                "controller_input_cos_sim_min_per_level": stat_list("feature_cos_sim_min", 1.0),
+                "controller_input_l2_dist_mean_per_level": stat_list("feature_l2_dist_mean", 0.0),
+                "controller_input_dim_var_mean_per_level": stat_list("feature_dim_var_mean", 0.0),
                 "raw_idx_per_level": raw_lists,
                 "parent_idx_per_level": parent_lists,
                 "post_parent_idx_per_level": post_parent_lists,
@@ -1580,6 +1634,14 @@ class AAHV3Attention(nn.Module):
             "win_idx_post_clamp": win_idx_post_clamp.detach().cpu().tolist() if win_idx_post_clamp is not None else [],
             "decision_logits_per_level": decision_debug.get("logits_per_level", []),
             "decision_logits_var_per_level": decision_debug.get("logits_var_per_level", []),
+            "controller_input_per_level": decision_debug.get("controller_input_per_level", []),
+            "controller_input_cos_sim_mean_per_level": decision_debug.get("controller_input_cos_sim_mean_per_level", []),
+            "controller_input_cos_sim_min_per_level": decision_debug.get("controller_input_cos_sim_min_per_level", []),
+            "controller_input_l2_dist_mean_per_level": decision_debug.get("controller_input_l2_dist_mean_per_level", []),
+            "controller_input_dim_var_mean_per_level": decision_debug.get("controller_input_dim_var_mean_per_level", []),
+            "decision_logits_margin_mean_per_level": decision_debug.get("logits_margin_mean_per_level", []),
+            "decision_logits_margin_min_per_level": decision_debug.get("logits_margin_min_per_level", []),
+            "decision_argmax_diversity_frac_per_level": decision_debug.get("argmax_diversity_frac_per_level", []),
             "decision_raw_idx_per_level": decision_debug.get("raw_idx_per_level", []),
             "decision_parent_idx_per_level": decision_debug.get("parent_idx_per_level", []),
             "decision_post_parent_idx_per_level": decision_debug.get("post_parent_idx_per_level", []),
