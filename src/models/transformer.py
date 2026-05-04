@@ -56,6 +56,9 @@ class GPTConfig:
     aah_v3_upper_l2_threshold: float = 0.0
     aah_v3_cosine_normdiff_scale: float = 16.0
     aah_v3_controller_input_mode: str = "base"
+    aah_v3_controller_arch: str = "mlp"
+    aah_v3_controller_logit_scale: float = 1.0
+    aah_v3_controller_rng_reference_dim: int = 16
 
 
 class CausalSelfAttention(nn.Module):
@@ -438,14 +441,25 @@ class AAHV2Attention(nn.Module):
 
 
 class AAHV3Controller(nn.Module):
-    def __init__(self, feat_dim: int, hidden_dim: int, n_windows: int):
+    def __init__(self, feat_dim: int, hidden_dim: int, n_windows: int, arch: str = "mlp"):
         super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(feat_dim, hidden_dim),
-            nn.GELU(),
-            nn.Linear(hidden_dim, n_windows),
-        )
+        arch = str(arch)
+        if arch == "deep_mlp":
+            self.mlp = nn.Sequential(
+                nn.Linear(feat_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, n_windows),
+            )
+        else:
+            self.mlp = nn.Sequential(
+                nn.Linear(feat_dim, hidden_dim),
+                nn.GELU(),
+                nn.Linear(hidden_dim, n_windows),
+            )
         self.n_windows = n_windows
+        self.arch = arch
 
     def forward(self, feats):
         return self.mlp(feats)
@@ -485,6 +499,8 @@ class AAHV3Attention(nn.Module):
         self.upper_l2_threshold = float(getattr(config, "aah_v3_upper_l2_threshold", 0.0))
         self.cosine_normdiff_scale = float(getattr(config, "aah_v3_cosine_normdiff_scale", 16.0))
         self.controller_input_mode = str(getattr(config, "aah_v3_controller_input_mode", "base"))
+        self.controller_arch = str(getattr(config, "aah_v3_controller_arch", "mlp"))
+        self.controller_logit_scale = float(getattr(config, "aah_v3_controller_logit_scale", 1.0))
         self.controller_feat_dim = 29 if self.controller_input_mode == "enriched" else 9
         self.eval_mode = False
         self.cached_win_idx = None
@@ -510,26 +526,34 @@ class AAHV3Attention(nn.Module):
         self.mask_cache = OrderedDict()
 
         controller_hidden_dim = max(4, int(config.aah_v3_control_dim))
-        if self.controller_input_mode == "enriched":
-            # Initialize the larger controller without changing the downstream RNG
-            # stream, then consume the same RNG draws as the base 9-D controller so
-            # non-controller weights remain comparable to the current/base path.
+        ref_controller_hidden_dim = max(4, int(getattr(config, "aah_v3_controller_rng_reference_dim", 16)))
+        controller_is_reference = (
+            self.controller_input_mode == "base"
+            and self.controller_arch == "mlp"
+            and controller_hidden_dim == ref_controller_hidden_dim
+        )
+        if controller_is_reference:
+            self.controller = AAHV3Controller(
+                feat_dim=self.controller_feat_dim,
+                hidden_dim=controller_hidden_dim,
+                n_windows=len(self.windows),
+                arch=self.controller_arch,
+            )
+        else:
+            # Initialize ablation controllers without changing downstream RNG, then
+            # consume the exact RNG draws of the current 9-D one-hidden-layer controller.
             with torch.random.fork_rng(devices=[]):
                 self.controller = AAHV3Controller(
                     feat_dim=self.controller_feat_dim,
                     hidden_dim=controller_hidden_dim,
                     n_windows=len(self.windows),
+                    arch=self.controller_arch,
                 )
             _ = AAHV3Controller(
                 feat_dim=9,
-                hidden_dim=controller_hidden_dim,
+                hidden_dim=ref_controller_hidden_dim,
                 n_windows=len(self.windows),
-            )
-        else:
-            self.controller = AAHV3Controller(
-                feat_dim=self.controller_feat_dim,
-                hidden_dim=controller_hidden_dim,
-                n_windows=len(self.windows),
+                arch="mlp",
             )
 
     def set_control(self, enabled: bool):
@@ -1050,6 +1074,12 @@ class AAHV3Attention(nn.Module):
             parent_maps.append(parent_map)
         return parent_maps
 
+    def _controller_logits(self, feats):
+        logits = self.controller(feats.float()).float()
+        if self.controller_logit_scale != 1.0:
+            logits = logits * self.controller_logit_scale
+        return logits
+
     def _controller_input_features(self, levels, parent_maps, level, device):
         groups, feats = levels[level]
         base = feats.float()
@@ -1087,7 +1117,7 @@ class AAHV3Attention(nn.Module):
         differ_from_parent_frac_per_level = [None] * n_levels
         top_feats = self._controller_input_features(levels, parent_maps, n_levels - 1, device)
         top_input_stats = self._feature_separability_stats(top_feats)
-        top_logits = self.controller(top_feats.float()).float()
+        top_logits = self._controller_logits(top_feats)
         top_idx = top_logits.argmax(dim=-1)
         win_indices[-1] = top_idx
         raw_idx_per_level[-1] = top_idx.detach().clone()
@@ -1107,7 +1137,7 @@ class AAHV3Attention(nn.Module):
         for level in range(n_levels - 2, -1, -1):
             feats = self._controller_input_features(levels, parent_maps, level, device)
             input_stats = self._feature_separability_stats(feats)
-            logits = self.controller(feats.float()).float()
+            logits = self._controller_logits(feats)
             idx = logits.argmax(dim=-1)
             idx_pre = idx.detach().clone()
             logits_per_level[level] = logits.detach().cpu().tolist()
@@ -1397,7 +1427,7 @@ class AAHV3Attention(nn.Module):
                     feature_probe_stats = self._feature_separability_stats(feats)
                     head_levels = [([ [i] for i in range(self.n_head) ], feats)]
                     controller_feats = self._controller_input_features(head_levels, [], 0, x.device)
-                    logits = self.controller(controller_feats.float()).float()
+                    logits = self._controller_logits(controller_feats)
                     controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     win_idx = logits.argmax(dim=-1)
                     win_idx_pre_clamp = win_idx.detach().clone()
@@ -1430,7 +1460,7 @@ class AAHV3Attention(nn.Module):
                         group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                         shadow_win_idx = group_win_idx[head_to_group]
                         controller_feats = self._controller_input_features(levels, parent_maps, 0, x.device)
-                        logits = self.controller(controller_feats.float()).float()
+                        logits = self._controller_logits(controller_feats)
                         controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                         shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
@@ -1464,7 +1494,7 @@ class AAHV3Attention(nn.Module):
                     if self.apply_window_control and group_win_idx is not None:
                         shadow_win_idx = group_win_idx[head_to_group]
                         controller_feats = self._controller_input_features(levels, parent_maps, 0, x.device)
-                        logits = self.controller(controller_feats.float()).float()
+                        logits = self._controller_logits(controller_feats)
                         controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                         shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     if self.cached_head_to_group is None:

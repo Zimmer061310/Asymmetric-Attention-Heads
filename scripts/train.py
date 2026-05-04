@@ -306,6 +306,9 @@ def main():
         aah_v3_upper_l2_threshold=model_cfg.get("aah_v3_upper_l2_threshold", 0.0),
         aah_v3_cosine_normdiff_scale=model_cfg.get("aah_v3_cosine_normdiff_scale", 16.0),
         aah_v3_controller_input_mode=model_cfg.get("aah_v3_controller_input_mode", "base"),
+        aah_v3_controller_arch=model_cfg.get("aah_v3_controller_arch", "mlp"),
+        aah_v3_controller_logit_scale=model_cfg.get("aah_v3_controller_logit_scale", 1.0),
+        aah_v3_controller_rng_reference_dim=model_cfg.get("aah_v3_controller_rng_reference_dim", 16),
     )
     model = GPT(gpt_cfg).to(device)
 
