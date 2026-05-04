@@ -509,13 +509,26 @@ class AAHV3Attention(nn.Module):
         )
         self.mask_cache = OrderedDict()
 
-        # Keep controller-size ablations from perturbing the global RNG stream for
-        # the rest of the model. This makes base vs enriched diagnostics compare
-        # the controller input path instead of accidentally changing later weights.
-        with torch.random.fork_rng(devices=[]):
+        controller_hidden_dim = max(4, int(config.aah_v3_control_dim))
+        if self.controller_input_mode == "enriched":
+            # Initialize the larger controller without changing the downstream RNG
+            # stream, then consume the same RNG draws as the base 9-D controller so
+            # non-controller weights remain comparable to the current/base path.
+            with torch.random.fork_rng(devices=[]):
+                self.controller = AAHV3Controller(
+                    feat_dim=self.controller_feat_dim,
+                    hidden_dim=controller_hidden_dim,
+                    n_windows=len(self.windows),
+                )
+            _ = AAHV3Controller(
+                feat_dim=9,
+                hidden_dim=controller_hidden_dim,
+                n_windows=len(self.windows),
+            )
+        else:
             self.controller = AAHV3Controller(
                 feat_dim=self.controller_feat_dim,
-                hidden_dim=max(4, int(config.aah_v3_control_dim)),
+                hidden_dim=controller_hidden_dim,
                 n_windows=len(self.windows),
             )
 
