@@ -742,6 +742,7 @@ class AAHV3Attention(nn.Module):
         return levels
     def _cluster(self, feats, threshold, prev_groups=None, return_debug: bool = False, allow_forced_bipartition: bool = True):
         n = feats.size(0)
+        feature_stats = self._feature_separability_stats(feats)
         if n == 1:
             groups = [[0]]
             if return_debug:
@@ -763,6 +764,7 @@ class AAHV3Attention(nn.Module):
                     "force_split_anchor_similarity": None,
                     "cluster_origin": "single_item",
                     "forced_bipartition_allowed": bool(allow_forced_bipartition),
+                    **feature_stats,
                 }
             return groups
         feats = F.normalize(feats, dim=-1, eps=1e-6)
@@ -834,6 +836,7 @@ class AAHV3Attention(nn.Module):
                 "force_split_anchor_similarity": float(force_split_anchor_similarity) if force_split_anchor_similarity is not None else None,
                 "cluster_origin": str(cluster_origin),
                 "forced_bipartition_allowed": bool(allow_forced_bipartition),
+                **feature_stats,
             }
         return groups
 
@@ -1424,6 +1427,13 @@ class AAHV3Attention(nn.Module):
         cluster_origin_per_level = [str(d.get("cluster_origin", "")) for d in cluster_debug]
         cluster_forced_bipartition_allowed_per_level = [bool(d.get("forced_bipartition_allowed", False)) for d in cluster_debug]
         cluster_groups_before_force_per_level = [int(d.get("groups_before_force", 0)) for d in cluster_debug]
+        cluster_feature_norm_mean_per_level = [float(d.get("feature_norm_mean", 0.0)) for d in cluster_debug]
+        cluster_feature_norm_std_per_level = [float(d.get("feature_norm_std", 0.0)) for d in cluster_debug]
+        cluster_feature_dim_var_mean_per_level = [float(d.get("feature_dim_var_mean", 0.0)) for d in cluster_debug]
+        cluster_feature_dim_var_std_per_level = [float(d.get("feature_dim_var_std", 0.0)) for d in cluster_debug]
+        cluster_feature_l2_dist_mean_per_level = [float(d.get("feature_l2_dist_mean", 0.0)) for d in cluster_debug]
+        cluster_feature_l2_dist_std_per_level = [float(d.get("feature_l2_dist_std", 0.0)) for d in cluster_debug]
+        cluster_feature_top_singular_ratio_per_level = [float(d.get("feature_top_singular_ratio", 1.0)) for d in cluster_debug]
         hierarchy_level_added_per_level = [bool(d.get("hierarchy_level_added", True)) for d in cluster_debug]
         hierarchy_growth_stopped_per_level = [bool(d.get("hierarchy_growth_stopped", False)) for d in cluster_debug]
         hierarchy_stop_reason_per_level = [str(d.get("hierarchy_stop_reason", "")) for d in cluster_debug]
@@ -1483,6 +1493,13 @@ class AAHV3Attention(nn.Module):
             "cluster_origin_per_level": cluster_origin_per_level,
             "cluster_forced_bipartition_allowed_per_level": cluster_forced_bipartition_allowed_per_level,
             "cluster_groups_before_force_per_level": cluster_groups_before_force_per_level,
+            "cluster_feature_norm_mean_per_level": cluster_feature_norm_mean_per_level,
+            "cluster_feature_norm_std_per_level": cluster_feature_norm_std_per_level,
+            "cluster_feature_dim_var_mean_per_level": cluster_feature_dim_var_mean_per_level,
+            "cluster_feature_dim_var_std_per_level": cluster_feature_dim_var_std_per_level,
+            "cluster_feature_l2_dist_mean_per_level": cluster_feature_l2_dist_mean_per_level,
+            "cluster_feature_l2_dist_std_per_level": cluster_feature_l2_dist_std_per_level,
+            "cluster_feature_top_singular_ratio_per_level": cluster_feature_top_singular_ratio_per_level,
             "hierarchy_level_added_per_level": hierarchy_level_added_per_level,
             "hierarchy_growth_stopped_per_level": hierarchy_growth_stopped_per_level,
             "hierarchy_stop_reason_per_level": hierarchy_stop_reason_per_level,

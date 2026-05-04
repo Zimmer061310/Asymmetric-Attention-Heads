@@ -455,6 +455,13 @@ def main():
         "cluster_origin_per_level",
         "cluster_forced_bipartition_allowed_per_level",
         "cluster_groups_before_force_per_level",
+        "cluster_feature_norm_mean_per_level",
+        "cluster_feature_norm_std_per_level",
+        "cluster_feature_dim_var_mean_per_level",
+        "cluster_feature_dim_var_std_per_level",
+        "cluster_feature_l2_dist_mean_per_level",
+        "cluster_feature_l2_dist_std_per_level",
+        "cluster_feature_top_singular_ratio_per_level",
         "hierarchy_level_added_per_level",
         "hierarchy_growth_stopped_per_level",
         "hierarchy_stop_reason_per_level",
@@ -673,6 +680,13 @@ def main():
                 cluster_origin_per_levels = []
                 cluster_forced_bipartition_allowed_per_levels = []
                 cluster_groups_before_force_per_levels = []
+                cluster_feature_norm_mean_per_levels = []
+                cluster_feature_norm_std_per_levels = []
+                cluster_feature_dim_var_mean_per_levels = []
+                cluster_feature_dim_var_std_per_levels = []
+                cluster_feature_l2_dist_mean_per_levels = []
+                cluster_feature_l2_dist_std_per_levels = []
+                cluster_feature_top_singular_ratio_per_levels = []
                 hierarchy_level_added_per_levels = []
                 hierarchy_growth_stopped_per_levels = []
                 hierarchy_stop_reason_per_levels = []
@@ -798,6 +812,20 @@ def main():
                                 cluster_forced_bipartition_allowed_per_levels.append(attn.last_stats.get("cluster_forced_bipartition_allowed_per_level"))
                             if "cluster_groups_before_force_per_level" in attn.last_stats:
                                 cluster_groups_before_force_per_levels.append(attn.last_stats.get("cluster_groups_before_force_per_level"))
+                            if "cluster_feature_norm_mean_per_level" in attn.last_stats:
+                                cluster_feature_norm_mean_per_levels.append(attn.last_stats.get("cluster_feature_norm_mean_per_level"))
+                            if "cluster_feature_norm_std_per_level" in attn.last_stats:
+                                cluster_feature_norm_std_per_levels.append(attn.last_stats.get("cluster_feature_norm_std_per_level"))
+                            if "cluster_feature_dim_var_mean_per_level" in attn.last_stats:
+                                cluster_feature_dim_var_mean_per_levels.append(attn.last_stats.get("cluster_feature_dim_var_mean_per_level"))
+                            if "cluster_feature_dim_var_std_per_level" in attn.last_stats:
+                                cluster_feature_dim_var_std_per_levels.append(attn.last_stats.get("cluster_feature_dim_var_std_per_level"))
+                            if "cluster_feature_l2_dist_mean_per_level" in attn.last_stats:
+                                cluster_feature_l2_dist_mean_per_levels.append(attn.last_stats.get("cluster_feature_l2_dist_mean_per_level"))
+                            if "cluster_feature_l2_dist_std_per_level" in attn.last_stats:
+                                cluster_feature_l2_dist_std_per_levels.append(attn.last_stats.get("cluster_feature_l2_dist_std_per_level"))
+                            if "cluster_feature_top_singular_ratio_per_level" in attn.last_stats:
+                                cluster_feature_top_singular_ratio_per_levels.append(attn.last_stats.get("cluster_feature_top_singular_ratio_per_level"))
                             if "hierarchy_level_added_per_level" in attn.last_stats:
                                 hierarchy_level_added_per_levels.append(attn.last_stats.get("hierarchy_level_added_per_level"))
                             if "hierarchy_growth_stopped_per_level" in attn.last_stats:
@@ -1124,6 +1152,20 @@ def main():
                         payload["aah/cluster_forced_bipartition_allowed_per_level"] = cluster_forced_bipartition_allowed_per_levels[0]
                     if cluster_groups_before_force_per_levels:
                         payload["aah/cluster_groups_before_force_per_level"] = cluster_groups_before_force_per_levels[0]
+                    if cluster_feature_norm_mean_per_levels:
+                        payload["aah/cluster_feature_norm_mean_per_level"] = cluster_feature_norm_mean_per_levels[0]
+                    if cluster_feature_norm_std_per_levels:
+                        payload["aah/cluster_feature_norm_std_per_level"] = cluster_feature_norm_std_per_levels[0]
+                    if cluster_feature_dim_var_mean_per_levels:
+                        payload["aah/cluster_feature_dim_var_mean_per_level"] = cluster_feature_dim_var_mean_per_levels[0]
+                    if cluster_feature_dim_var_std_per_levels:
+                        payload["aah/cluster_feature_dim_var_std_per_level"] = cluster_feature_dim_var_std_per_levels[0]
+                    if cluster_feature_l2_dist_mean_per_levels:
+                        payload["aah/cluster_feature_l2_dist_mean_per_level"] = cluster_feature_l2_dist_mean_per_levels[0]
+                    if cluster_feature_l2_dist_std_per_levels:
+                        payload["aah/cluster_feature_l2_dist_std_per_level"] = cluster_feature_l2_dist_std_per_levels[0]
+                    if cluster_feature_top_singular_ratio_per_levels:
+                        payload["aah/cluster_feature_top_singular_ratio_per_level"] = cluster_feature_top_singular_ratio_per_levels[0]
                     if hierarchy_level_added_per_levels:
                         payload["aah/hierarchy_level_added_per_level"] = hierarchy_level_added_per_levels[0]
                     if hierarchy_growth_stopped_per_levels:
@@ -1285,6 +1327,13 @@ def main():
                         str(cluster_origin_per_levels[0]) if cluster_origin_per_levels else "",
                         str(cluster_forced_bipartition_allowed_per_levels[0]) if cluster_forced_bipartition_allowed_per_levels else "",
                         str(cluster_groups_before_force_per_levels[0]) if cluster_groups_before_force_per_levels else "",
+                        str(cluster_feature_norm_mean_per_levels[0]) if cluster_feature_norm_mean_per_levels else "",
+                        str(cluster_feature_norm_std_per_levels[0]) if cluster_feature_norm_std_per_levels else "",
+                        str(cluster_feature_dim_var_mean_per_levels[0]) if cluster_feature_dim_var_mean_per_levels else "",
+                        str(cluster_feature_dim_var_std_per_levels[0]) if cluster_feature_dim_var_std_per_levels else "",
+                        str(cluster_feature_l2_dist_mean_per_levels[0]) if cluster_feature_l2_dist_mean_per_levels else "",
+                        str(cluster_feature_l2_dist_std_per_levels[0]) if cluster_feature_l2_dist_std_per_levels else "",
+                        str(cluster_feature_top_singular_ratio_per_levels[0]) if cluster_feature_top_singular_ratio_per_levels else "",
                         str(hierarchy_level_added_per_levels[0]) if hierarchy_level_added_per_levels else "",
                         str(hierarchy_growth_stopped_per_levels[0]) if hierarchy_growth_stopped_per_levels else "",
                         str(hierarchy_stop_reason_per_levels[0]) if hierarchy_stop_reason_per_levels else "",
