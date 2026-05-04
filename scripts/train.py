@@ -452,6 +452,12 @@ def main():
         "hierarchy_group_members_per_level",
         "cluster_forced_bipartition_per_level",
         "cluster_force_split_anchor_similarity_per_level",
+        "cluster_origin_per_level",
+        "cluster_forced_bipartition_allowed_per_level",
+        "cluster_groups_before_force_per_level",
+        "hierarchy_level_added_per_level",
+        "hierarchy_growth_stopped_per_level",
+        "hierarchy_stop_reason_per_level",
         "cluster_forced_bipartition_level0",
         "cluster_force_split_anchor_similarity_level0",
     ]
@@ -664,6 +670,12 @@ def main():
                 cluster_super_thresholds = []
                 cluster_forced_bipartition_per_levels = []
                 cluster_force_split_anchor_similarity_per_levels = []
+                cluster_origin_per_levels = []
+                cluster_forced_bipartition_allowed_per_levels = []
+                cluster_groups_before_force_per_levels = []
+                hierarchy_level_added_per_levels = []
+                hierarchy_growth_stopped_per_levels = []
+                hierarchy_stop_reason_per_levels = []
                 feature_dim_var_means = []
                 feature_dim_var_stds = []
                 feature_dim_var_mins = []
@@ -780,6 +792,18 @@ def main():
                                 cluster_forced_bipartition_per_levels.append(attn.last_stats.get("cluster_forced_bipartition_per_level"))
                             if "cluster_force_split_anchor_similarity_per_level" in attn.last_stats:
                                 cluster_force_split_anchor_similarity_per_levels.append(attn.last_stats.get("cluster_force_split_anchor_similarity_per_level"))
+                            if "cluster_origin_per_level" in attn.last_stats:
+                                cluster_origin_per_levels.append(attn.last_stats.get("cluster_origin_per_level"))
+                            if "cluster_forced_bipartition_allowed_per_level" in attn.last_stats:
+                                cluster_forced_bipartition_allowed_per_levels.append(attn.last_stats.get("cluster_forced_bipartition_allowed_per_level"))
+                            if "cluster_groups_before_force_per_level" in attn.last_stats:
+                                cluster_groups_before_force_per_levels.append(attn.last_stats.get("cluster_groups_before_force_per_level"))
+                            if "hierarchy_level_added_per_level" in attn.last_stats:
+                                hierarchy_level_added_per_levels.append(attn.last_stats.get("hierarchy_level_added_per_level"))
+                            if "hierarchy_growth_stopped_per_level" in attn.last_stats:
+                                hierarchy_growth_stopped_per_levels.append(attn.last_stats.get("hierarchy_growth_stopped_per_level"))
+                            if "hierarchy_stop_reason_per_level" in attn.last_stats:
+                                hierarchy_stop_reason_per_levels.append(attn.last_stats.get("hierarchy_stop_reason_per_level"))
                             if "feature_dim_var_mean" in attn.last_stats:
                                 feature_dim_var_means.append(attn.last_stats.get("feature_dim_var_mean"))
                             if "feature_dim_var_std" in attn.last_stats:
@@ -1094,6 +1118,18 @@ def main():
                         payload["aah/cluster_forced_bipartition_per_level"] = cluster_forced_bipartition_per_levels[0]
                     if cluster_force_split_anchor_similarity_per_levels:
                         payload["aah/cluster_force_split_anchor_similarity_per_level"] = cluster_force_split_anchor_similarity_per_levels[0]
+                    if cluster_origin_per_levels:
+                        payload["aah/cluster_origin_per_level"] = cluster_origin_per_levels[0]
+                    if cluster_forced_bipartition_allowed_per_levels:
+                        payload["aah/cluster_forced_bipartition_allowed_per_level"] = cluster_forced_bipartition_allowed_per_levels[0]
+                    if cluster_groups_before_force_per_levels:
+                        payload["aah/cluster_groups_before_force_per_level"] = cluster_groups_before_force_per_levels[0]
+                    if hierarchy_level_added_per_levels:
+                        payload["aah/hierarchy_level_added_per_level"] = hierarchy_level_added_per_levels[0]
+                    if hierarchy_growth_stopped_per_levels:
+                        payload["aah/hierarchy_growth_stopped_per_level"] = hierarchy_growth_stopped_per_levels[0]
+                    if hierarchy_stop_reason_per_levels:
+                        payload["aah/hierarchy_stop_reason_per_level"] = hierarchy_stop_reason_per_levels[0]
                     if cluster_forced_bipartition_level0 is not None:
                         payload["aah/cluster_forced_bipartition_level0"] = cluster_forced_bipartition_level0
                         payload["aah/forced_bipartition"] = cluster_forced_bipartition_level0
@@ -1234,6 +1270,9 @@ def main():
                         fmt(overhead_time_ms),
                         f"{step_time_ms:.2f}",
                         last_eval_time_s,
+                        "",
+                        "",
+                        "",
                         str(path_mode_freq) if path_mode_freq else "",
                         str(group_counts_per_levels[0]) if group_counts_per_levels else "",
                         str(controller_logits_std_per_levels[0]) if controller_logits_std_per_levels else "",
@@ -1243,6 +1282,12 @@ def main():
                         str(hierarchy_group_members_per_levels[0]) if hierarchy_group_members_per_levels else "",
                         str(cluster_forced_bipartition_per_levels[0]) if cluster_forced_bipartition_per_levels else "",
                         str(cluster_force_split_anchor_similarity_per_levels[0]) if cluster_force_split_anchor_similarity_per_levels else "",
+                        str(cluster_origin_per_levels[0]) if cluster_origin_per_levels else "",
+                        str(cluster_forced_bipartition_allowed_per_levels[0]) if cluster_forced_bipartition_allowed_per_levels else "",
+                        str(cluster_groups_before_force_per_levels[0]) if cluster_groups_before_force_per_levels else "",
+                        str(hierarchy_level_added_per_levels[0]) if hierarchy_level_added_per_levels else "",
+                        str(hierarchy_growth_stopped_per_levels[0]) if hierarchy_growth_stopped_per_levels else "",
+                        str(hierarchy_stop_reason_per_levels[0]) if hierarchy_stop_reason_per_levels else "",
                         str(cluster_forced_bipartition_level0) if cluster_forced_bipartition_level0 is not None else "",
                         f"{cluster_force_split_anchor_similarity_level0:.6f}" if cluster_force_split_anchor_similarity_level0 is not None else "",
                     ])

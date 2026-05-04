@@ -721,20 +721,26 @@ class AAHV3Attention(nn.Module):
             return levels
         feats_prev = group_feats
         for level_idx in range(1, self.max_depth):
-            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True)
+            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True, allow_forced_bipartition=False)
             dbg["level_idx"] = level_idx
             dbg["threshold_kind"] = "super_threshold"
+            if len(groups) == 1:
+                dbg["hierarchy_level_added"] = False
+                dbg["hierarchy_growth_stopped"] = True
+                dbg["hierarchy_stop_reason"] = "upper_level_collapsed"
+                cluster_debug.append(dbg)
+                break
+            dbg["hierarchy_level_added"] = True
+            dbg["hierarchy_growth_stopped"] = False
+            dbg["hierarchy_stop_reason"] = ""
             cluster_debug.append(dbg)
             feats = self._aggregate(groups, feats_prev)
             levels.append((groups, feats))
-            if len(groups) == 1:
-                break
             feats_prev = feats
         if return_debug:
             return levels, cluster_debug
         return levels
-
-    def _cluster(self, feats, threshold, prev_groups=None, return_debug: bool = False):
+    def _cluster(self, feats, threshold, prev_groups=None, return_debug: bool = False, allow_forced_bipartition: bool = True):
         n = feats.size(0)
         if n == 1:
             groups = [[0]]
@@ -752,6 +758,11 @@ class AAHV3Attention(nn.Module):
                     "small_groups_before_merge": 0,
                     "singleton_groups_before_merge": 0,
                     "min_group_size": int(self.min_group_size),
+                    "groups_before_force": 1,
+                    "forced_bipartition": False,
+                    "force_split_anchor_similarity": None,
+                    "cluster_origin": "single_item",
+                    "forced_bipartition_allowed": bool(allow_forced_bipartition),
                 }
             return groups
         feats = F.normalize(feats, dim=-1, eps=1e-6)
@@ -788,11 +799,16 @@ class AAHV3Attention(nn.Module):
             else:
                 groups.append([i])
                 centroids.append(fi.clone())
+        groups_before_force = len(groups)
         forced_bipartition = False
         force_split_anchor_similarity = None
-        if len(groups) == 1 and n >= 2:
+        cluster_origin = "natural"
+        if len(groups) == 1 and n >= 2 and allow_forced_bipartition:
             groups, force_split_anchor_similarity = self._force_bipartition_groups(feats, sim)
             forced_bipartition = len(groups) > 1
+            cluster_origin = "forced_bipartition" if forced_bipartition else "collapsed"
+        elif len(groups) == 1 and n >= 2:
+            cluster_origin = "collapsed"
         groups_before_merge = len(groups)
         small_groups_before_merge = sum(1 for g in groups if len(g) < self.min_group_size)
         singleton_groups_before_merge = sum(1 for g in groups if len(g) == 1)
@@ -813,8 +829,11 @@ class AAHV3Attention(nn.Module):
                 "small_groups_before_merge": int(small_groups_before_merge),
                 "singleton_groups_before_merge": int(singleton_groups_before_merge),
                 "min_group_size": int(self.min_group_size),
+                "groups_before_force": int(groups_before_force),
                 "forced_bipartition": bool(forced_bipartition),
                 "force_split_anchor_similarity": float(force_split_anchor_similarity) if force_split_anchor_similarity is not None else None,
+                "cluster_origin": str(cluster_origin),
+                "forced_bipartition_allowed": bool(allow_forced_bipartition),
             }
         return groups
 
@@ -904,9 +923,12 @@ class AAHV3Attention(nn.Module):
     def _build_hierarchy(self, head_feats, prev_head_groups=None, return_debug: bool = False):
         levels = []
         cluster_debug = []
-        groups0, dbg0 = self._cluster(head_feats, self.sim_threshold, prev_groups=prev_head_groups, return_debug=True)
+        groups0, dbg0 = self._cluster(head_feats, self.sim_threshold, prev_groups=prev_head_groups, return_debug=True, allow_forced_bipartition=True)
         dbg0["level_idx"] = 0
         dbg0["threshold_kind"] = "sim_threshold"
+        dbg0["hierarchy_level_added"] = True
+        dbg0["hierarchy_growth_stopped"] = len(groups0) == 1
+        dbg0["hierarchy_stop_reason"] = "level0_collapsed" if len(groups0) == 1 else ""
         cluster_debug.append(dbg0)
         feats0 = self._aggregate(groups0, head_feats)
         levels.append((groups0, feats0))
@@ -916,14 +938,21 @@ class AAHV3Attention(nn.Module):
             return levels
         feats_prev = feats0
         for level_idx in range(1, self.max_depth):
-            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True)
+            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True, allow_forced_bipartition=False)
             dbg["level_idx"] = level_idx
             dbg["threshold_kind"] = "super_threshold"
+            if len(groups) == 1:
+                dbg["hierarchy_level_added"] = False
+                dbg["hierarchy_growth_stopped"] = True
+                dbg["hierarchy_stop_reason"] = "upper_level_collapsed"
+                cluster_debug.append(dbg)
+                break
+            dbg["hierarchy_level_added"] = True
+            dbg["hierarchy_growth_stopped"] = False
+            dbg["hierarchy_stop_reason"] = ""
             cluster_debug.append(dbg)
             feats = self._aggregate(groups, feats_prev)
             levels.append((groups, feats))
-            if len(groups) == 1:
-                break
             feats_prev = feats
         if return_debug:
             return levels, cluster_debug
@@ -1392,6 +1421,12 @@ class AAHV3Attention(nn.Module):
             float(d.get("force_split_anchor_similarity")) if d.get("force_split_anchor_similarity") is not None else None
             for d in cluster_debug
         ]
+        cluster_origin_per_level = [str(d.get("cluster_origin", "")) for d in cluster_debug]
+        cluster_forced_bipartition_allowed_per_level = [bool(d.get("forced_bipartition_allowed", False)) for d in cluster_debug]
+        cluster_groups_before_force_per_level = [int(d.get("groups_before_force", 0)) for d in cluster_debug]
+        hierarchy_level_added_per_level = [bool(d.get("hierarchy_level_added", True)) for d in cluster_debug]
+        hierarchy_growth_stopped_per_level = [bool(d.get("hierarchy_growth_stopped", False)) for d in cluster_debug]
+        hierarchy_stop_reason_per_level = [str(d.get("hierarchy_stop_reason", "")) for d in cluster_debug]
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
@@ -1445,6 +1480,12 @@ class AAHV3Attention(nn.Module):
             "cluster_sim_max_per_level": cluster_sim_max_per_level,
             "cluster_forced_bipartition_per_level": cluster_forced_bipartition_per_level,
             "cluster_force_split_anchor_similarity_per_level": cluster_force_split_anchor_similarity_per_level,
+            "cluster_origin_per_level": cluster_origin_per_level,
+            "cluster_forced_bipartition_allowed_per_level": cluster_forced_bipartition_allowed_per_level,
+            "cluster_groups_before_force_per_level": cluster_groups_before_force_per_level,
+            "hierarchy_level_added_per_level": hierarchy_level_added_per_level,
+            "hierarchy_growth_stopped_per_level": hierarchy_growth_stopped_per_level,
+            "hierarchy_stop_reason_per_level": hierarchy_stop_reason_per_level,
             "cluster_min_group_size": int(self.min_group_size),
             "cluster_sim_threshold": float(self.sim_threshold),
             "cluster_super_threshold": float(self.super_threshold),
