@@ -143,6 +143,9 @@ def build_model(cfg, vocab_size, device):
         aah_v3_resolution_collapse_max_frac=model_cfg.get("aah_v3_resolution_collapse_max_frac", 0.95),
         aah_v3_post_warmup_ramp_steps=model_cfg.get("aah_v3_post_warmup_ramp_steps", 0),
         aah_v3_group_feature_mode=model_cfg.get("aah_v3_group_feature_mode", "mean"),
+        aah_v3_upper_cluster_metric=model_cfg.get("aah_v3_upper_cluster_metric", "cosine"),
+        aah_v3_upper_l2_threshold=model_cfg.get("aah_v3_upper_l2_threshold", 0.0),
+        aah_v3_cosine_normdiff_scale=model_cfg.get("aah_v3_cosine_normdiff_scale", 16.0),
     )
     return GPT(gpt_cfg).to(device)
 

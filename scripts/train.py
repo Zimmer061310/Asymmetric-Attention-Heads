@@ -302,6 +302,9 @@ def main():
         aah_v3_resolution_collapse_max_frac=model_cfg.get("aah_v3_resolution_collapse_max_frac", 0.95),
         aah_v3_post_warmup_ramp_steps=model_cfg.get("aah_v3_post_warmup_ramp_steps", 0),
         aah_v3_group_feature_mode=model_cfg.get("aah_v3_group_feature_mode", "mean"),
+        aah_v3_upper_cluster_metric=model_cfg.get("aah_v3_upper_cluster_metric", "cosine"),
+        aah_v3_upper_l2_threshold=model_cfg.get("aah_v3_upper_l2_threshold", 0.0),
+        aah_v3_cosine_normdiff_scale=model_cfg.get("aah_v3_cosine_normdiff_scale", 16.0),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -451,6 +454,7 @@ def main():
         "win_idx_post_clamp",
         "hierarchy_head_group_map_per_level",
         "hierarchy_group_members_per_level",
+        "cluster_metric_per_level",
         "cluster_threshold_kind_per_level",
         "cluster_threshold_per_level",
         "cluster_item_count_per_level",
@@ -671,6 +675,7 @@ def main():
                 win_idx_post_parent_clamps = []
                 hierarchy_head_group_map_per_levels = []
                 hierarchy_group_members_per_levels = []
+                cluster_metric_per_levels = []
                 cluster_threshold_kind_per_levels = []
                 cluster_threshold_per_levels = []
                 cluster_item_count_per_levels = []
@@ -783,6 +788,8 @@ def main():
                                 hierarchy_head_group_map_per_levels.append(attn.last_stats.get("hierarchy_head_group_map_per_level"))
                             if "hierarchy_group_members_per_level" in attn.last_stats:
                                 hierarchy_group_members_per_levels.append(attn.last_stats.get("hierarchy_group_members_per_level"))
+                            if "cluster_metric_per_level" in attn.last_stats:
+                                cluster_metric_per_levels.append(attn.last_stats.get("cluster_metric_per_level"))
                             if "cluster_threshold_kind_per_level" in attn.last_stats:
                                 cluster_threshold_kind_per_levels.append(attn.last_stats.get("cluster_threshold_kind_per_level"))
                             if "cluster_threshold_per_level" in attn.last_stats:
@@ -1123,6 +1130,8 @@ def main():
                         payload["aah/hierarchy_head_group_map_per_level"] = hierarchy_head_group_map_per_levels[0]
                     if hierarchy_group_members_per_levels:
                         payload["aah/hierarchy_group_members_per_level"] = hierarchy_group_members_per_levels[0]
+                    if cluster_metric_per_levels:
+                        payload["aah/cluster_metric_per_level"] = cluster_metric_per_levels[0]
                     if cluster_threshold_kind_per_levels:
                         payload["aah/cluster_threshold_kind_per_level"] = cluster_threshold_kind_per_levels[0]
                     if cluster_threshold_per_levels:
@@ -1333,6 +1342,7 @@ def main():
                         str(win_idx_post_parent_clamps[0]) if win_idx_post_parent_clamps else "",
                         str(hierarchy_head_group_map_per_levels[0]) if hierarchy_head_group_map_per_levels else "",
                         str(hierarchy_group_members_per_levels[0]) if hierarchy_group_members_per_levels else "",
+                        str(cluster_metric_per_levels[0]) if cluster_metric_per_levels else "",
                         str(cluster_threshold_kind_per_levels[0]) if cluster_threshold_kind_per_levels else "",
                         str(cluster_threshold_per_levels[0]) if cluster_threshold_per_levels else "",
                         str(cluster_item_count_per_levels[0]) if cluster_item_count_per_levels else "",

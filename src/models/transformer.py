@@ -52,6 +52,9 @@ class GPTConfig:
     aah_v3_resolution_collapse_max_frac: float = 0.95
     aah_v3_post_warmup_ramp_steps: int = 0
     aah_v3_group_feature_mode: str = "mean"
+    aah_v3_upper_cluster_metric: str = "cosine"
+    aah_v3_upper_l2_threshold: float = 0.0
+    aah_v3_cosine_normdiff_scale: float = 16.0
 
 
 class CausalSelfAttention(nn.Module):
@@ -477,6 +480,9 @@ class AAHV3Attention(nn.Module):
         self.resolution_collapse_max_frac = float(config.aah_v3_resolution_collapse_max_frac)
         self.post_warmup_ramp_steps = max(0, int(config.aah_v3_post_warmup_ramp_steps))
         self.group_feature_mode = str(getattr(config, "aah_v3_group_feature_mode", "mean"))
+        self.upper_cluster_metric = str(getattr(config, "aah_v3_upper_cluster_metric", "cosine"))
+        self.upper_l2_threshold = float(getattr(config, "aah_v3_upper_l2_threshold", 0.0))
+        self.cosine_normdiff_scale = float(getattr(config, "aah_v3_cosine_normdiff_scale", 16.0))
         self.eval_mode = False
         self.cached_win_idx = None
         self.cached_head_to_group = None
@@ -723,7 +729,7 @@ class AAHV3Attention(nn.Module):
             return levels
         feats_prev = group_feats
         for level_idx in range(1, self.max_depth):
-            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True, allow_forced_bipartition=False)
+            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True, allow_forced_bipartition=False, metric=self.upper_cluster_metric)
             dbg["level_idx"] = level_idx
             dbg["threshold_kind"] = "super_threshold"
             if len(groups) == 1:
@@ -742,15 +748,19 @@ class AAHV3Attention(nn.Module):
         if return_debug:
             return levels, cluster_debug
         return levels
-    def _cluster(self, feats, threshold, prev_groups=None, return_debug: bool = False, allow_forced_bipartition: bool = True):
+    def _cluster(self, feats, threshold, prev_groups=None, return_debug: bool = False, allow_forced_bipartition: bool = True, metric: str = "cosine"):
         n = feats.size(0)
         feature_stats = self._feature_separability_stats(feats)
+        metric = str(metric)
+        if metric == "l2":
+            threshold = float(self.upper_l2_threshold)
         if n == 1:
             groups = [[0]]
             if return_debug:
                 return groups, {
                     "n_items": 1,
                     "threshold": float(threshold),
+                    "cluster_metric": metric,
                     "sim_mean": 1.0,
                     "sim_std": 0.0,
                     "sim_min": 1.0,
@@ -769,15 +779,32 @@ class AAHV3Attention(nn.Module):
                     **feature_stats,
                 }
             return groups
-        feats = F.normalize(feats, dim=-1, eps=1e-6)
-        sim = feats @ feats.transpose(0, 1)
+
+        raw_feats = feats.float()
+        if metric == "centered_cosine":
+            score_feats = F.normalize(raw_feats - raw_feats.mean(dim=0, keepdim=True), dim=-1, eps=1e-6)
+            sim = score_feats @ score_feats.transpose(0, 1)
+        elif metric == "l2":
+            score_feats = raw_feats
+            sim = -torch.cdist(raw_feats, raw_feats, p=2)
+        elif metric == "cosine_normdiff":
+            score_feats = F.normalize(raw_feats, dim=-1, eps=1e-6)
+            cos = score_feats @ score_feats.transpose(0, 1)
+            norms = raw_feats.norm(dim=-1)
+            norm_den = torch.maximum(norms.unsqueeze(0), norms.unsqueeze(1)).clamp_min(1e-6)
+            norm_diff = (norms.unsqueeze(0) - norms.unsqueeze(1)).abs() / norm_den
+            sim = cos - (self.cosine_normdiff_scale * norm_diff)
+        else:
+            metric = "cosine"
+            score_feats = F.normalize(raw_feats, dim=-1, eps=1e-6)
+            sim = score_feats @ score_feats.transpose(0, 1)
         offdiag_mask = ~torch.eye(n, dtype=torch.bool, device=sim.device)
         sim_offdiag = sim[offdiag_mask]
         sim_mean = float(sim_offdiag.mean().item()) if sim_offdiag.numel() > 0 else 1.0
         sim_std = float(sim_offdiag.std(unbiased=False).item()) if sim_offdiag.numel() > 1 else 0.0
         sim_min = float(sim_offdiag.min().item()) if sim_offdiag.numel() > 0 else 1.0
         sim_max = float(sim_offdiag.max().item()) if sim_offdiag.numel() > 0 else 1.0
-        if prev_groups is not None and self.churn_penalty > 0:
+        if metric == "cosine" and prev_groups is not None and self.churn_penalty > 0:
             same_group = prev_groups.unsqueeze(0) == prev_groups.unsqueeze(1)
             sim = torch.clamp(sim + (same_group.float() * self.churn_penalty), max=1.0)
         # Use centroid-threshold assignment instead of transitive connected-components.
@@ -786,20 +813,32 @@ class AAHV3Attention(nn.Module):
         groups = []
         centroids = []
         for i in range(n):
-            fi = feats[i]
+            fi = score_feats[i]
             if not centroids:
                 groups.append([i])
                 centroids.append(fi.clone())
                 continue
             c_stack = torch.stack(centroids, dim=0)
-            sims = (c_stack @ fi.unsqueeze(1)).squeeze(1)
+            if metric == "l2":
+                sims = -torch.cdist(c_stack, fi.unsqueeze(0), p=2).squeeze(1)
+            elif metric == "cosine_normdiff":
+                cos = c_stack @ fi.unsqueeze(1)
+                cos = cos.squeeze(1)
+                c_norms = torch.stack([raw_feats[g].mean(dim=0).norm() for g in groups], dim=0)
+                fi_norm = raw_feats[i].norm()
+                norm_den = torch.maximum(c_norms, fi_norm.expand_as(c_norms)).clamp_min(1e-6)
+                norm_diff = (c_norms - fi_norm).abs() / norm_den
+                sims = cos - (self.cosine_normdiff_scale * norm_diff)
+            else:
+                sims = (c_stack @ fi.unsqueeze(1)).squeeze(1)
             best_sim, best_idx = torch.max(sims, dim=0)
             if float(best_sim.item()) >= float(threshold):
                 gi = int(best_idx.item())
                 groups[gi].append(i)
                 # running centroid update
-                centroids[gi] = feats[groups[gi]].mean(dim=0)
-                centroids[gi] = F.normalize(centroids[gi], dim=0, eps=1e-6)
+                centroids[gi] = score_feats[groups[gi]].mean(dim=0)
+                if metric != "l2":
+                    centroids[gi] = F.normalize(centroids[gi], dim=0, eps=1e-6)
             else:
                 groups.append([i])
                 centroids.append(fi.clone())
@@ -808,7 +847,7 @@ class AAHV3Attention(nn.Module):
         force_split_anchor_similarity = None
         cluster_origin = "natural"
         if len(groups) == 1 and n >= 2 and allow_forced_bipartition:
-            groups, force_split_anchor_similarity = self._force_bipartition_groups(feats, sim)
+            groups, force_split_anchor_similarity = self._force_bipartition_groups(score_feats, sim)
             forced_bipartition = len(groups) > 1
             cluster_origin = "forced_bipartition" if forced_bipartition else "collapsed"
         elif len(groups) == 1 and n >= 2:
@@ -817,12 +856,13 @@ class AAHV3Attention(nn.Module):
         small_groups_before_merge = sum(1 for g in groups if len(g) < self.min_group_size)
         singleton_groups_before_merge = sum(1 for g in groups if len(g) == 1)
         if self.min_group_size > 1 and len(groups) > 1 and not forced_bipartition:
-            groups = self._merge_small_groups(groups, feats, sim, threshold)
+            groups = self._merge_small_groups(groups, score_feats, sim, threshold)
         groups_after_merge = len(groups)
         if return_debug:
             return groups, {
                 "n_items": int(n),
                 "threshold": float(threshold),
+                "cluster_metric": metric,
                 "sim_mean": sim_mean,
                 "sim_std": sim_std,
                 "sim_min": sim_min,
@@ -958,7 +998,7 @@ class AAHV3Attention(nn.Module):
             return levels
         feats_prev = feats0
         for level_idx in range(1, self.max_depth):
-            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True, allow_forced_bipartition=False)
+            groups, dbg = self._cluster(feats_prev, self.super_threshold, return_debug=True, allow_forced_bipartition=False, metric=self.upper_cluster_metric)
             dbg["level_idx"] = level_idx
             dbg["threshold_kind"] = "super_threshold"
             if len(groups) == 1:
@@ -1425,6 +1465,7 @@ class AAHV3Attention(nn.Module):
                 group_ratios[g] = avg_w / float(lq)
         for window, heads in head_groups.items():
             branch_usage_freq[int(window)] = len(heads) / float(self.n_head)
+        cluster_metric_per_level = [str(d.get("cluster_metric", "cosine")) for d in cluster_debug]
         cluster_threshold_kind_per_level = [str(d.get("threshold_kind", "")) for d in cluster_debug]
         cluster_threshold_per_level = [float(d.get("threshold", 0.0)) for d in cluster_debug]
         cluster_item_count_per_level = [int(d.get("n_items", 0)) for d in cluster_debug]
@@ -1494,6 +1535,7 @@ class AAHV3Attention(nn.Module):
             "path_mode": path_mode,
             "win_idx_pre_clamp": win_idx_pre_clamp.detach().cpu().tolist() if win_idx_pre_clamp is not None else [],
             "win_idx_post_clamp": win_idx_post_clamp.detach().cpu().tolist() if win_idx_post_clamp is not None else [],
+            "cluster_metric_per_level": cluster_metric_per_level,
             "cluster_threshold_kind_per_level": cluster_threshold_kind_per_level,
             "cluster_threshold_per_level": cluster_threshold_per_level,
             "cluster_item_count_per_level": cluster_item_count_per_level,
