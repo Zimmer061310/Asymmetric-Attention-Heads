@@ -51,6 +51,7 @@ class GPTConfig:
     aah_v3_resolution_collapse_min_frac: float = 0.95
     aah_v3_resolution_collapse_max_frac: float = 0.95
     aah_v3_post_warmup_ramp_steps: int = 0
+    aah_v3_group_feature_mode: str = "mean"
 
 
 class CausalSelfAttention(nn.Module):
@@ -475,6 +476,7 @@ class AAHV3Attention(nn.Module):
         self.resolution_collapse_min_frac = float(config.aah_v3_resolution_collapse_min_frac)
         self.resolution_collapse_max_frac = float(config.aah_v3_resolution_collapse_max_frac)
         self.post_warmup_ramp_steps = max(0, int(config.aah_v3_post_warmup_ramp_steps))
+        self.group_feature_mode = str(getattr(config, "aah_v3_group_feature_mode", "mean"))
         self.eval_mode = False
         self.cached_win_idx = None
         self.cached_head_to_group = None
@@ -918,8 +920,23 @@ class AAHV3Attention(nn.Module):
 
     def _aggregate(self, groups, feats):
         agg = []
+        global_mean = feats.mean(dim=0) if feats.numel() > 0 else None
+        mode = self.group_feature_mode
         for g in groups:
-            g_feats = feats[g].mean(dim=0)
+            child_feats = feats[g]
+            mean = child_feats.mean(dim=0)
+            if mode == "mean":
+                g_feats = mean
+            elif mode == "mean_std":
+                spread = child_feats.std(dim=0, unbiased=False) if child_feats.size(0) > 1 else torch.zeros_like(mean)
+                g_feats = mean + spread
+            elif mode == "mean_var":
+                spread = child_feats.var(dim=0, unbiased=False) if child_feats.size(0) > 1 else torch.zeros_like(mean)
+                g_feats = mean + spread
+            elif mode == "mean_global_offset":
+                g_feats = mean + (mean - global_mean)
+            else:
+                g_feats = mean
             agg.append(g_feats)
         return torch.stack(agg, dim=0)
 
@@ -1145,6 +1162,7 @@ class AAHV3Attention(nn.Module):
                 "cluster_min_group_size": int(self.min_group_size),
                 "cluster_sim_threshold": float(self.sim_threshold),
                 "cluster_super_threshold": float(self.super_threshold),
+                "group_feature_mode": self.group_feature_mode,
                 "feature_dim_var_mean": 0.0,
                 "feature_dim_var_std": 0.0,
                 "feature_dim_var_min": 0.0,

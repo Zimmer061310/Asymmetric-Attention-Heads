@@ -301,6 +301,7 @@ def main():
         aah_v3_resolution_collapse_min_frac=model_cfg.get("aah_v3_resolution_collapse_min_frac", 0.95),
         aah_v3_resolution_collapse_max_frac=model_cfg.get("aah_v3_resolution_collapse_max_frac", 0.95),
         aah_v3_post_warmup_ramp_steps=model_cfg.get("aah_v3_post_warmup_ramp_steps", 0),
+        aah_v3_group_feature_mode=model_cfg.get("aah_v3_group_feature_mode", "mean"),
     )
     model = GPT(gpt_cfg).to(device)
 
