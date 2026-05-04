@@ -1378,7 +1378,9 @@ class AAHV3Attention(nn.Module):
                     group_change_rate = None
                     feats = self._head_features(q, k, v)
                     feature_probe_stats = self._feature_separability_stats(feats)
-                    logits = self.controller(feats.float()).float()
+                    head_levels = [([ [i] for i in range(self.n_head) ], feats)]
+                    controller_feats = self._controller_input_features(head_levels, [], 0, x.device)
+                    logits = self.controller(controller_feats.float()).float()
                     controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     win_idx = logits.argmax(dim=-1)
                     win_idx_pre_clamp = win_idx.detach().clone()
@@ -1410,7 +1412,8 @@ class AAHV3Attention(nn.Module):
                         parent_maps = self._parent_maps(levels)
                         group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
                         shadow_win_idx = group_win_idx[head_to_group]
-                        logits = self.controller(levels[0][1].float()).float()
+                        controller_feats = self._controller_input_features(levels, parent_maps, 0, x.device)
+                        logits = self.controller(controller_feats.float()).float()
                         controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                         shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
@@ -1443,7 +1446,8 @@ class AAHV3Attention(nn.Module):
                             head_to_group[h] = gi
                     if self.apply_window_control and group_win_idx is not None:
                         shadow_win_idx = group_win_idx[head_to_group]
-                        logits = self.controller(levels[0][1].float()).float()
+                        controller_feats = self._controller_input_features(levels, parent_maps, 0, x.device)
+                        logits = self.controller(controller_feats.float()).float()
                         controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                         shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     if self.cached_head_to_group is None:
