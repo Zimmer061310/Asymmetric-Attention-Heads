@@ -509,11 +509,15 @@ class AAHV3Attention(nn.Module):
         )
         self.mask_cache = OrderedDict()
 
-        self.controller = AAHV3Controller(
-            feat_dim=self.controller_feat_dim,
-            hidden_dim=max(4, int(config.aah_v3_control_dim)),
-            n_windows=len(self.windows),
-        )
+        # Keep controller-size ablations from perturbing the global RNG stream for
+        # the rest of the model. This makes base vs enriched diagnostics compare
+        # the controller input path instead of accidentally changing later weights.
+        with torch.random.fork_rng(devices=[]):
+            self.controller = AAHV3Controller(
+                feat_dim=self.controller_feat_dim,
+                hidden_dim=max(4, int(config.aah_v3_control_dim)),
+                n_windows=len(self.windows),
+            )
 
     def set_control(self, enabled: bool):
         self.control_enabled = bool(enabled)
