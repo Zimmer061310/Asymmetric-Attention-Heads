@@ -503,7 +503,14 @@ class AAHV3Attention(nn.Module):
         self.controller_arch = str(getattr(config, "aah_v3_controller_arch", "mlp"))
         self.controller_logit_scale = float(getattr(config, "aah_v3_controller_logit_scale", 1.0))
         self.controller_choice_mode = str(getattr(config, "aah_v3_controller_choice_mode", "learned"))
-        self.controller_feat_dim = 29 if self.controller_input_mode == "enriched" else 9
+        if self.controller_input_mode == "contrastive":
+            self.controller_feat_dim = 38
+        elif self.controller_input_mode == "position_aware":
+            self.controller_feat_dim = 32
+        elif self.controller_input_mode == "enriched":
+            self.controller_feat_dim = 29
+        else:
+            self.controller_feat_dim = 9
         self.eval_mode = False
         self.cached_win_idx = None
         self.cached_head_to_group = None
@@ -1139,22 +1146,56 @@ class AAHV3Attention(nn.Module):
     def _controller_input_features(self, levels, parent_maps, level, device):
         groups, feats = levels[level]
         base = feats.float()
-        if self.controller_input_mode != "enriched":
+        if self.controller_input_mode == "base":
             return base
         n = base.size(0)
         n_levels = len(levels)
         level_value = float(level) / max(1.0, float(n_levels - 1))
         level_feat = torch.full((n, 1), level_value, device=base.device, dtype=base.dtype)
-        if level < n_levels - 1 and parent_maps:
+        has_parent = level < n_levels - 1 and parent_maps
+        if has_parent:
             parent_map = parent_maps[level].to(base.device)
             parent_feats = levels[level + 1][1].float()[parent_map]
             parent_diff = base - parent_feats
         else:
+            parent_map = None
             parent_diff = torch.zeros_like(base)
         global_offset = base - base.mean(dim=0, keepdim=True)
         denom = max(1.0, float(sum(len(g) for g in groups)))
         size_feat = torch.tensor([len(g) / denom for g in groups], device=base.device, dtype=base.dtype).unsqueeze(1)
-        return torch.cat([base, level_feat, parent_diff, global_offset, size_feat], dim=-1)
+        enriched = torch.cat([base, level_feat, parent_diff, global_offset, size_feat], dim=-1)
+        if self.controller_input_mode == "enriched":
+            return enriched
+        sibling_diff = torch.zeros_like(base)
+        pos_norm = torch.zeros((n, 1), device=base.device, dtype=base.dtype)
+        left_feat = torch.zeros((n, 1), device=base.device, dtype=base.dtype)
+        right_feat = torch.zeros((n, 1), device=base.device, dtype=base.dtype)
+        if n > 1:
+            if has_parent:
+                for gi in range(n):
+                    same_parent = (parent_map == parent_map[gi]).nonzero(as_tuple=False).flatten()
+                    sib = same_parent[same_parent != gi]
+                    if sib.numel() > 0:
+                        sibling_diff[gi] = base[gi] - base[sib].mean(dim=0)
+                    count = max(1, int(same_parent.numel()) - 1)
+                    pos = int((same_parent == gi).nonzero(as_tuple=False).flatten()[0].item()) if (same_parent == gi).any() else 0
+                    pos_norm[gi, 0] = float(pos) / float(count)
+                    left_feat[gi, 0] = 1.0 if pos == 0 else 0.0
+                    right_feat[gi, 0] = 1.0 if pos > 0 else 0.0
+            else:
+                for gi in range(n):
+                    sib = torch.arange(n, device=base.device)
+                    sib = sib[sib != gi]
+                    sibling_diff[gi] = base[gi] - base[sib].mean(dim=0)
+                    count = max(1, n - 1)
+                    pos_norm[gi, 0] = float(gi) / float(count)
+                    left_feat[gi, 0] = 1.0 if gi == 0 else 0.0
+                    right_feat[gi, 0] = 1.0 if gi > 0 else 0.0
+        if self.controller_input_mode == "contrastive":
+            return torch.cat([enriched, sibling_diff], dim=-1)
+        if self.controller_input_mode == "position_aware":
+            return torch.cat([enriched, pos_norm, left_feat, right_feat], dim=-1)
+        return enriched
 
     def _select_windows(self, levels, parent_maps, device, return_debug: bool = False):
         n_levels = len(levels)
