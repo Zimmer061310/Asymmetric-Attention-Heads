@@ -151,6 +151,8 @@ def build_model(cfg, vocab_size, device):
         aah_v3_controller_logit_scale=model_cfg.get("aah_v3_controller_logit_scale", 1.0),
         aah_v3_controller_rng_reference_dim=model_cfg.get("aah_v3_controller_rng_reference_dim", 16),
         aah_v3_controller_choice_mode=model_cfg.get("aah_v3_controller_choice_mode", "learned"),
+        aah_v3_controller_pairwise_mode=model_cfg.get("aah_v3_controller_pairwise_mode", "none"),
+        aah_v3_pairwise_bias_scale=model_cfg.get("aah_v3_pairwise_bias_scale", 1.0),
     )
     return GPT(gpt_cfg).to(device)
 

@@ -60,6 +60,8 @@ class GPTConfig:
     aah_v3_controller_logit_scale: float = 1.0
     aah_v3_controller_rng_reference_dim: int = 16
     aah_v3_controller_choice_mode: str = "learned"
+    aah_v3_controller_pairwise_mode: str = "none"
+    aah_v3_pairwise_bias_scale: float = 1.0
 
 
 class CausalSelfAttention(nn.Module):
@@ -503,6 +505,8 @@ class AAHV3Attention(nn.Module):
         self.controller_arch = str(getattr(config, "aah_v3_controller_arch", "mlp"))
         self.controller_logit_scale = float(getattr(config, "aah_v3_controller_logit_scale", 1.0))
         self.controller_choice_mode = str(getattr(config, "aah_v3_controller_choice_mode", "learned"))
+        self.controller_pairwise_mode = str(getattr(config, "aah_v3_controller_pairwise_mode", "none"))
+        self.pairwise_bias_scale = float(getattr(config, "aah_v3_pairwise_bias_scale", 1.0))
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -564,6 +568,17 @@ class AAHV3Attention(nn.Module):
                 n_windows=len(self.windows),
                 arch="mlp",
             )
+        self.pairwise_bias = None
+        if self.controller_pairwise_mode == "sibling_bias":
+            # Diagnostic pairwise term. Forking avoids perturbing the initialization
+            # stream for later blocks while still giving the scorer trainable params.
+            with torch.random.fork_rng(devices=[]):
+                self.pairwise_bias = AAHV3Controller(
+                    feat_dim=self.controller_feat_dim,
+                    hidden_dim=controller_hidden_dim,
+                    n_windows=len(self.windows),
+                    arch="mlp",
+                )
 
     def set_control(self, enabled: bool):
         self.control_enabled = bool(enabled)
@@ -1097,6 +1112,53 @@ class AAHV3Attention(nn.Module):
             return torch.where(vals == 0, torch.full_like(vals, lo), torch.full_like(vals, hi))
         return None
 
+    def _sibling_delta_features(self, feats, parent_map=None):
+        f = feats.float()
+        n = int(f.size(0))
+        delta = torch.zeros_like(f)
+        if n <= 1:
+            return delta
+        if parent_map is not None:
+            pm = parent_map.to(f.device)
+            for gi in range(n):
+                same_parent = (pm == pm[gi]).nonzero(as_tuple=False).flatten()
+                sib = same_parent[same_parent != gi]
+                if sib.numel() > 0:
+                    delta[gi] = f[gi] - f[sib].mean(dim=0)
+        else:
+            all_idx = torch.arange(n, device=f.device)
+            for gi in range(n):
+                sib = all_idx[all_idx != gi]
+                delta[gi] = f[gi] - f[sib].mean(dim=0)
+        return delta
+
+    def _apply_pairwise_bias(self, feats, logits, parent_map=None):
+        empty = {
+            "bias_l2_mean": 0.0,
+            "bias_l2_max": 0.0,
+            "bias_abs_mean": 0.0,
+            "bias_abs_max": 0.0,
+            "top1_changed_frac": 0.0,
+            "base_top1_ids": logits.argmax(dim=-1).detach().cpu().tolist() if logits.numel() > 0 else [],
+        }
+        if self.controller_pairwise_mode != "sibling_bias" or self.pairwise_bias is None:
+            return logits, empty
+        delta = self._sibling_delta_features(feats, parent_map=parent_map)
+        bias = self.pairwise_bias(delta.float()).float() * self.pairwise_bias_scale
+        out = logits + bias
+        bias_l2 = bias.norm(dim=-1) if bias.numel() > 0 else torch.zeros(1, device=logits.device)
+        base_top1 = logits.argmax(dim=-1)
+        out_top1 = out.argmax(dim=-1)
+        stats = {
+            "bias_l2_mean": float(bias_l2.mean().item()) if bias_l2.numel() > 0 else 0.0,
+            "bias_l2_max": float(bias_l2.max().item()) if bias_l2.numel() > 0 else 0.0,
+            "bias_abs_mean": float(bias.abs().mean().item()) if bias.numel() > 0 else 0.0,
+            "bias_abs_max": float(bias.abs().max().item()) if bias.numel() > 0 else 0.0,
+            "top1_changed_frac": float((base_top1 != out_top1).float().mean().item()) if base_top1.numel() > 0 else 0.0,
+            "base_top1_ids": base_top1.detach().cpu().tolist(),
+        }
+        return out, stats
+
     def _sibling_contrast_stats(self, feats, logits):
         n = int(feats.size(0))
         if n < 2:
@@ -1212,10 +1274,12 @@ class AAHV3Attention(nn.Module):
         logits_std_per_level = [0.0] * n_levels
         logits_var_per_level = [0.0] * n_levels
         sibling_contrast_per_level = [None] * n_levels
+        pairwise_bias_per_level = [None] * n_levels
         differ_from_parent_frac_per_level = [None] * n_levels
         top_feats = self._controller_input_features(levels, parent_maps, n_levels - 1, device)
         top_input_stats = self._feature_separability_stats(top_feats)
         top_logits = self._controller_logits(top_feats)
+        top_logits, pairwise_bias_per_level[-1] = self._apply_pairwise_bias(top_feats, top_logits, parent_map=None)
         sibling_contrast_per_level[-1] = self._sibling_contrast_stats(top_feats, top_logits)
         top_idx = top_logits.argmax(dim=-1)
         oracle_idx = self._oracle_window_indices(top_idx.numel(), device)
@@ -1240,6 +1304,8 @@ class AAHV3Attention(nn.Module):
             feats = self._controller_input_features(levels, parent_maps, level, device)
             input_stats = self._feature_separability_stats(feats)
             logits = self._controller_logits(feats)
+            parent_map_for_pairwise = parent_maps[level].to(device)
+            logits, pairwise_bias_per_level[level] = self._apply_pairwise_bias(feats, logits, parent_map=parent_map_for_pairwise)
             sibling_contrast_per_level[level] = self._sibling_contrast_stats(feats, logits)
             idx = logits.argmax(dim=-1)
             oracle_idx = self._oracle_window_indices(idx.numel(), device)
@@ -1256,7 +1322,7 @@ class AAHV3Attention(nn.Module):
             argmax_diversity_frac_per_level[level] = float(torch.unique(idx).numel()) / max(1.0, float(idx.numel()))
             logits_std_per_level[level] = float(logits.std(unbiased=False).item())
             logits_var_per_level[level] = float(logits.var(unbiased=False).item())
-            parent_map = parent_maps[level].to(device)
+            parent_map = parent_map_for_pairwise
             parent_idx = win_indices[level + 1][parent_map]
             idx = torch.minimum(idx, parent_idx)
             raw_idx_per_level[level] = idx_pre.detach().clone()
@@ -1278,6 +1344,7 @@ class AAHV3Attention(nn.Module):
             input_stats = controller_input_stats_per_level
             stat_list = lambda key, default: [float(st.get(key, default)) if st is not None else default for st in input_stats]
             sibling_stat_list = lambda key, default: [st.get(key, default) if st is not None else default for st in sibling_contrast_per_level]
+            pairwise_stat_list = lambda key, default: [st.get(key, default) if st is not None else default for st in pairwise_bias_per_level]
             return win_indices[0], {
                 "pre_clamp_level0": pre_clamp_level0,
                 "post_clamp_level0": post_clamp_level0,
@@ -1304,6 +1371,12 @@ class AAHV3Attention(nn.Module):
                 "sibling_ranking_diff_frac_per_level": sibling_stat_list("ranking_diff_frac", 0.0),
                 "sibling_top1_differ_frac_per_level": sibling_stat_list("top1_differ_frac", 0.0),
                 "sibling_top1_ids_per_level": sibling_stat_list("top1_ids", []),
+                "pairwise_bias_l2_mean_per_level": pairwise_stat_list("bias_l2_mean", 0.0),
+                "pairwise_bias_l2_max_per_level": pairwise_stat_list("bias_l2_max", 0.0),
+                "pairwise_bias_abs_mean_per_level": pairwise_stat_list("bias_abs_mean", 0.0),
+                "pairwise_bias_abs_max_per_level": pairwise_stat_list("bias_abs_max", 0.0),
+                "pairwise_bias_top1_changed_frac_per_level": pairwise_stat_list("top1_changed_frac", 0.0),
+                "pairwise_base_top1_ids_per_level": pairwise_stat_list("base_top1_ids", []),
                 "raw_idx_per_level": raw_lists,
                 "parent_idx_per_level": parent_lists,
                 "post_parent_idx_per_level": post_parent_lists,
@@ -1824,6 +1897,12 @@ class AAHV3Attention(nn.Module):
             "sibling_ranking_diff_frac_per_level": decision_debug.get("sibling_ranking_diff_frac_per_level", []),
             "sibling_top1_differ_frac_per_level": decision_debug.get("sibling_top1_differ_frac_per_level", []),
             "sibling_top1_ids_per_level": decision_debug.get("sibling_top1_ids_per_level", []),
+            "pairwise_bias_l2_mean_per_level": decision_debug.get("pairwise_bias_l2_mean_per_level", []),
+            "pairwise_bias_l2_max_per_level": decision_debug.get("pairwise_bias_l2_max_per_level", []),
+            "pairwise_bias_abs_mean_per_level": decision_debug.get("pairwise_bias_abs_mean_per_level", []),
+            "pairwise_bias_abs_max_per_level": decision_debug.get("pairwise_bias_abs_max_per_level", []),
+            "pairwise_bias_top1_changed_frac_per_level": decision_debug.get("pairwise_bias_top1_changed_frac_per_level", []),
+            "pairwise_base_top1_ids_per_level": decision_debug.get("pairwise_base_top1_ids_per_level", []),
             "decision_raw_idx_per_level": decision_debug.get("raw_idx_per_level", []),
             "decision_parent_idx_per_level": decision_debug.get("parent_idx_per_level", []),
             "decision_post_parent_idx_per_level": decision_debug.get("post_parent_idx_per_level", []),

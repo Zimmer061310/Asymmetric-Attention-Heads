@@ -310,6 +310,8 @@ def main():
         aah_v3_controller_logit_scale=model_cfg.get("aah_v3_controller_logit_scale", 1.0),
         aah_v3_controller_rng_reference_dim=model_cfg.get("aah_v3_controller_rng_reference_dim", 16),
         aah_v3_controller_choice_mode=model_cfg.get("aah_v3_controller_choice_mode", "learned"),
+        aah_v3_controller_pairwise_mode=model_cfg.get("aah_v3_controller_pairwise_mode", "none"),
+        aah_v3_pairwise_bias_scale=model_cfg.get("aah_v3_pairwise_bias_scale", 1.0),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -479,6 +481,12 @@ def main():
         "sibling_ranking_diff_frac_per_level",
         "sibling_top1_differ_frac_per_level",
         "sibling_top1_ids_per_level",
+        "pairwise_bias_l2_mean_per_level",
+        "pairwise_bias_l2_max_per_level",
+        "pairwise_bias_abs_mean_per_level",
+        "pairwise_bias_abs_max_per_level",
+        "pairwise_bias_top1_changed_frac_per_level",
+        "pairwise_base_top1_ids_per_level",
         "decision_raw_idx_per_level",
         "decision_parent_idx_per_level",
         "decision_post_parent_idx_per_level",
@@ -740,6 +748,12 @@ def main():
                 sibling_ranking_diff_frac_per_levels = []
                 sibling_top1_differ_frac_per_levels = []
                 sibling_top1_ids_per_levels = []
+                pairwise_bias_l2_mean_per_levels = []
+                pairwise_bias_l2_max_per_levels = []
+                pairwise_bias_abs_mean_per_levels = []
+                pairwise_bias_abs_max_per_levels = []
+                pairwise_bias_top1_changed_frac_per_levels = []
+                pairwise_base_top1_ids_per_levels = []
                 decision_raw_idx_per_levels = []
                 decision_parent_idx_per_levels = []
                 decision_post_parent_idx_per_levels = []
@@ -908,6 +922,18 @@ def main():
                                 sibling_top1_differ_frac_per_levels.append(attn.last_stats.get("sibling_top1_differ_frac_per_level"))
                             if "sibling_top1_ids_per_level" in attn.last_stats:
                                 sibling_top1_ids_per_levels.append(attn.last_stats.get("sibling_top1_ids_per_level"))
+                            if "pairwise_bias_l2_mean_per_level" in attn.last_stats:
+                                pairwise_bias_l2_mean_per_levels.append(attn.last_stats.get("pairwise_bias_l2_mean_per_level"))
+                            if "pairwise_bias_l2_max_per_level" in attn.last_stats:
+                                pairwise_bias_l2_max_per_levels.append(attn.last_stats.get("pairwise_bias_l2_max_per_level"))
+                            if "pairwise_bias_abs_mean_per_level" in attn.last_stats:
+                                pairwise_bias_abs_mean_per_levels.append(attn.last_stats.get("pairwise_bias_abs_mean_per_level"))
+                            if "pairwise_bias_abs_max_per_level" in attn.last_stats:
+                                pairwise_bias_abs_max_per_levels.append(attn.last_stats.get("pairwise_bias_abs_max_per_level"))
+                            if "pairwise_bias_top1_changed_frac_per_level" in attn.last_stats:
+                                pairwise_bias_top1_changed_frac_per_levels.append(attn.last_stats.get("pairwise_bias_top1_changed_frac_per_level"))
+                            if "pairwise_base_top1_ids_per_level" in attn.last_stats:
+                                pairwise_base_top1_ids_per_levels.append(attn.last_stats.get("pairwise_base_top1_ids_per_level"))
                             if "decision_raw_idx_per_level" in attn.last_stats:
                                 decision_raw_idx_per_levels.append(attn.last_stats.get("decision_raw_idx_per_level"))
                             if "decision_parent_idx_per_level" in attn.last_stats:
@@ -1512,6 +1538,12 @@ def main():
                         str(sibling_ranking_diff_frac_per_levels[0]) if sibling_ranking_diff_frac_per_levels else "",
                         str(sibling_top1_differ_frac_per_levels[0]) if sibling_top1_differ_frac_per_levels else "",
                         str(sibling_top1_ids_per_levels[0]) if sibling_top1_ids_per_levels else "",
+                        str(pairwise_bias_l2_mean_per_levels[0]) if pairwise_bias_l2_mean_per_levels else "",
+                        str(pairwise_bias_l2_max_per_levels[0]) if pairwise_bias_l2_max_per_levels else "",
+                        str(pairwise_bias_abs_mean_per_levels[0]) if pairwise_bias_abs_mean_per_levels else "",
+                        str(pairwise_bias_abs_max_per_levels[0]) if pairwise_bias_abs_max_per_levels else "",
+                        str(pairwise_bias_top1_changed_frac_per_levels[0]) if pairwise_bias_top1_changed_frac_per_levels else "",
+                        str(pairwise_base_top1_ids_per_levels[0]) if pairwise_base_top1_ids_per_levels else "",
                         str(decision_raw_idx_per_levels[0]) if decision_raw_idx_per_levels else "",
                         str(decision_parent_idx_per_levels[0]) if decision_parent_idx_per_levels else "",
                         str(decision_post_parent_idx_per_levels[0]) if decision_post_parent_idx_per_levels else "",
