@@ -515,6 +515,8 @@ class AAHV3Attention(nn.Module):
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
             self.controller_feat_dim = 32
+        elif self.controller_input_mode == "relative_sibling_mean":
+            self.controller_feat_dim = 28
         elif self.controller_input_mode == "enriched":
             self.controller_feat_dim = 29
         else:
@@ -1334,6 +1336,8 @@ class AAHV3Attention(nn.Module):
             return torch.cat([enriched, sibling_diff], dim=-1)
         if self.controller_input_mode == "position_aware":
             return torch.cat([enriched, pos_norm, left_feat, right_feat], dim=-1)
+        if self.controller_input_mode == "relative_sibling_mean":
+            return torch.cat([base, sibling_diff, parent_diff, level_feat], dim=-1)
         return enriched
 
     def _select_windows(self, levels, parent_maps, device, return_debug: bool = False):
