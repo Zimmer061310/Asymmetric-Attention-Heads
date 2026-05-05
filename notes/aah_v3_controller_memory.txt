@@ -1,0 +1,142 @@
+# AAH-v3 Controller Memory Notes
+
+Purpose: store important controller/hierarchy ideas that are easy to lose during context compaction.
+
+## 1. How to handle 3+ sibling groups
+
+Current clean success is for two sibling groups, using a wide joint sibling scorer.
+For two siblings A and B, the scorer can compare:
+
+- A
+- B
+- A - B
+- B - A
+
+and output two window-logit vectors jointly.
+
+This worked because it let the controller answer:
+
+- should A get a wider window than B?
+- should B get a wider window than A?
+
+instead of scoring A and B independently.
+
+For 3+ sibling groups, do not simply keep independent per-group scoring.
+The important idea is still relative scoring.
+
+Recommended first extension: group-vs-sibling-mean scorer.
+
+For siblings A, B, C, D:
+
+- score A using A compared to mean(B, C, D)
+- score B using B compared to mean(A, C, D)
+- score C using C compared to mean(A, B, D)
+- score D using D compared to mean(A, B, C)
+
+This generalizes the successful two-sibling case:
+
+- with two siblings, A - mean(B) is A - B
+- with two siblings, B - mean(A) is B - A
+
+So group-vs-sibling-mean is the simplest scalable version of sibling comparison.
+
+Possible later alternatives:
+
+1. All-pairs scorer
+   - compare A vs B, A vs C, A vs D, etc.
+   - more powerful but more expensive and more complex
+
+2. Set/attention scorer
+   - feed all sibling features into a small set-attention or mini-transformer block
+   - clean long-term design, but larger redesign
+
+Do not jump to all-pairs or set-attention first unless group-vs-sibling-mean fails.
+
+## 2. Meaning of hierarchy count lists like [2,2,2,2]
+
+A list like [2,2,2,2] means the number of groups at each hierarchy level.
+
+Example:
+
+- level 0 has 2 groups
+- level 1 has 2 groups
+- level 2 has 2 groups
+- level 3 has 2 groups
+
+It does not mean each group has 2 heads.
+It means the hierarchy has 4 levels and each level currently contains 2 groups.
+
+This was important because earlier AAH-v3 had fake or collapsed hierarchy.
+The successful setup made hierarchy structurally real again.
+
+## 3. Meaning of window index lists like [3,0]
+
+A list like [3,0] means the selected attention-window indices for sibling groups.
+
+Current window index mapping:
+
+- 0 -> window 64
+- 1 -> window 128
+- 2 -> window 256
+- 3 -> window 512
+
+So [3,0] means:
+
+- sibling/group A chose index 3 -> window 512
+- sibling/group B chose index 0 -> window 64
+
+This is important because [3,0] proves the controller finally treated sibling groups differently.
+Before the wide joint scorer, choices often looked like [2,2], meaning both siblings got the same window.
+
+## 4. Current strongest conclusion
+
+The wide joint sibling scorer is the first clean controller success.
+
+It showed:
+
+- hierarchy stayed real: [2,2,2,2]
+- sibling ranking differed
+- sibling top1 differed
+- parent propagation preserved the difference
+- post-map windows stayed differentiated with ramp disabled
+- compute changed materially
+- all branches 64/128/256/512 were used
+
+Main diagnosis now:
+
+Independent per-group controller scoring was the structural bottleneck.
+A sufficiently expressive joint scorer can break sibling top1 symmetry.
+
+## 5. What is not solved yet
+
+This is not final AAH success yet.
+It only proves the controller can produce differentiated sibling choices under a real hierarchy.
+
+Still need to test:
+
+- whether differentiation is stable beyond 120 steps
+- whether it survives longer training
+- whether ramp destroys it later
+- whether quality becomes acceptable
+- whether a simpler equivalent to wide joint scoring exists
+
+## 6. Recommended next experiment
+
+Run a slightly longer sanity test using the wide joint scorer.
+
+Keep focused:
+
+- same 1B setup
+- same hierarchy metric setup
+- ramp disabled, or evaluate only after ramp completion
+- measure train loss, val loss, val ppl
+- measure attn_ratio and flops_ratio
+- measure branch usage
+- measure sibling_top1_differ_frac
+- measure sibling_ranking_diff_frac
+- measure mixed post-map layers
+- log all-layer top1 ids, not only first-layer per-level stats
+
+Goal:
+
+Confirm that wide joint scoring is stable and not just a 120-step diagnostic artifact.
