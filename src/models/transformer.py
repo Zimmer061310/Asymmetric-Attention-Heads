@@ -62,6 +62,8 @@ class GPTConfig:
     aah_v3_controller_choice_mode: str = "learned"
     aah_v3_controller_pairwise_mode: str = "none"
     aah_v3_pairwise_bias_scale: float = 1.0
+    aah_v3_joint_output_scale: float = 1.0
+    aah_v3_joint_hidden_dim: int = 0
 
 
 class CausalSelfAttention(nn.Module):
@@ -507,6 +509,8 @@ class AAHV3Attention(nn.Module):
         self.controller_choice_mode = str(getattr(config, "aah_v3_controller_choice_mode", "learned"))
         self.controller_pairwise_mode = str(getattr(config, "aah_v3_controller_pairwise_mode", "none"))
         self.pairwise_bias_scale = float(getattr(config, "aah_v3_pairwise_bias_scale", 1.0))
+        self.joint_output_scale = float(getattr(config, "aah_v3_joint_output_scale", 1.0))
+        self.joint_hidden_dim = int(getattr(config, "aah_v3_joint_hidden_dim", 0))
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -581,10 +585,11 @@ class AAHV3Attention(nn.Module):
                     arch="mlp",
                 )
         elif self.controller_pairwise_mode == "joint_sibling":
+            joint_hidden_dim = max(4, self.joint_hidden_dim) if self.joint_hidden_dim > 0 else controller_hidden_dim
             with torch.random.fork_rng(devices=[]):
                 self.joint_sibling_scorer = AAHV3Controller(
                     feat_dim=4 * self.controller_feat_dim,
-                    hidden_dim=controller_hidden_dim,
+                    hidden_dim=joint_hidden_dim,
                     n_windows=2 * len(self.windows),
                     arch="mlp",
                 )
@@ -1192,6 +1197,7 @@ class AAHV3Attention(nn.Module):
             "joint_output_abs_delta_max": 0.0,
             "joint_top1_changed_frac": 0.0,
             "joint_base_top1_ids": logits.argmax(dim=-1).detach().cpu().tolist() if logits.numel() > 0 else [],
+            "joint_output_scale": float(self.joint_output_scale),
         }
         if self.controller_pairwise_mode != "joint_sibling" or self.joint_sibling_scorer is None:
             return logits, empty
@@ -1208,6 +1214,8 @@ class AAHV3Attention(nn.Module):
             fb = feats[b].float()
             joint_feat = torch.cat([fa, fb, fa - fb, fb - fa], dim=-1).unsqueeze(0)
             pair_logits = self.joint_sibling_scorer(joint_feat).float().view(2, len(self.windows))
+            if self.joint_output_scale != 1.0:
+                pair_logits = pair_logits * self.joint_output_scale
             out[a] = pair_logits[0]
             out[b] = pair_logits[1]
             diff = pair_logits[0] - pair_logits[1]
@@ -1224,6 +1232,7 @@ class AAHV3Attention(nn.Module):
             "joint_output_abs_delta_max": float(delta_t.abs().max().item()),
             "joint_top1_changed_frac": float(changed_t.mean().item()),
             "joint_base_top1_ids": base_top1.detach().cpu().tolist(),
+            "joint_output_scale": float(self.joint_output_scale),
         }
         return out, stats
 
@@ -1456,6 +1465,7 @@ class AAHV3Attention(nn.Module):
                 "joint_output_abs_delta_max_per_level": joint_stat_list("joint_output_abs_delta_max", 0.0),
                 "joint_top1_changed_frac_per_level": joint_stat_list("joint_top1_changed_frac", 0.0),
                 "joint_base_top1_ids_per_level": joint_stat_list("joint_base_top1_ids", []),
+                "joint_output_scale_per_level": joint_stat_list("joint_output_scale", 1.0),
                 "raw_idx_per_level": raw_lists,
                 "parent_idx_per_level": parent_lists,
                 "post_parent_idx_per_level": post_parent_lists,
@@ -1989,6 +1999,7 @@ class AAHV3Attention(nn.Module):
             "joint_output_abs_delta_max_per_level": decision_debug.get("joint_output_abs_delta_max_per_level", []),
             "joint_top1_changed_frac_per_level": decision_debug.get("joint_top1_changed_frac_per_level", []),
             "joint_base_top1_ids_per_level": decision_debug.get("joint_base_top1_ids_per_level", []),
+            "joint_output_scale_per_level": decision_debug.get("joint_output_scale_per_level", []),
             "decision_raw_idx_per_level": decision_debug.get("raw_idx_per_level", []),
             "decision_parent_idx_per_level": decision_debug.get("parent_idx_per_level", []),
             "decision_post_parent_idx_per_level": decision_debug.get("post_parent_idx_per_level", []),

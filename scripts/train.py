@@ -312,6 +312,8 @@ def main():
         aah_v3_controller_choice_mode=model_cfg.get("aah_v3_controller_choice_mode", "learned"),
         aah_v3_controller_pairwise_mode=model_cfg.get("aah_v3_controller_pairwise_mode", "none"),
         aah_v3_pairwise_bias_scale=model_cfg.get("aah_v3_pairwise_bias_scale", 1.0),
+        aah_v3_joint_output_scale=model_cfg.get("aah_v3_joint_output_scale", 1.0),
+        aah_v3_joint_hidden_dim=model_cfg.get("aah_v3_joint_hidden_dim", 0),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -494,6 +496,7 @@ def main():
         "joint_output_abs_delta_max_per_level",
         "joint_top1_changed_frac_per_level",
         "joint_base_top1_ids_per_level",
+        "joint_output_scale_per_level",
         "decision_raw_idx_per_level",
         "decision_parent_idx_per_level",
         "decision_post_parent_idx_per_level",
@@ -768,6 +771,7 @@ def main():
                 joint_output_abs_delta_max_per_levels = []
                 joint_top1_changed_frac_per_levels = []
                 joint_base_top1_ids_per_levels = []
+                joint_output_scale_per_levels = []
                 decision_raw_idx_per_levels = []
                 decision_parent_idx_per_levels = []
                 decision_post_parent_idx_per_levels = []
@@ -962,6 +966,8 @@ def main():
                                 joint_top1_changed_frac_per_levels.append(attn.last_stats.get("joint_top1_changed_frac_per_level"))
                             if "joint_base_top1_ids_per_level" in attn.last_stats:
                                 joint_base_top1_ids_per_levels.append(attn.last_stats.get("joint_base_top1_ids_per_level"))
+                            if "joint_output_scale_per_level" in attn.last_stats:
+                                joint_output_scale_per_levels.append(attn.last_stats.get("joint_output_scale_per_level"))
                             if "decision_raw_idx_per_level" in attn.last_stats:
                                 decision_raw_idx_per_levels.append(attn.last_stats.get("decision_raw_idx_per_level"))
                             if "decision_parent_idx_per_level" in attn.last_stats:
@@ -1579,6 +1585,7 @@ def main():
                         str(joint_output_abs_delta_max_per_levels[0]) if joint_output_abs_delta_max_per_levels else "",
                         str(joint_top1_changed_frac_per_levels[0]) if joint_top1_changed_frac_per_levels else "",
                         str(joint_base_top1_ids_per_levels[0]) if joint_base_top1_ids_per_levels else "",
+                        str(joint_output_scale_per_levels[0]) if joint_output_scale_per_levels else "",
                         str(decision_raw_idx_per_levels[0]) if decision_raw_idx_per_levels else "",
                         str(decision_parent_idx_per_levels[0]) if decision_parent_idx_per_levels else "",
                         str(decision_post_parent_idx_per_levels[0]) if decision_post_parent_idx_per_levels else "",
