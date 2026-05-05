@@ -569,6 +569,7 @@ class AAHV3Attention(nn.Module):
                 arch="mlp",
             )
         self.pairwise_bias = None
+        self.joint_sibling_scorer = None
         if self.controller_pairwise_mode == "sibling_bias":
             # Diagnostic pairwise term. Forking avoids perturbing the initialization
             # stream for later blocks while still giving the scorer trainable params.
@@ -577,6 +578,14 @@ class AAHV3Attention(nn.Module):
                     feat_dim=self.controller_feat_dim,
                     hidden_dim=controller_hidden_dim,
                     n_windows=len(self.windows),
+                    arch="mlp",
+                )
+        elif self.controller_pairwise_mode == "joint_sibling":
+            with torch.random.fork_rng(devices=[]):
+                self.joint_sibling_scorer = AAHV3Controller(
+                    feat_dim=4 * self.controller_feat_dim,
+                    hidden_dim=controller_hidden_dim,
+                    n_windows=2 * len(self.windows),
                     arch="mlp",
                 )
 
@@ -1159,6 +1168,65 @@ class AAHV3Attention(nn.Module):
         }
         return out, stats
 
+    def _sibling_pairs(self, n: int, device, parent_map=None):
+        pairs = []
+        if n < 2:
+            return pairs
+        if parent_map is not None:
+            pm = parent_map.to(device)
+            for parent in torch.unique(pm).detach().cpu().tolist():
+                members = (pm == int(parent)).nonzero(as_tuple=False).flatten().detach().cpu().tolist()
+                for i in range(0, len(members) - 1, 2):
+                    pairs.append((int(members[i]), int(members[i + 1])))
+        else:
+            for i in range(0, n - 1, 2):
+                pairs.append((i, i + 1))
+        return pairs
+
+    def _apply_joint_sibling_logits(self, feats, logits, parent_map=None):
+        empty = {
+            "joint_pair_count": 0,
+            "joint_output_delta_l2_mean": 0.0,
+            "joint_output_delta_l2_max": 0.0,
+            "joint_output_abs_delta_mean": 0.0,
+            "joint_output_abs_delta_max": 0.0,
+            "joint_top1_changed_frac": 0.0,
+            "joint_base_top1_ids": logits.argmax(dim=-1).detach().cpu().tolist() if logits.numel() > 0 else [],
+        }
+        if self.controller_pairwise_mode != "joint_sibling" or self.joint_sibling_scorer is None:
+            return logits, empty
+        n = int(feats.size(0))
+        pairs = self._sibling_pairs(n, feats.device, parent_map=parent_map)
+        if not pairs:
+            return logits, empty
+        out = logits.clone()
+        deltas = []
+        changed = []
+        base_top1 = logits.argmax(dim=-1)
+        for a, b in pairs:
+            fa = feats[a].float()
+            fb = feats[b].float()
+            joint_feat = torch.cat([fa, fb, fa - fb, fb - fa], dim=-1).unsqueeze(0)
+            pair_logits = self.joint_sibling_scorer(joint_feat).float().view(2, len(self.windows))
+            out[a] = pair_logits[0]
+            out[b] = pair_logits[1]
+            diff = pair_logits[0] - pair_logits[1]
+            deltas.append(diff)
+            changed.append((base_top1[a] != pair_logits[0].argmax()).float())
+            changed.append((base_top1[b] != pair_logits[1].argmax()).float())
+        delta_t = torch.stack(deltas, dim=0)
+        changed_t = torch.stack(changed) if changed else torch.zeros(1, device=logits.device)
+        stats = {
+            "joint_pair_count": int(len(pairs)),
+            "joint_output_delta_l2_mean": float(delta_t.norm(dim=-1).mean().item()),
+            "joint_output_delta_l2_max": float(delta_t.norm(dim=-1).max().item()),
+            "joint_output_abs_delta_mean": float(delta_t.abs().mean().item()),
+            "joint_output_abs_delta_max": float(delta_t.abs().max().item()),
+            "joint_top1_changed_frac": float(changed_t.mean().item()),
+            "joint_base_top1_ids": base_top1.detach().cpu().tolist(),
+        }
+        return out, stats
+
     def _sibling_contrast_stats(self, feats, logits):
         n = int(feats.size(0))
         if n < 2:
@@ -1275,11 +1343,13 @@ class AAHV3Attention(nn.Module):
         logits_var_per_level = [0.0] * n_levels
         sibling_contrast_per_level = [None] * n_levels
         pairwise_bias_per_level = [None] * n_levels
+        joint_scorer_per_level = [None] * n_levels
         differ_from_parent_frac_per_level = [None] * n_levels
         top_feats = self._controller_input_features(levels, parent_maps, n_levels - 1, device)
         top_input_stats = self._feature_separability_stats(top_feats)
         top_logits = self._controller_logits(top_feats)
         top_logits, pairwise_bias_per_level[-1] = self._apply_pairwise_bias(top_feats, top_logits, parent_map=None)
+        top_logits, joint_scorer_per_level[-1] = self._apply_joint_sibling_logits(top_feats, top_logits, parent_map=None)
         sibling_contrast_per_level[-1] = self._sibling_contrast_stats(top_feats, top_logits)
         top_idx = top_logits.argmax(dim=-1)
         oracle_idx = self._oracle_window_indices(top_idx.numel(), device)
@@ -1306,6 +1376,7 @@ class AAHV3Attention(nn.Module):
             logits = self._controller_logits(feats)
             parent_map_for_pairwise = parent_maps[level].to(device)
             logits, pairwise_bias_per_level[level] = self._apply_pairwise_bias(feats, logits, parent_map=parent_map_for_pairwise)
+            logits, joint_scorer_per_level[level] = self._apply_joint_sibling_logits(feats, logits, parent_map=parent_map_for_pairwise)
             sibling_contrast_per_level[level] = self._sibling_contrast_stats(feats, logits)
             idx = logits.argmax(dim=-1)
             oracle_idx = self._oracle_window_indices(idx.numel(), device)
@@ -1345,6 +1416,7 @@ class AAHV3Attention(nn.Module):
             stat_list = lambda key, default: [float(st.get(key, default)) if st is not None else default for st in input_stats]
             sibling_stat_list = lambda key, default: [st.get(key, default) if st is not None else default for st in sibling_contrast_per_level]
             pairwise_stat_list = lambda key, default: [st.get(key, default) if st is not None else default for st in pairwise_bias_per_level]
+            joint_stat_list = lambda key, default: [st.get(key, default) if st is not None else default for st in joint_scorer_per_level]
             return win_indices[0], {
                 "pre_clamp_level0": pre_clamp_level0,
                 "post_clamp_level0": post_clamp_level0,
@@ -1377,6 +1449,13 @@ class AAHV3Attention(nn.Module):
                 "pairwise_bias_abs_max_per_level": pairwise_stat_list("bias_abs_max", 0.0),
                 "pairwise_bias_top1_changed_frac_per_level": pairwise_stat_list("top1_changed_frac", 0.0),
                 "pairwise_base_top1_ids_per_level": pairwise_stat_list("base_top1_ids", []),
+                "joint_pair_count_per_level": joint_stat_list("joint_pair_count", 0),
+                "joint_output_delta_l2_mean_per_level": joint_stat_list("joint_output_delta_l2_mean", 0.0),
+                "joint_output_delta_l2_max_per_level": joint_stat_list("joint_output_delta_l2_max", 0.0),
+                "joint_output_abs_delta_mean_per_level": joint_stat_list("joint_output_abs_delta_mean", 0.0),
+                "joint_output_abs_delta_max_per_level": joint_stat_list("joint_output_abs_delta_max", 0.0),
+                "joint_top1_changed_frac_per_level": joint_stat_list("joint_top1_changed_frac", 0.0),
+                "joint_base_top1_ids_per_level": joint_stat_list("joint_base_top1_ids", []),
                 "raw_idx_per_level": raw_lists,
                 "parent_idx_per_level": parent_lists,
                 "post_parent_idx_per_level": post_parent_lists,
@@ -1903,6 +1982,13 @@ class AAHV3Attention(nn.Module):
             "pairwise_bias_abs_max_per_level": decision_debug.get("pairwise_bias_abs_max_per_level", []),
             "pairwise_bias_top1_changed_frac_per_level": decision_debug.get("pairwise_bias_top1_changed_frac_per_level", []),
             "pairwise_base_top1_ids_per_level": decision_debug.get("pairwise_base_top1_ids_per_level", []),
+            "joint_pair_count_per_level": decision_debug.get("joint_pair_count_per_level", []),
+            "joint_output_delta_l2_mean_per_level": decision_debug.get("joint_output_delta_l2_mean_per_level", []),
+            "joint_output_delta_l2_max_per_level": decision_debug.get("joint_output_delta_l2_max_per_level", []),
+            "joint_output_abs_delta_mean_per_level": decision_debug.get("joint_output_abs_delta_mean_per_level", []),
+            "joint_output_abs_delta_max_per_level": decision_debug.get("joint_output_abs_delta_max_per_level", []),
+            "joint_top1_changed_frac_per_level": decision_debug.get("joint_top1_changed_frac_per_level", []),
+            "joint_base_top1_ids_per_level": decision_debug.get("joint_base_top1_ids_per_level", []),
             "decision_raw_idx_per_level": decision_debug.get("raw_idx_per_level", []),
             "decision_parent_idx_per_level": decision_debug.get("parent_idx_per_level", []),
             "decision_post_parent_idx_per_level": decision_debug.get("post_parent_idx_per_level", []),

@@ -487,6 +487,13 @@ def main():
         "pairwise_bias_abs_max_per_level",
         "pairwise_bias_top1_changed_frac_per_level",
         "pairwise_base_top1_ids_per_level",
+        "joint_pair_count_per_level",
+        "joint_output_delta_l2_mean_per_level",
+        "joint_output_delta_l2_max_per_level",
+        "joint_output_abs_delta_mean_per_level",
+        "joint_output_abs_delta_max_per_level",
+        "joint_top1_changed_frac_per_level",
+        "joint_base_top1_ids_per_level",
         "decision_raw_idx_per_level",
         "decision_parent_idx_per_level",
         "decision_post_parent_idx_per_level",
@@ -754,6 +761,13 @@ def main():
                 pairwise_bias_abs_max_per_levels = []
                 pairwise_bias_top1_changed_frac_per_levels = []
                 pairwise_base_top1_ids_per_levels = []
+                joint_pair_count_per_levels = []
+                joint_output_delta_l2_mean_per_levels = []
+                joint_output_delta_l2_max_per_levels = []
+                joint_output_abs_delta_mean_per_levels = []
+                joint_output_abs_delta_max_per_levels = []
+                joint_top1_changed_frac_per_levels = []
+                joint_base_top1_ids_per_levels = []
                 decision_raw_idx_per_levels = []
                 decision_parent_idx_per_levels = []
                 decision_post_parent_idx_per_levels = []
@@ -934,6 +948,20 @@ def main():
                                 pairwise_bias_top1_changed_frac_per_levels.append(attn.last_stats.get("pairwise_bias_top1_changed_frac_per_level"))
                             if "pairwise_base_top1_ids_per_level" in attn.last_stats:
                                 pairwise_base_top1_ids_per_levels.append(attn.last_stats.get("pairwise_base_top1_ids_per_level"))
+                            if "joint_pair_count_per_level" in attn.last_stats:
+                                joint_pair_count_per_levels.append(attn.last_stats.get("joint_pair_count_per_level"))
+                            if "joint_output_delta_l2_mean_per_level" in attn.last_stats:
+                                joint_output_delta_l2_mean_per_levels.append(attn.last_stats.get("joint_output_delta_l2_mean_per_level"))
+                            if "joint_output_delta_l2_max_per_level" in attn.last_stats:
+                                joint_output_delta_l2_max_per_levels.append(attn.last_stats.get("joint_output_delta_l2_max_per_level"))
+                            if "joint_output_abs_delta_mean_per_level" in attn.last_stats:
+                                joint_output_abs_delta_mean_per_levels.append(attn.last_stats.get("joint_output_abs_delta_mean_per_level"))
+                            if "joint_output_abs_delta_max_per_level" in attn.last_stats:
+                                joint_output_abs_delta_max_per_levels.append(attn.last_stats.get("joint_output_abs_delta_max_per_level"))
+                            if "joint_top1_changed_frac_per_level" in attn.last_stats:
+                                joint_top1_changed_frac_per_levels.append(attn.last_stats.get("joint_top1_changed_frac_per_level"))
+                            if "joint_base_top1_ids_per_level" in attn.last_stats:
+                                joint_base_top1_ids_per_levels.append(attn.last_stats.get("joint_base_top1_ids_per_level"))
                             if "decision_raw_idx_per_level" in attn.last_stats:
                                 decision_raw_idx_per_levels.append(attn.last_stats.get("decision_raw_idx_per_level"))
                             if "decision_parent_idx_per_level" in attn.last_stats:
@@ -1544,6 +1572,13 @@ def main():
                         str(pairwise_bias_abs_max_per_levels[0]) if pairwise_bias_abs_max_per_levels else "",
                         str(pairwise_bias_top1_changed_frac_per_levels[0]) if pairwise_bias_top1_changed_frac_per_levels else "",
                         str(pairwise_base_top1_ids_per_levels[0]) if pairwise_base_top1_ids_per_levels else "",
+                        str(joint_pair_count_per_levels[0]) if joint_pair_count_per_levels else "",
+                        str(joint_output_delta_l2_mean_per_levels[0]) if joint_output_delta_l2_mean_per_levels else "",
+                        str(joint_output_delta_l2_max_per_levels[0]) if joint_output_delta_l2_max_per_levels else "",
+                        str(joint_output_abs_delta_mean_per_levels[0]) if joint_output_abs_delta_mean_per_levels else "",
+                        str(joint_output_abs_delta_max_per_levels[0]) if joint_output_abs_delta_max_per_levels else "",
+                        str(joint_top1_changed_frac_per_levels[0]) if joint_top1_changed_frac_per_levels else "",
+                        str(joint_base_top1_ids_per_levels[0]) if joint_base_top1_ids_per_levels else "",
                         str(decision_raw_idx_per_levels[0]) if decision_raw_idx_per_levels else "",
                         str(decision_parent_idx_per_levels[0]) if decision_parent_idx_per_levels else "",
                         str(decision_post_parent_idx_per_levels[0]) if decision_post_parent_idx_per_levels else "",
