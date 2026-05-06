@@ -530,6 +530,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_feats = None
         self.cached_group_feats_step = None
         self.cached_group_counts_per_level = None
+        self.cached_decision_debug = None
         self.last_control_step = None
         self.current_step = None
         self.last_stats = {}
@@ -607,6 +608,7 @@ class AAHV3Attention(nn.Module):
             self.cached_group_feats = None
             self.cached_group_feats_step = None
             self.cached_group_counts_per_level = None
+            self.cached_decision_debug = None
             self.last_control_step = None
             self.ema_win_idx = None
 
@@ -616,6 +618,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_feats = None
         self.cached_group_feats_step = None
         self.cached_group_counts_per_level = None
+        self.cached_decision_debug = None
         self.last_control_step = None
         self.ema_win_idx = None
 
@@ -1672,6 +1675,8 @@ class AAHV3Attention(nn.Module):
                     hierarchy_levels_used = 1
                     group_counts_per_level = [int(self.n_head)]
                     self.cached_group_counts_per_level = list(group_counts_per_level)
+                if self.cached_decision_debug is not None:
+                    decision_debug = self.cached_decision_debug
             else:
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
                 if self.build_hierarchy:
@@ -1703,6 +1708,7 @@ class AAHV3Attention(nn.Module):
                     window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
                     controller_logits_std_per_level = win_debug["logits_std_per_level"]
                     decision_debug = win_debug
+                    self.cached_decision_debug = win_debug
                     groups0 = levels[0][0]
                     t_mapping = time.perf_counter()
                     head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
