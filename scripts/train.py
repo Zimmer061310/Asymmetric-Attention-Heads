@@ -314,6 +314,7 @@ def main():
         aah_v3_pairwise_bias_scale=model_cfg.get("aah_v3_pairwise_bias_scale", 1.0),
         aah_v3_joint_output_scale=model_cfg.get("aah_v3_joint_output_scale", 1.0),
         aah_v3_joint_hidden_dim=model_cfg.get("aah_v3_joint_hidden_dim", 0),
+        aah_v3_diagnostic_detail=model_cfg.get("aah_v3_diagnostic_detail", "full"),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -448,6 +449,11 @@ def main():
         "w_min",
         "w_max",
         "control_time_ms",
+        "control_feature_time_ms",
+        "hierarchy_time_ms",
+        "window_select_time_ms",
+        "control_mapping_time_ms",
+        "diagnostics_pack_time_ms",
         "attn_time_ms",
         "mask_time_ms",
         "overhead_time_ms",
@@ -847,6 +853,11 @@ def main():
                 w_mins = []
                 w_maxs = []
                 control_times = []
+                control_feature_times = []
+                hierarchy_times = []
+                window_select_times = []
+                control_mapping_times = []
+                diagnostics_pack_times = []
                 attn_times = []
                 mask_times = []
                 overhead_times = []
@@ -1100,6 +1111,16 @@ def main():
                                 feature_top_singular_ratios.append(attn.last_stats.get("feature_top_singular_ratio"))
                             if "control_time_ms" in attn.last_stats:
                                 control_times.append(attn.last_stats.get("control_time_ms"))
+                            if "control_feature_time_ms" in attn.last_stats:
+                                control_feature_times.append(attn.last_stats.get("control_feature_time_ms"))
+                            if "hierarchy_time_ms" in attn.last_stats:
+                                hierarchy_times.append(attn.last_stats.get("hierarchy_time_ms"))
+                            if "window_select_time_ms" in attn.last_stats:
+                                window_select_times.append(attn.last_stats.get("window_select_time_ms"))
+                            if "control_mapping_time_ms" in attn.last_stats:
+                                control_mapping_times.append(attn.last_stats.get("control_mapping_time_ms"))
+                            if "diagnostics_pack_time_ms" in attn.last_stats:
+                                diagnostics_pack_times.append(attn.last_stats.get("diagnostics_pack_time_ms"))
                             if "attn_time_ms" in attn.last_stats:
                                 attn_times.append(attn.last_stats.get("attn_time_ms"))
                             if "mask_time_ms" in attn.last_stats:
@@ -1225,6 +1246,11 @@ def main():
                 w_min = min(w_mins) if w_mins else None
                 w_max = max(w_maxs) if w_maxs else None
                 control_time_ms = sum(control_times) / len(control_times) if control_times else None
+                control_feature_time_ms = sum(control_feature_times) / len(control_feature_times) if control_feature_times else None
+                hierarchy_time_ms = sum(hierarchy_times) / len(hierarchy_times) if hierarchy_times else None
+                window_select_time_ms = sum(window_select_times) / len(window_select_times) if window_select_times else None
+                control_mapping_time_ms = sum(control_mapping_times) / len(control_mapping_times) if control_mapping_times else None
+                diagnostics_pack_time_ms = sum(diagnostics_pack_times) / len(diagnostics_pack_times) if diagnostics_pack_times else None
                 attn_time_ms = sum(attn_times) / len(attn_times) if attn_times else None
                 mask_time_ms = sum(mask_times) / len(mask_times) if mask_times else None
                 overhead_time_ms = sum(overhead_times) / len(overhead_times) if overhead_times else None
@@ -1310,6 +1336,16 @@ def main():
                         payload["aah/W_max"] = w_max
                     if control_time_ms is not None:
                         payload["aah/time/control_ms"] = control_time_ms
+                    if control_feature_time_ms is not None:
+                        payload["aah/time/control_feature_ms"] = control_feature_time_ms
+                    if hierarchy_time_ms is not None:
+                        payload["aah/time/hierarchy_ms"] = hierarchy_time_ms
+                    if window_select_time_ms is not None:
+                        payload["aah/time/window_select_ms"] = window_select_time_ms
+                    if control_mapping_time_ms is not None:
+                        payload["aah/time/control_mapping_ms"] = control_mapping_time_ms
+                    if diagnostics_pack_time_ms is not None:
+                        payload["aah/time/diagnostics_pack_ms"] = diagnostics_pack_time_ms
                     if attn_time_ms is not None:
                         payload["aah/time/attention_ms"] = attn_time_ms
                     if mask_time_ms is not None:
@@ -1545,6 +1581,11 @@ def main():
                         fmt(w_min),
                         fmt(w_max),
                         fmt(control_time_ms),
+                        fmt(control_feature_time_ms),
+                        fmt(hierarchy_time_ms),
+                        fmt(window_select_time_ms),
+                        fmt(control_mapping_time_ms),
+                        fmt(diagnostics_pack_time_ms),
                         fmt(attn_time_ms),
                         fmt(mask_time_ms),
                         fmt(overhead_time_ms),

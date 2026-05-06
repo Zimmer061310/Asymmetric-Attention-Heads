@@ -64,6 +64,7 @@ class GPTConfig:
     aah_v3_pairwise_bias_scale: float = 1.0
     aah_v3_joint_output_scale: float = 1.0
     aah_v3_joint_hidden_dim: int = 0
+    aah_v3_diagnostic_detail: str = "full"
 
 
 class CausalSelfAttention(nn.Module):
@@ -511,6 +512,8 @@ class AAHV3Attention(nn.Module):
         self.pairwise_bias_scale = float(getattr(config, "aah_v3_pairwise_bias_scale", 1.0))
         self.joint_output_scale = float(getattr(config, "aah_v3_joint_output_scale", 1.0))
         self.joint_hidden_dim = int(getattr(config, "aah_v3_joint_hidden_dim", 0))
+        self.diagnostic_detail = str(getattr(config, "aah_v3_diagnostic_detail", "full"))
+        self.light_diagnostics = self.diagnostic_detail in ("light", "minimal", "off")
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -1548,6 +1551,11 @@ class AAHV3Attention(nn.Module):
         decision_debug = {}
         win_idx_before_execution_mapping = None
         win_idx_after_execution_mapping = None
+        control_feature_time_ms = 0.0
+        hierarchy_time_ms = 0.0
+        window_select_time_ms = 0.0
+        control_mapping_time_ms = 0.0
+        diagnostics_pack_time_ms = 0.0
         t_control0 = time.perf_counter()
         if not self.apply_window_control and not self.build_hierarchy:
             path_mode = "full_attention_fastpath"
@@ -1668,27 +1676,35 @@ class AAHV3Attention(nn.Module):
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
                 if self.build_hierarchy:
                     path_mode = "grouped_control_update"
+                    t_feature = time.perf_counter()
                     feats = self._head_features(q, k, v)
-                    feature_probe_stats = self._feature_separability_stats(feats)
+                    feature_probe_stats = {} if self.light_diagnostics else self._feature_separability_stats(feats)
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
                         self.ema_feats = feats.detach().float()
                     else:
                         alpha = max(0.0, min(1.0, self.ema_alpha))
                         self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach().float()
+                    control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
                     prev_groups = None
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
+                    t_hierarchy = time.perf_counter()
                     levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
+                    hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
                     self.cached_group_counts_per_level = list(group_counts_per_level)
-                    hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
-                    hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
+                    if not self.light_diagnostics:
+                        hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                        hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
+                    t_window_select = time.perf_counter()
                     parent_maps = self._parent_maps(levels)
                     group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                    window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
                     controller_logits_std_per_level = win_debug["logits_std_per_level"]
                     decision_debug = win_debug
                     groups0 = levels[0][0]
+                    t_mapping = time.perf_counter()
                     head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
                     for gi, heads in enumerate(groups0):
                         for h in heads:
@@ -1702,17 +1718,22 @@ class AAHV3Attention(nn.Module):
                     else:
                         group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
                     self.cached_head_to_group = head_to_group.detach().clone()
+                    control_mapping_time_ms += (time.perf_counter() - t_mapping) * 1000.0
                     self.cached_group_feats = None
                     self.cached_group_feats_step = None
                 else:
                     path_mode = "ungrouped_control_update"
                     head_to_group = None
                     group_change_rate = None
+                    t_feature = time.perf_counter()
                     feats = self._head_features(q, k, v)
-                    feature_probe_stats = self._feature_separability_stats(feats)
+                    feature_probe_stats = {} if self.light_diagnostics else self._feature_separability_stats(feats)
                     head_levels = [([ [i] for i in range(self.n_head) ], feats)]
+                    control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
+                    t_window_select = time.perf_counter()
                     controller_feats = self._controller_input_features(head_levels, [], 0, x.device)
                     logits = self._controller_logits(controller_feats)
+                    window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
                     controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     win_idx = logits.argmax(dim=-1)
                     win_idx_pre_clamp = win_idx.detach().clone()
@@ -1750,8 +1771,10 @@ class AAHV3Attention(nn.Module):
                         shadow_logit_mean = logits.mean(dim=0).detach().cpu().tolist()
                     group_change_rate = 0.0
                 else:
+                    t_feature = time.perf_counter()
                     feats = self._head_features(q, k, v)
-                    feature_probe_stats = self._feature_separability_stats(feats)
+                    feature_probe_stats = {} if self.light_diagnostics else self._feature_separability_stats(feats)
+                    control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
                     if self.ema_feats is None or self.ema_feats.shape != feats.shape:
                         self.ema_feats = feats.detach().float()
                     else:
@@ -1760,15 +1783,20 @@ class AAHV3Attention(nn.Module):
                     prev_groups = None
                     if self.cached_head_to_group is not None:
                         prev_groups = self.cached_head_to_group
+                    t_hierarchy = time.perf_counter()
                     levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
+                    hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
                     hierarchy_levels_used = len(levels)
                     group_counts_per_level = [len(groups) for groups, _ in levels]
                     self.cached_group_counts_per_level = list(group_counts_per_level)
-                    hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
-                    hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
+                    if not self.light_diagnostics:
+                        hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                        hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
                     if self.apply_window_control:
+                        t_window_select = time.perf_counter()
                         parent_maps = self._parent_maps(levels)
                         group_win_idx, _ = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                        window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
                     else:
                         group_win_idx = None
                     groups0 = levels[0][0]
@@ -1898,6 +1926,7 @@ class AAHV3Attention(nn.Module):
                 group_ratios[g] = avg_w / float(lq)
         for window, heads in head_groups.items():
             branch_usage_freq[int(window)] = len(heads) / float(self.n_head)
+        t_diag_pack = time.perf_counter()
         cluster_metric_per_level = [str(d.get("cluster_metric", "cosine")) for d in cluster_debug]
         cluster_threshold_kind_per_level = [str(d.get("threshold_kind", "")) for d in cluster_debug]
         cluster_threshold_per_level = [float(d.get("threshold", 0.0)) for d in cluster_debug]
@@ -1929,6 +1958,7 @@ class AAHV3Attention(nn.Module):
         hierarchy_level_added_per_level = [bool(d.get("hierarchy_level_added", True)) for d in cluster_debug]
         hierarchy_growth_stopped_per_level = [bool(d.get("hierarchy_growth_stopped", False)) for d in cluster_debug]
         hierarchy_stop_reason_per_level = [str(d.get("hierarchy_stop_reason", "")) for d in cluster_debug]
+        diagnostics_pack_time_ms += (time.perf_counter() - t_diag_pack) * 1000.0
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
@@ -1946,6 +1976,11 @@ class AAHV3Attention(nn.Module):
             "group_ratios": group_ratios,
             "branch_usage_freq": branch_usage_freq,
             "control_time_ms": control_time_ms,
+            "control_feature_time_ms": control_feature_time_ms,
+            "hierarchy_time_ms": hierarchy_time_ms,
+            "window_select_time_ms": window_select_time_ms,
+            "control_mapping_time_ms": control_mapping_time_ms,
+            "diagnostics_pack_time_ms": diagnostics_pack_time_ms,
             "attn_time_ms": attn_time_ms,
             "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
             "mask_time_ms": mask_time_ms,
@@ -1968,9 +2003,9 @@ class AAHV3Attention(nn.Module):
             "path_mode": path_mode,
             "win_idx_pre_clamp": win_idx_pre_clamp.detach().cpu().tolist() if win_idx_pre_clamp is not None else [],
             "win_idx_post_clamp": win_idx_post_clamp.detach().cpu().tolist() if win_idx_post_clamp is not None else [],
-            "decision_logits_per_level": decision_debug.get("logits_per_level", []),
-            "decision_logits_var_per_level": decision_debug.get("logits_var_per_level", []),
-            "controller_input_per_level": decision_debug.get("controller_input_per_level", []),
+            "decision_logits_per_level": [] if self.light_diagnostics else decision_debug.get("logits_per_level", []),
+            "decision_logits_var_per_level": [] if self.light_diagnostics else decision_debug.get("logits_var_per_level", []),
+            "controller_input_per_level": [] if self.light_diagnostics else decision_debug.get("controller_input_per_level", []),
             "controller_input_cos_sim_mean_per_level": decision_debug.get("controller_input_cos_sim_mean_per_level", []),
             "controller_input_cos_sim_min_per_level": decision_debug.get("controller_input_cos_sim_min_per_level", []),
             "controller_input_l2_dist_mean_per_level": decision_debug.get("controller_input_l2_dist_mean_per_level", []),
@@ -2063,8 +2098,8 @@ class AAHV3Attention(nn.Module):
             "feature_norm_mean": float(feature_probe_stats.get("feature_norm_mean", 0.0)),
             "feature_norm_std": float(feature_probe_stats.get("feature_norm_std", 0.0)),
             "feature_top_singular_ratio": float(feature_probe_stats.get("feature_top_singular_ratio", 1.0)),
-            "hierarchy_head_group_map_per_level": hierarchy_head_group_map_per_level,
-            "hierarchy_group_members_per_level": hierarchy_group_members_per_level,
+            "hierarchy_head_group_map_per_level": [] if self.light_diagnostics else hierarchy_head_group_map_per_level,
+            "hierarchy_group_members_per_level": [] if self.light_diagnostics else hierarchy_group_members_per_level,
         }
         if return_attn:
             return y, attn_maps
