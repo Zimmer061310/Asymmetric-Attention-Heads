@@ -315,6 +315,7 @@ def main():
         aah_v3_joint_output_scale=model_cfg.get("aah_v3_joint_output_scale", 1.0),
         aah_v3_joint_hidden_dim=model_cfg.get("aah_v3_joint_hidden_dim", 0),
         aah_v3_diagnostic_detail=model_cfg.get("aah_v3_diagnostic_detail", "full"),
+        aah_v3_reuse_group_hierarchy=model_cfg.get("aah_v3_reuse_group_hierarchy", False),
     )
     model = GPT(gpt_cfg).to(device)
 

@@ -65,6 +65,7 @@ class GPTConfig:
     aah_v3_joint_output_scale: float = 1.0
     aah_v3_joint_hidden_dim: int = 0
     aah_v3_diagnostic_detail: str = "full"
+    aah_v3_reuse_group_hierarchy: bool = False
 
 
 class CausalSelfAttention(nn.Module):
@@ -514,6 +515,7 @@ class AAHV3Attention(nn.Module):
         self.joint_hidden_dim = int(getattr(config, "aah_v3_joint_hidden_dim", 0))
         self.diagnostic_detail = str(getattr(config, "aah_v3_diagnostic_detail", "full"))
         self.light_diagnostics = self.diagnostic_detail in ("light", "minimal", "off")
+        self.reuse_group_hierarchy = bool(getattr(config, "aah_v3_reuse_group_hierarchy", False))
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -1680,51 +1682,84 @@ class AAHV3Attention(nn.Module):
             else:
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
                 if self.build_hierarchy:
-                    path_mode = "grouped_control_update"
-                    t_feature = time.perf_counter()
-                    feats = self._head_features(q, k, v)
-                    feature_probe_stats = {} if self.light_diagnostics else self._feature_separability_stats(feats)
-                    if self.ema_feats is None or self.ema_feats.shape != feats.shape:
-                        self.ema_feats = feats.detach().float()
-                    else:
-                        alpha = max(0.0, min(1.0, self.ema_alpha))
-                        self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach().float()
-                    control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
-                    prev_groups = None
-                    if self.cached_head_to_group is not None:
-                        prev_groups = self.cached_head_to_group
-                    t_hierarchy = time.perf_counter()
-                    levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
-                    hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
-                    hierarchy_levels_used = len(levels)
-                    group_counts_per_level = [len(groups) for groups, _ in levels]
-                    self.cached_group_counts_per_level = list(group_counts_per_level)
-                    if not self.light_diagnostics:
-                        hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
-                        hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
-                    t_window_select = time.perf_counter()
-                    parent_maps = self._parent_maps(levels)
-                    group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
-                    window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
-                    controller_logits_std_per_level = win_debug["logits_std_per_level"]
-                    decision_debug = win_debug
-                    self.cached_decision_debug = win_debug
-                    groups0 = levels[0][0]
-                    t_mapping = time.perf_counter()
-                    head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
-                    for gi, heads in enumerate(groups0):
-                        for h in heads:
-                            head_to_group[h] = gi
-                    win_idx = group_win_idx[head_to_group]
-                    win_idx_pre_clamp = win_debug["pre_clamp_level0"][head_to_group]
-                    win_idx_post_clamp = win_debug["post_clamp_level0"][head_to_group]
-                    win_idx_before_execution_mapping = win_idx.detach().clone()
-                    if self.cached_head_to_group is None:
+                    can_reuse_group_hierarchy = self.reuse_group_hierarchy and self.cached_head_to_group is not None
+                    if can_reuse_group_hierarchy:
+                        path_mode = "grouped_control_reuse_update"
+                        t_feature = time.perf_counter()
+                        head_to_group = self.cached_head_to_group
+                        groups0 = self._groups_from_head_to_group(head_to_group)
+                        group_feats = self._group_features_from_qkv(q, k, v, groups0)
+                        feature_probe_stats = {}
+                        control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
+                        t_hierarchy = time.perf_counter()
+                        levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
+                        hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
+                        hierarchy_levels_used = len(levels)
+                        group_counts_per_level = [len(groups) for groups, _ in levels]
+                        self.cached_group_counts_per_level = list(group_counts_per_level)
+                        if not self.light_diagnostics:
+                            hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                            hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
+                        t_window_select = time.perf_counter()
+                        parent_maps = self._parent_maps(levels)
+                        group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                        window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
+                        controller_logits_std_per_level = win_debug["logits_std_per_level"]
+                        decision_debug = win_debug
+                        self.cached_decision_debug = win_debug
+                        t_mapping = time.perf_counter()
+                        win_idx = group_win_idx[head_to_group]
+                        win_idx_pre_clamp = win_debug["pre_clamp_level0"][head_to_group]
+                        win_idx_post_clamp = win_debug["post_clamp_level0"][head_to_group]
+                        win_idx_before_execution_mapping = win_idx.detach().clone()
                         group_change_rate = 0.0
+                        control_mapping_time_ms += (time.perf_counter() - t_mapping) * 1000.0
                     else:
-                        group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
-                    self.cached_head_to_group = head_to_group.detach().clone()
-                    control_mapping_time_ms += (time.perf_counter() - t_mapping) * 1000.0
+                        path_mode = "grouped_control_update"
+                        t_feature = time.perf_counter()
+                        feats = self._head_features(q, k, v)
+                        feature_probe_stats = {} if self.light_diagnostics else self._feature_separability_stats(feats)
+                        if self.ema_feats is None or self.ema_feats.shape != feats.shape:
+                            self.ema_feats = feats.detach().float()
+                        else:
+                            alpha = max(0.0, min(1.0, self.ema_alpha))
+                            self.ema_feats = alpha * self.ema_feats + (1.0 - alpha) * feats.detach().float()
+                        control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
+                        prev_groups = None
+                        if self.cached_head_to_group is not None:
+                            prev_groups = self.cached_head_to_group
+                        t_hierarchy = time.perf_counter()
+                        levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
+                        hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
+                        hierarchy_levels_used = len(levels)
+                        group_counts_per_level = [len(groups) for groups, _ in levels]
+                        self.cached_group_counts_per_level = list(group_counts_per_level)
+                        if not self.light_diagnostics:
+                            hierarchy_head_group_map_per_level = self._head_group_map_per_level(levels)
+                            hierarchy_group_members_per_level = self._group_members_from_head_maps(hierarchy_head_group_map_per_level)
+                        t_window_select = time.perf_counter()
+                        parent_maps = self._parent_maps(levels)
+                        group_win_idx, win_debug = self._select_windows(levels, parent_maps, device=x.device, return_debug=True)
+                        window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
+                        controller_logits_std_per_level = win_debug["logits_std_per_level"]
+                        decision_debug = win_debug
+                        self.cached_decision_debug = win_debug
+                        groups0 = levels[0][0]
+                        t_mapping = time.perf_counter()
+                        head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
+                        for gi, heads in enumerate(groups0):
+                            for h in heads:
+                                head_to_group[h] = gi
+                        win_idx = group_win_idx[head_to_group]
+                        win_idx_pre_clamp = win_debug["pre_clamp_level0"][head_to_group]
+                        win_idx_post_clamp = win_debug["post_clamp_level0"][head_to_group]
+                        win_idx_before_execution_mapping = win_idx.detach().clone()
+                        if self.cached_head_to_group is None:
+                            group_change_rate = 0.0
+                        else:
+                            group_change_rate = (head_to_group != self.cached_head_to_group).float().mean().item()
+                        self.cached_head_to_group = head_to_group.detach().clone()
+                        control_mapping_time_ms += (time.perf_counter() - t_mapping) * 1000.0
                     self.cached_group_feats = None
                     self.cached_group_feats_step = None
                 else:
