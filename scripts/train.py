@@ -317,7 +317,7 @@ def main():
         aah_v3_diagnostic_detail=model_cfg.get("aah_v3_diagnostic_detail", "full"),
         aah_v3_reuse_group_hierarchy=model_cfg.get("aah_v3_reuse_group_hierarchy", False),
         aah_v3_hierarchy_ablation_mode=model_cfg.get("aah_v3_hierarchy_ablation_mode", "adaptive"),
-        aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", experiment.get("seed", 1337)),
+        aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", exp.get("seed", 1337)),
     )
     model = GPT(gpt_cfg).to(device)
 
