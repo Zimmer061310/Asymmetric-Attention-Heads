@@ -533,6 +533,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_feats_step = None
         self.cached_group_counts_per_level = None
         self.cached_decision_debug = None
+        self.fixed_head_to_group = None
         self.last_control_step = None
         self.current_step = None
         self.last_stats = {}
@@ -621,6 +622,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_feats_step = None
         self.cached_group_counts_per_level = None
         self.cached_decision_debug = None
+        self.fixed_head_to_group = None
         self.last_control_step = None
         self.ema_win_idx = None
 
@@ -1071,6 +1073,58 @@ class AAHV3Attention(nn.Module):
                 g_feats = mean
             agg.append(g_feats)
         return torch.stack(agg, dim=0)
+
+    def _fixed_balanced_head_to_group(self, device):
+        cached = self.fixed_head_to_group
+        if cached is not None and cached.device == device and cached.numel() == self.n_head:
+            return cached
+        if self.hierarchy_ablation_mode == "fixed_random":
+            generator = torch.Generator(device="cpu")
+            generator.manual_seed(self.fixed_hierarchy_seed)
+            order = torch.randperm(self.n_head, generator=generator).tolist()
+            first = set(order[: self.n_head // 2])
+            head_to_group = torch.tensor([0 if h in first else 1 for h in range(self.n_head)], dtype=torch.long, device=device)
+        else:
+            head_to_group = torch.tensor([h % 2 for h in range(self.n_head)], dtype=torch.long, device=device)
+        self.fixed_head_to_group = head_to_group.detach().clone()
+        return self.fixed_head_to_group
+
+    def _fixed_balanced_groups0(self, device):
+        return self._groups_from_head_to_group(self._fixed_balanced_head_to_group(device))
+
+    def _build_passthrough_hierarchy(self, groups0, group_feats, return_debug: bool = False):
+        levels = [(groups0, group_feats)]
+        cluster_debug = [{
+            "level_idx": 0,
+            "threshold_kind": "fixed_balanced",
+            "hierarchy_level_added": True,
+            "hierarchy_growth_stopped": False,
+            "hierarchy_stop_reason": "",
+            "cluster_groups_before_merge": len(groups0),
+            "cluster_groups_after_merge": len(groups0),
+            "cluster_groups_merged": 0,
+            "cluster_groups_before_force": len(groups0),
+        }]
+        feats_prev = group_feats
+        for level_idx in range(1, self.max_depth):
+            groups = [[idx] for idx in range(feats_prev.shape[0])]
+            feats = self._aggregate(groups, feats_prev)
+            levels.append((groups, feats))
+            cluster_debug.append({
+                "level_idx": level_idx,
+                "threshold_kind": "fixed_passthrough",
+                "hierarchy_level_added": True,
+                "hierarchy_growth_stopped": False,
+                "hierarchy_stop_reason": "",
+                "cluster_groups_before_merge": len(groups),
+                "cluster_groups_after_merge": len(groups),
+                "cluster_groups_merged": 0,
+                "cluster_groups_before_force": len(groups),
+            })
+            feats_prev = feats
+        if return_debug:
+            return levels, cluster_debug
+        return levels
 
     def _build_hierarchy(self, head_feats, prev_head_groups=None, return_debug: bool = False):
         levels = []
@@ -1682,17 +1736,30 @@ class AAHV3Attention(nn.Module):
             else:
                 prev_win_idx = self.cached_win_idx.detach().clone() if self.cached_win_idx is not None else None
                 if self.build_hierarchy:
+                    use_fixed_hierarchy = self.hierarchy_ablation_mode in ("fixed_deterministic", "fixed_random")
+                    use_frozen_hierarchy = self.hierarchy_ablation_mode == "freeze_after_warmup" and self.cached_head_to_group is not None
                     can_reuse_group_hierarchy = self.reuse_group_hierarchy and self.cached_head_to_group is not None
-                    if can_reuse_group_hierarchy:
-                        path_mode = "grouped_control_reuse_update"
+                    if use_fixed_hierarchy or use_frozen_hierarchy or can_reuse_group_hierarchy:
+                        if use_fixed_hierarchy:
+                            path_mode = f"grouped_control_{self.hierarchy_ablation_mode}_update"
+                        elif use_frozen_hierarchy:
+                            path_mode = "grouped_control_frozen_update"
+                        else:
+                            path_mode = "grouped_control_reuse_update"
                         t_feature = time.perf_counter()
-                        head_to_group = self.cached_head_to_group
+                        if use_fixed_hierarchy:
+                            head_to_group = self._fixed_balanced_head_to_group(x.device)
+                        else:
+                            head_to_group = self.cached_head_to_group
                         groups0 = self._groups_from_head_to_group(head_to_group)
                         group_feats = self._group_features_from_qkv(q, k, v, groups0)
                         feature_probe_stats = {}
                         control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
                         t_hierarchy = time.perf_counter()
-                        levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
+                        if use_fixed_hierarchy or use_frozen_hierarchy:
+                            levels, cluster_debug = self._build_passthrough_hierarchy(groups0, group_feats, return_debug=True)
+                        else:
+                            levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
                         hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
                         hierarchy_levels_used = len(levels)
                         group_counts_per_level = [len(groups) for groups, _ in levels]
@@ -1713,6 +1780,7 @@ class AAHV3Attention(nn.Module):
                         win_idx_post_clamp = win_debug["post_clamp_level0"][head_to_group]
                         win_idx_before_execution_mapping = win_idx.detach().clone()
                         group_change_rate = 0.0
+                        self.cached_head_to_group = head_to_group.detach().clone()
                         control_mapping_time_ms += (time.perf_counter() - t_mapping) * 1000.0
                     else:
                         path_mode = "grouped_control_update"
