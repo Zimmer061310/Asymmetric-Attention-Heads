@@ -66,6 +66,8 @@ class GPTConfig:
     aah_v3_joint_hidden_dim: int = 0
     aah_v3_diagnostic_detail: str = "full"
     aah_v3_reuse_group_hierarchy: bool = False
+    aah_v3_hierarchy_ablation_mode: str = "adaptive"
+    aah_v3_fixed_hierarchy_seed: int = 1337
 
 
 class CausalSelfAttention(nn.Module):
