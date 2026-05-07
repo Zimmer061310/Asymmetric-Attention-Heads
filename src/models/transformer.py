@@ -519,7 +519,7 @@ class AAHV3Attention(nn.Module):
         self.light_diagnostics = self.diagnostic_detail in ("light", "minimal", "off")
         self.reuse_group_hierarchy = bool(getattr(config, "aah_v3_reuse_group_hierarchy", False))
         self.hierarchy_ablation_mode = str(getattr(config, "aah_v3_hierarchy_ablation_mode", "adaptive"))
-        valid_hierarchy_ablation_modes = {"adaptive", "freeze_after_warmup", "fixed_deterministic", "fixed_random"}
+        valid_hierarchy_ablation_modes = {"adaptive", "freeze_after_warmup", "freeze_learned_topology", "fixed_deterministic", "fixed_random"}
         if self.hierarchy_ablation_mode not in valid_hierarchy_ablation_modes:
             raise ValueError(f"Unsupported aah_v3_hierarchy_ablation_mode: {self.hierarchy_ablation_mode}")
         self.fixed_hierarchy_seed = int(getattr(config, "aah_v3_fixed_hierarchy_seed", 1337))
@@ -541,6 +541,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_counts_per_level = None
         self.cached_decision_debug = None
         self.fixed_head_to_group = None
+        self.cached_hierarchy_topology = None
         self.last_control_step = None
         self.current_step = None
         self.last_stats = {}
@@ -630,6 +631,7 @@ class AAHV3Attention(nn.Module):
         self.cached_group_counts_per_level = None
         self.cached_decision_debug = None
         self.fixed_head_to_group = None
+        self.cached_hierarchy_topology = None
         self.last_control_step = None
         self.ema_win_idx = None
 
@@ -1120,6 +1122,36 @@ class AAHV3Attention(nn.Module):
             cluster_debug.append({
                 "level_idx": level_idx,
                 "threshold_kind": "fixed_passthrough",
+                "hierarchy_level_added": True,
+                "hierarchy_growth_stopped": False,
+                "hierarchy_stop_reason": "",
+                "cluster_groups_before_merge": len(groups),
+                "cluster_groups_after_merge": len(groups),
+                "cluster_groups_merged": 0,
+                "cluster_groups_before_force": len(groups),
+            })
+            feats_prev = feats
+        if return_debug:
+            return levels, cluster_debug
+        return levels
+
+    def _clone_hierarchy_topology(self, levels):
+        return [[list(group) for group in groups] for groups, _ in levels]
+
+    def _build_hierarchy_from_topology(self, topology, level0_feats, return_debug: bool = False):
+        levels = []
+        cluster_debug = []
+        feats_prev = level0_feats
+        for level_idx, groups_template in enumerate(topology):
+            groups = [list(group) for group in groups_template]
+            if level_idx == 0:
+                feats = level0_feats
+            else:
+                feats = self._aggregate(groups, feats_prev)
+            levels.append((groups, feats))
+            cluster_debug.append({
+                "level_idx": level_idx,
+                "threshold_kind": "frozen_learned_topology" if level_idx == 0 else "frozen_learned_upper_topology",
                 "hierarchy_level_added": True,
                 "hierarchy_growth_stopped": False,
                 "hierarchy_stop_reason": "",
@@ -1745,10 +1777,13 @@ class AAHV3Attention(nn.Module):
                 if self.build_hierarchy:
                     use_fixed_hierarchy = self.hierarchy_ablation_mode in ("fixed_deterministic", "fixed_random")
                     use_frozen_hierarchy = self.hierarchy_ablation_mode == "freeze_after_warmup" and self.cached_head_to_group is not None
+                    use_frozen_learned_topology = self.hierarchy_ablation_mode == "freeze_learned_topology" and self.cached_hierarchy_topology is not None
                     can_reuse_group_hierarchy = self.reuse_group_hierarchy and self.cached_head_to_group is not None
-                    if use_fixed_hierarchy or use_frozen_hierarchy or can_reuse_group_hierarchy:
+                    if use_fixed_hierarchy or use_frozen_hierarchy or use_frozen_learned_topology or can_reuse_group_hierarchy:
                         if use_fixed_hierarchy:
                             path_mode = f"grouped_control_{self.hierarchy_ablation_mode}_update"
+                        elif use_frozen_learned_topology:
+                            path_mode = "grouped_control_frozen_learned_topology_update"
                         elif use_frozen_hierarchy:
                             path_mode = "grouped_control_frozen_update"
                         else:
@@ -1756,6 +1791,12 @@ class AAHV3Attention(nn.Module):
                         t_feature = time.perf_counter()
                         if use_fixed_hierarchy:
                             head_to_group = self._fixed_balanced_head_to_group(x.device)
+                        elif use_frozen_learned_topology:
+                            groups0_template = self.cached_hierarchy_topology[0]
+                            head_to_group = torch.empty(self.n_head, dtype=torch.long, device=x.device)
+                            for gi, heads in enumerate(groups0_template):
+                                for h in heads:
+                                    head_to_group[h] = gi
                         else:
                             head_to_group = self.cached_head_to_group
                         groups0 = self._groups_from_head_to_group(head_to_group)
@@ -1763,7 +1804,9 @@ class AAHV3Attention(nn.Module):
                         feature_probe_stats = {}
                         control_feature_time_ms += (time.perf_counter() - t_feature) * 1000.0
                         t_hierarchy = time.perf_counter()
-                        if use_fixed_hierarchy or use_frozen_hierarchy:
+                        if use_frozen_learned_topology:
+                            levels, cluster_debug = self._build_hierarchy_from_topology(self.cached_hierarchy_topology, group_feats, return_debug=True)
+                        elif use_fixed_hierarchy or use_frozen_hierarchy:
                             levels, cluster_debug = self._build_passthrough_hierarchy(groups0, group_feats, return_debug=True)
                         else:
                             levels, cluster_debug = self._build_group_hierarchy(groups0, group_feats, return_debug=True)
@@ -1805,6 +1848,8 @@ class AAHV3Attention(nn.Module):
                             prev_groups = self.cached_head_to_group
                         t_hierarchy = time.perf_counter()
                         levels, cluster_debug = self._build_hierarchy(self.ema_feats, prev_head_groups=prev_groups, return_debug=True)
+                        if self.hierarchy_ablation_mode == "freeze_learned_topology" and self.cached_hierarchy_topology is None:
+                            self.cached_hierarchy_topology = self._clone_hierarchy_topology(levels)
                         hierarchy_time_ms += (time.perf_counter() - t_hierarchy) * 1000.0
                         hierarchy_levels_used = len(levels)
                         group_counts_per_level = [len(groups) for groups, _ in levels]
