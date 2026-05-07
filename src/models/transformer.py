@@ -518,6 +518,11 @@ class AAHV3Attention(nn.Module):
         self.diagnostic_detail = str(getattr(config, "aah_v3_diagnostic_detail", "full"))
         self.light_diagnostics = self.diagnostic_detail in ("light", "minimal", "off")
         self.reuse_group_hierarchy = bool(getattr(config, "aah_v3_reuse_group_hierarchy", False))
+        self.hierarchy_ablation_mode = str(getattr(config, "aah_v3_hierarchy_ablation_mode", "adaptive"))
+        valid_hierarchy_ablation_modes = {"adaptive", "freeze_after_warmup", "fixed_deterministic", "fixed_random"}
+        if self.hierarchy_ablation_mode not in valid_hierarchy_ablation_modes:
+            raise ValueError(f"Unsupported aah_v3_hierarchy_ablation_mode: {self.hierarchy_ablation_mode}")
+        self.fixed_hierarchy_seed = int(getattr(config, "aah_v3_fixed_hierarchy_seed", 1337))
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
