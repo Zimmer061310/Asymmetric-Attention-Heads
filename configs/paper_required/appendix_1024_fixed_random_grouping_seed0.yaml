@@ -1,7 +1,7 @@
 experiment:
-  name: paper-stress_1024_grouping_off-seed0
+  name: paper-appendix_1024_fixed_random_grouping-seed0
   seed: 0
-  variant: stress_1024_grouping_off
+  variant: appendix_1024_fixed_random_grouping
   out_dir: experiments/paper
 data:
   dataset: wikitext-2-raw-v1
@@ -20,7 +20,7 @@ model:
   - 256
   - 512
   - 1024
-  aah_v3_grouping_enabled: false
+  aah_v3_grouping_enabled: true
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16
   aah_v3_control_interval: 5
@@ -43,21 +43,21 @@ model:
   aah_v3_controller_logit_scale: 1.0
   aah_v3_controller_rng_reference_dim: 16
   aah_v3_controller_choice_mode: learned
-  aah_v3_controller_pairwise_mode: none
+  aah_v3_controller_pairwise_mode: joint_sibling
   aah_v3_pairwise_bias_scale: 1.0
   aah_v3_joint_output_scale: 1.0
   aah_v3_joint_hidden_dim: 64
   aah_v3_diagnostic_detail: light
   aah_v3_resolution_collapse_min_frac: 0.98
   aah_v3_resolution_collapse_max_frac: 0.98
-  aah_v3_build_hierarchy: false
+  aah_v3_build_hierarchy: true
   aah_v3_apply_window_control: true
   aah_v3_reuse_group_hierarchy: false
-  aah_v3_hierarchy_ablation_mode: adaptive
+  aah_v3_hierarchy_ablation_mode: fixed_random
   aah_v3_fixed_hierarchy_seed: 0
   aah_v3_parent_constraint: true
 train:
-  batch_size: 2
+  batch_size: 4
   grad_accum: 1
   max_steps: 1000
   lr: 0.0003

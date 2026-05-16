@@ -1,12 +1,12 @@
 experiment:
-  name: paper-appendix_512_no_parent_constraint-seed1
-  seed: 1
-  variant: appendix_512_no_parent_constraint
+  name: paper-appendix_1024_control_off-seed0
+  seed: 0
+  variant: appendix_1024_control_off
   out_dir: experiments/paper
 data:
   dataset: wikitext-2-raw-v1
   tokenizer: gpt2
-  seq_len: 512
+  seq_len: 1024
   num_workers: 2
 model:
   n_layer: 16
@@ -16,12 +16,12 @@ model:
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:
-  - 64
   - 128
   - 256
   - 512
+  - 1024
   aah_v3_grouping_enabled: true
-  aah_v3_control_enabled: true
+  aah_v3_control_enabled: false
   aah_v3_control_dim: 16
   aah_v3_control_interval: 5
   aah_v3_sim_threshold: 0.72
@@ -51,13 +51,13 @@ model:
   aah_v3_resolution_collapse_min_frac: 0.98
   aah_v3_resolution_collapse_max_frac: 0.98
   aah_v3_build_hierarchy: true
-  aah_v3_apply_window_control: true
+  aah_v3_apply_window_control: false
   aah_v3_reuse_group_hierarchy: false
   aah_v3_hierarchy_ablation_mode: adaptive
-  aah_v3_fixed_hierarchy_seed: 1
-  aah_v3_parent_constraint: false
+  aah_v3_fixed_hierarchy_seed: 0
+  aah_v3_parent_constraint: true
 train:
-  batch_size: 8
+  batch_size: 4
   grad_accum: 1
   max_steps: 1000
   lr: 0.0003

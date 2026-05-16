@@ -1,7 +1,7 @@
 experiment:
-  name: paper-stress_1024_shallow_freeze-seed2
-  seed: 2
-  variant: stress_1024_shallow_freeze
+  name: paper-main_1024_grouping_off-seed0
+  seed: 0
+  variant: main_1024_grouping_off
   out_dir: experiments/paper
 data:
   dataset: wikitext-2-raw-v1
@@ -20,13 +20,13 @@ model:
   - 256
   - 512
   - 1024
-  aah_v3_grouping_enabled: true
+  aah_v3_grouping_enabled: false
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16
   aah_v3_control_interval: 5
   aah_v3_sim_threshold: 0.72
   aah_v3_super_threshold: 0.76
-  aah_v3_max_depth: 1
+  aah_v3_max_depth: 4
   aah_v3_ema_alpha: 0.9
   aah_v3_churn_penalty: 0.02
   aah_v3_min_group_size: 3
@@ -43,21 +43,21 @@ model:
   aah_v3_controller_logit_scale: 1.0
   aah_v3_controller_rng_reference_dim: 16
   aah_v3_controller_choice_mode: learned
-  aah_v3_controller_pairwise_mode: joint_sibling
+  aah_v3_controller_pairwise_mode: none
   aah_v3_pairwise_bias_scale: 1.0
   aah_v3_joint_output_scale: 1.0
   aah_v3_joint_hidden_dim: 64
   aah_v3_diagnostic_detail: light
   aah_v3_resolution_collapse_min_frac: 0.98
   aah_v3_resolution_collapse_max_frac: 0.98
-  aah_v3_build_hierarchy: true
+  aah_v3_build_hierarchy: false
   aah_v3_apply_window_control: true
   aah_v3_reuse_group_hierarchy: false
-  aah_v3_hierarchy_ablation_mode: freeze_learned_topology
-  aah_v3_fixed_hierarchy_seed: 2
+  aah_v3_hierarchy_ablation_mode: adaptive
+  aah_v3_fixed_hierarchy_seed: 0
   aah_v3_parent_constraint: true
 train:
-  batch_size: 2
+  batch_size: 4
   grad_accum: 1
   max_steps: 1000
   lr: 0.0003

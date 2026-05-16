@@ -1,12 +1,12 @@
 experiment:
-  name: paper-main_512_full_adaptive-seed0
+  name: paper-main_1024_full_adaptive-seed0
   seed: 0
-  variant: main_512_full_adaptive
+  variant: main_1024_full_adaptive
   out_dir: experiments/paper
 data:
   dataset: wikitext-2-raw-v1
   tokenizer: gpt2
-  seq_len: 512
+  seq_len: 1024
   num_workers: 2
 model:
   n_layer: 16
@@ -16,10 +16,10 @@ model:
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:
-  - 64
   - 128
   - 256
   - 512
+  - 1024
   aah_v3_grouping_enabled: true
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16
@@ -57,7 +57,7 @@ model:
   aah_v3_fixed_hierarchy_seed: 0
   aah_v3_parent_constraint: true
 train:
-  batch_size: 8
+  batch_size: 4
   grad_accum: 1
   max_steps: 1000
   lr: 0.0003

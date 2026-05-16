@@ -11,30 +11,24 @@ import yaml
 
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-DEFAULT_SEEDS = [0, 1, 2]
+DEFAULT_SEEDS = [0]
 
 
-MAIN_512 = [
-    "main_512_pure_baseline",
-    "main_512_grouping_off",
-    "main_512_full_adaptive",
-    "main_512_shallow_freeze",
-    "main_512_deep_practical_reuse",
+MAIN_1024 = [
+    "main_1024_pure_baseline",
+    "main_1024_grouping_off",
+    "main_1024_full_adaptive",
+    "main_1024_shallow_freeze",
+    "main_1024_deep_practical_reuse",
 ]
 
-STRESS_1024 = [
-    "stress_1024_grouping_off",
-    "stress_1024_shallow_freeze",
-    "stress_1024_deep_practical_reuse",
-]
-
-APPENDIX_512 = [
-    "appendix_512_control_off",
-    "appendix_512_fixed_random_grouping",
-    "appendix_512_freeze_after_warmup_passthrough",
-    "appendix_512_independent_scoring",
-    "appendix_512_no_parent_constraint",
-    "appendix_512_no_feature_ema",
+APPENDIX_1024 = [
+    "appendix_1024_control_off",
+    "appendix_1024_fixed_random_grouping",
+    "appendix_1024_freeze_after_warmup_passthrough",
+    "appendix_1024_independent_scoring",
+    "appendix_1024_no_parent_constraint",
+    "appendix_1024_no_feature_ema",
 ]
 
 
@@ -48,8 +42,8 @@ def deep_update(dst, src):
 
 
 def base_config(run_id, seed, context_length, aah_enabled=True):
-    windows = [64, 128, 256, context_length] if context_length == 512 else [128, 256, 512, context_length]
-    batch_size = 8 if context_length == 512 else 2
+    windows = [128, 256, 512, context_length]
+    batch_size = 4
     return {
         "experiment": {
             "name": f"paper-{run_id}-seed{seed}",
@@ -226,16 +220,16 @@ def apply_regime_overrides(cfg, run_id):
 
 def suite_run_ids(suite):
     if suite == "mandatory":
-        return MAIN_512 + STRESS_1024
+        return MAIN_1024
     if suite == "appendix":
-        return APPENDIX_512
+        return APPENDIX_1024
     if suite == "all":
-        return MAIN_512 + STRESS_1024 + APPENDIX_512
+        return MAIN_1024 + APPENDIX_1024
     raise ValueError(f"Unknown suite: {suite}")
 
 
 def context_for_run(run_id):
-    return 1024 if "_1024_" in run_id or run_id.startswith("stress_1024") else 512
+    return 1024
 
 
 def config_path_for(config_dir, run_id, seed):
