@@ -1,12 +1,12 @@
 experiment:
-  name: paper-appendix_2048_control_off-seed0
+  name: paper-main_4096_grouping_off-seed0
   seed: 0
-  variant: appendix_2048_control_off
+  variant: main_4096_grouping_off
   out_dir: experiments/paper
 data:
   dataset: wikitext-2-raw-v1
   tokenizer: gpt2
-  seq_len: 2048
+  seq_len: 4096
   num_workers: 2
 model:
   n_layer: 16
@@ -16,12 +16,12 @@ model:
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:
-  - 256
   - 512
   - 1024
   - 2048
-  aah_v3_grouping_enabled: true
-  aah_v3_control_enabled: false
+  - 4096
+  aah_v3_grouping_enabled: false
+  aah_v3_control_enabled: true
   aah_v3_control_dim: 16
   aah_v3_control_interval: 5
   aah_v3_sim_threshold: 0.72
@@ -43,21 +43,21 @@ model:
   aah_v3_controller_logit_scale: 1.0
   aah_v3_controller_rng_reference_dim: 16
   aah_v3_controller_choice_mode: learned
-  aah_v3_controller_pairwise_mode: joint_sibling
+  aah_v3_controller_pairwise_mode: none
   aah_v3_pairwise_bias_scale: 1.0
   aah_v3_joint_output_scale: 1.0
   aah_v3_joint_hidden_dim: 64
   aah_v3_diagnostic_detail: light
   aah_v3_resolution_collapse_min_frac: 0.98
   aah_v3_resolution_collapse_max_frac: 0.98
-  aah_v3_build_hierarchy: true
-  aah_v3_apply_window_control: false
+  aah_v3_build_hierarchy: false
+  aah_v3_apply_window_control: true
   aah_v3_reuse_group_hierarchy: false
   aah_v3_hierarchy_ablation_mode: adaptive
   aah_v3_fixed_hierarchy_seed: 0
   aah_v3_parent_constraint: true
 train:
-  batch_size: 2
+  batch_size: 1
   grad_accum: 1
   max_steps: 10000
   lr: 0.0003

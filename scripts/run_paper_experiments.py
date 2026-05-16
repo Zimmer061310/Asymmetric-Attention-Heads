@@ -14,21 +14,21 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DEFAULT_SEEDS = [0]
 
 
-MAIN_2048 = [
-    "main_2048_pure_baseline",
-    "main_2048_grouping_off",
-    "main_2048_full_adaptive",
-    "main_2048_shallow_freeze",
-    "main_2048_deep_practical_reuse",
+MAIN_4096 = [
+    "main_4096_pure_baseline",
+    "main_4096_grouping_off",
+    "main_4096_full_adaptive",
+    "main_4096_shallow_freeze",
+    "main_4096_deep_practical_reuse",
 ]
 
-APPENDIX_2048 = [
-    "appendix_2048_control_off",
-    "appendix_2048_fixed_random_grouping",
-    "appendix_2048_freeze_after_warmup_passthrough",
-    "appendix_2048_independent_scoring",
-    "appendix_2048_no_parent_constraint",
-    "appendix_2048_no_feature_ema",
+APPENDIX_4096 = [
+    "appendix_4096_control_off",
+    "appendix_4096_fixed_random_grouping",
+    "appendix_4096_freeze_after_warmup_passthrough",
+    "appendix_4096_independent_scoring",
+    "appendix_4096_no_parent_constraint",
+    "appendix_4096_no_feature_ema",
 ]
 
 
@@ -42,8 +42,8 @@ def deep_update(dst, src):
 
 
 def base_config(run_id, seed, context_length, aah_enabled=True):
-    windows = [256, 512, 1024, context_length]
-    batch_size = 2
+    windows = [512, 1024, 2048, context_length]
+    batch_size = 1
     return {
         "experiment": {
             "name": f"paper-{run_id}-seed{seed}",
@@ -220,16 +220,16 @@ def apply_regime_overrides(cfg, run_id):
 
 def suite_run_ids(suite):
     if suite == "mandatory":
-        return MAIN_2048
+        return MAIN_4096
     if suite == "appendix":
-        return APPENDIX_2048
+        return APPENDIX_4096
     if suite == "all":
-        return MAIN_2048 + APPENDIX_2048
+        return MAIN_4096 + APPENDIX_4096
     raise ValueError(f"Unknown suite: {suite}")
 
 
 def context_for_run(run_id):
-    return 2048
+    return 4096
 
 
 def config_path_for(config_dir, run_id, seed):
