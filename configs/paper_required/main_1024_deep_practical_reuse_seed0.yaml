@@ -69,7 +69,7 @@ train:
   log_interval: 50
   device: cuda
   precision: bf16
-  use_wandb: false
+  use_wandb: true
   log_csv: true
   save_checkpoints: true
   checkpoint_steps:

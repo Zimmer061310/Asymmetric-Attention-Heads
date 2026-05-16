@@ -115,7 +115,7 @@ def base_config(run_id, seed, context_length, aah_enabled=True):
             "log_interval": 50,
             "device": "cuda",
             "precision": "bf16",
-            "use_wandb": False,
+            "use_wandb": True,
             "log_csv": True,
             "save_checkpoints": True,
             "checkpoint_steps": [1000],
