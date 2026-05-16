@@ -68,6 +68,7 @@ class GPTConfig:
     aah_v3_reuse_group_hierarchy: bool = False
     aah_v3_hierarchy_ablation_mode: str = "adaptive"
     aah_v3_fixed_hierarchy_seed: int = 1337
+    aah_v3_parent_constraint: bool = True
 
 
 class CausalSelfAttention(nn.Module):
@@ -523,6 +524,7 @@ class AAHV3Attention(nn.Module):
         if self.hierarchy_ablation_mode not in valid_hierarchy_ablation_modes:
             raise ValueError(f"Unsupported aah_v3_hierarchy_ablation_mode: {self.hierarchy_ablation_mode}")
         self.fixed_hierarchy_seed = int(getattr(config, "aah_v3_fixed_hierarchy_seed", 1337))
+        self.parent_constraint = bool(getattr(config, "aah_v3_parent_constraint", True))
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -1509,7 +1511,8 @@ class AAHV3Attention(nn.Module):
             logits_var_per_level[level] = float(logits.var(unbiased=False).item())
             parent_map = parent_map_for_pairwise
             parent_idx = win_indices[level + 1][parent_map]
-            idx = torch.minimum(idx, parent_idx)
+            if self.parent_constraint:
+                idx = torch.minimum(idx, parent_idx)
             raw_idx_per_level[level] = idx_pre.detach().clone()
             parent_idx_per_level[level] = parent_idx.detach().clone()
             post_parent_idx_per_level[level] = idx.detach().clone()

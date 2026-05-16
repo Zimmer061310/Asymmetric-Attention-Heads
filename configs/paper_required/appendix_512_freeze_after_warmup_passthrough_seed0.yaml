@@ -1,0 +1,76 @@
+experiment:
+  name: paper-appendix_512_freeze_after_warmup_passthrough-seed0
+  seed: 0
+  variant: appendix_512_freeze_after_warmup_passthrough
+  out_dir: experiments/paper
+data:
+  dataset: wikitext-2-raw-v1
+  tokenizer: gpt2
+  seq_len: 512
+  num_workers: 2
+model:
+  n_layer: 16
+  n_head: 12
+  n_embd: 1536
+  n_ff: 6144
+  dropout: 0.1
+  aah_v3_enabled: true
+  aah_v3_windows:
+  - 64
+  - 128
+  - 256
+  - 512
+  aah_v3_grouping_enabled: true
+  aah_v3_control_enabled: true
+  aah_v3_control_dim: 16
+  aah_v3_control_interval: 5
+  aah_v3_sim_threshold: 0.72
+  aah_v3_super_threshold: 0.76
+  aah_v3_max_depth: 4
+  aah_v3_ema_alpha: 0.9
+  aah_v3_churn_penalty: 0.02
+  aah_v3_min_group_size: 3
+  aah_v3_warmup_steps: 100
+  aah_v3_W_min_gpu: 64
+  aah_v3_resolution_ema_alpha: 0.15
+  aah_v3_post_warmup_ramp_steps: 0
+  aah_v3_group_feature_mode: mean
+  aah_v3_upper_cluster_metric: cosine_normdiff
+  aah_v3_upper_l2_threshold: 0.0
+  aah_v3_cosine_normdiff_scale: 16.0
+  aah_v3_controller_input_mode: enriched
+  aah_v3_controller_arch: mlp
+  aah_v3_controller_logit_scale: 1.0
+  aah_v3_controller_rng_reference_dim: 16
+  aah_v3_controller_choice_mode: learned
+  aah_v3_controller_pairwise_mode: joint_sibling
+  aah_v3_pairwise_bias_scale: 1.0
+  aah_v3_joint_output_scale: 1.0
+  aah_v3_joint_hidden_dim: 64
+  aah_v3_diagnostic_detail: light
+  aah_v3_resolution_collapse_min_frac: 0.98
+  aah_v3_resolution_collapse_max_frac: 0.98
+  aah_v3_build_hierarchy: true
+  aah_v3_apply_window_control: true
+  aah_v3_reuse_group_hierarchy: false
+  aah_v3_hierarchy_ablation_mode: freeze_after_warmup
+  aah_v3_fixed_hierarchy_seed: 0
+  aah_v3_parent_constraint: true
+train:
+  batch_size: 8
+  grad_accum: 1
+  max_steps: 1000
+  lr: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 500
+  eval_batches: 20
+  eval_log_progress: false
+  log_interval: 50
+  device: cuda
+  precision: bf16
+  use_wandb: false
+  log_csv: true
+  save_checkpoints: true
+  checkpoint_steps:
+  - 1000

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import csv
 import glob
 import hashlib
 import json
@@ -155,6 +156,11 @@ def build_model(cfg, vocab_size, device):
         aah_v3_pairwise_bias_scale=model_cfg.get("aah_v3_pairwise_bias_scale", 1.0),
         aah_v3_joint_output_scale=model_cfg.get("aah_v3_joint_output_scale", 1.0),
         aah_v3_joint_hidden_dim=model_cfg.get("aah_v3_joint_hidden_dim", 0),
+        aah_v3_diagnostic_detail=model_cfg.get("aah_v3_diagnostic_detail", "full"),
+        aah_v3_reuse_group_hierarchy=model_cfg.get("aah_v3_reuse_group_hierarchy", False),
+        aah_v3_hierarchy_ablation_mode=model_cfg.get("aah_v3_hierarchy_ablation_mode", "adaptive"),
+        aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", cfg["experiment"].get("seed", 1337)),
+        aah_v3_parent_constraint=model_cfg.get("aah_v3_parent_constraint", True),
     )
     return GPT(gpt_cfg).to(device)
 
@@ -196,6 +202,8 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
     total_attn_flops = 0.0
     total_flops = 0.0
     total_full_flops = 0.0
+    total_attn_elements = 0.0
+    total_baseline_elements = 0.0
     n = 0
     t0 = time.time()
     resolution_per_head_sum = None
@@ -221,6 +229,11 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
                         be += attn.last_stats.get("baseline_elements", 0.0)
                 if be > 0:
                     attn_elems = te
+                    total_attn_elements += te
+                    total_baseline_elements += be
+            else:
+                total_attn_elements += float(model.config.n_layer * model.config.n_head * x.size(1) * x.size(1))
+                total_baseline_elements += float(model.config.n_layer * model.config.n_head * x.size(1) * x.size(1))
             fa, ft, _, _ = estimate_flops(
                 {
                     "n_layer": model.config.n_layer,
@@ -277,6 +290,7 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
     flops_total_est = total_flops / max(1, n)
     flops_ratio = (total_flops / total_full_flops) if total_full_flops > 0 else 1.0
     flops_reduction_pct = (1.0 - flops_ratio) * 100.0
+    attn_ratio = (total_attn_elements / total_baseline_elements) if total_baseline_elements > 0 else 1.0
     resolution_per_head_mean = None
     if resolution_per_head_sum is not None and resolution_per_head_count > 0:
         resolution_per_head_mean = (resolution_per_head_sum / float(resolution_per_head_count)).tolist()
@@ -293,9 +307,174 @@ def evaluate(model, loader, device, max_batches, use_bf16=False):
         flops_total_est,
         flops_ratio,
         flops_reduction_pct,
+        attn_ratio,
         resolution_per_head_mean,
         branch_usage_mean,
     )
+
+
+def _json_cell(value):
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, sort_keys=True)
+    return value
+
+
+def _window_idx_from_size(size, windows):
+    try:
+        return list(windows).index(int(size))
+    except Exception:
+        return ""
+
+
+def write_mechanism_diagnostics(model, cfg, row, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    exp = cfg["experiment"]
+    model_cfg = cfg["model"]
+    windows = list(model_cfg.get("aah_v3_windows", [64, 128, 256, cfg["data"]["seq_len"]]))
+    context_length = int(cfg["data"]["seq_len"])
+    regime = exp.get("variant", exp.get("name", ""))
+    seed = int(row.get("seed", exp.get("seed", -1)))
+    checkpoint_step = row.get("checkpoint_step")
+    run_name = exp.get("name", "")
+
+    safe_name = run_name.replace("/", "_")
+    step_label = checkpoint_step if checkpoint_step is not None else "unknown"
+    heatmap_path = os.path.join(out_dir, f"{safe_name}_step{step_label}_heatmap.csv")
+    sibling_path = os.path.join(out_dir, f"{safe_name}_step{step_label}_siblings.csv")
+
+    heatmap_fields = [
+        "run_name",
+        "regime",
+        "seed",
+        "context_length",
+        "checkpoint_step",
+        "layer_id",
+        "head_id",
+        "group_id",
+        "selected_window_idx",
+        "selected_window_size",
+        "pre_clamp_window_idx",
+        "post_clamp_window_idx",
+        "final_window_idx",
+        "final_window_size",
+        "hierarchy_levels_used",
+        "group_counts_per_level",
+        "path_mode",
+    ]
+    sibling_fields = [
+        "run_name",
+        "regime",
+        "seed",
+        "context_length",
+        "checkpoint_step",
+        "layer_id",
+        "hierarchy_level",
+        "sibling_pair_id",
+        "left_group_id",
+        "right_group_id",
+        "left_raw_window_idx",
+        "right_raw_window_idx",
+        "left_final_window_idx",
+        "right_final_window_idx",
+        "same_raw_choice",
+        "same_final_choice",
+        "abs_window_idx_difference",
+        "sibling_choice_entropy",
+        "joint_scorer_logits_left",
+        "joint_scorer_logits_right",
+    ]
+
+    with open(heatmap_path, "w", newline="") as f_heat, open(sibling_path, "w", newline="") as f_sib:
+        heat_writer = csv.DictWriter(f_heat, fieldnames=heatmap_fields)
+        sib_writer = csv.DictWriter(f_sib, fieldnames=sibling_fields)
+        heat_writer.writeheader()
+        sib_writer.writeheader()
+
+        for layer_id, block in enumerate(model.blocks):
+            attn = block.attn
+            stats = getattr(attn, "last_stats", {})
+            if not isinstance(stats, dict):
+                continue
+            group_ids = stats.get("head_groups", []) or []
+            pre_idx = stats.get("win_idx_pre_clamp", []) or stats.get("decision_head_idx_before_execution_mapping", []) or []
+            post_idx = stats.get("win_idx_post_clamp", []) or stats.get("decision_head_idx_before_execution_mapping", []) or []
+            final_idx = stats.get("decision_head_idx_after_execution_mapping", []) or []
+            final_sizes = stats.get("resolution_per_head", []) or []
+            selected_idx = stats.get("decision_head_idx_before_execution_mapping", []) or post_idx or pre_idx
+            n_head = int(getattr(attn, "n_head", len(final_sizes) or len(group_ids) or 0))
+
+            for head_id in range(n_head):
+                final_size = final_sizes[head_id] if head_id < len(final_sizes) else ""
+                fidx = final_idx[head_id] if head_id < len(final_idx) else _window_idx_from_size(final_size, windows)
+                sidx = selected_idx[head_id] if head_id < len(selected_idx) else fidx
+                heat_writer.writerow(
+                    {
+                        "run_name": run_name,
+                        "regime": regime,
+                        "seed": seed,
+                        "context_length": context_length,
+                        "checkpoint_step": checkpoint_step,
+                        "layer_id": layer_id,
+                        "head_id": head_id,
+                        "group_id": group_ids[head_id] if head_id < len(group_ids) else "",
+                        "selected_window_idx": sidx,
+                        "selected_window_size": windows[int(sidx)] if isinstance(sidx, int) and 0 <= int(sidx) < len(windows) else final_size,
+                        "pre_clamp_window_idx": pre_idx[head_id] if head_id < len(pre_idx) else "",
+                        "post_clamp_window_idx": post_idx[head_id] if head_id < len(post_idx) else "",
+                        "final_window_idx": fidx,
+                        "final_window_size": final_size,
+                        "hierarchy_levels_used": stats.get("hierarchy_levels_used", ""),
+                        "group_counts_per_level": _json_cell(stats.get("group_counts_per_level", [])),
+                        "path_mode": stats.get("path_mode", ""),
+                    }
+                )
+
+            raw_levels = stats.get("decision_raw_idx_per_level", []) or []
+            final_levels = stats.get("decision_post_parent_idx_per_level", []) or []
+            logits_levels = stats.get("decision_logits_per_level", []) or []
+            for level, raw in enumerate(raw_levels):
+                if not isinstance(raw, list) or len(raw) < 2:
+                    continue
+                final = final_levels[level] if level < len(final_levels) and isinstance(final_levels[level], list) else raw
+                logits = logits_levels[level] if level < len(logits_levels) and isinstance(logits_levels[level], list) else []
+                pair_id = 0
+                for left in range(0, len(raw) - 1, 2):
+                    right = left + 1
+                    left_final = final[left] if left < len(final) else raw[left]
+                    right_final = final[right] if right < len(final) else raw[right]
+                    diff = abs(int(left_final) - int(right_final))
+                    if int(left_final) == int(right_final):
+                        entropy = 0.0
+                    else:
+                        entropy = math.log(2.0)
+                    sib_writer.writerow(
+                        {
+                            "run_name": run_name,
+                            "regime": regime,
+                            "seed": seed,
+                            "context_length": context_length,
+                            "checkpoint_step": checkpoint_step,
+                            "layer_id": layer_id,
+                            "hierarchy_level": level,
+                            "sibling_pair_id": pair_id,
+                            "left_group_id": left,
+                            "right_group_id": right,
+                            "left_raw_window_idx": raw[left],
+                            "right_raw_window_idx": raw[right],
+                            "left_final_window_idx": left_final,
+                            "right_final_window_idx": right_final,
+                            "same_raw_choice": int(raw[left]) == int(raw[right]),
+                            "same_final_choice": int(left_final) == int(right_final),
+                            "abs_window_idx_difference": diff,
+                            "sibling_choice_entropy": entropy,
+                            "joint_scorer_logits_left": _json_cell(logits[left] if left < len(logits) else ""),
+                            "joint_scorer_logits_right": _json_cell(logits[right] if right < len(logits) else ""),
+                        }
+                    )
+                    pair_id += 1
+    return heatmap_path, sibling_path
 
 
 def parse_step_from_checkpoint_name(path):
@@ -356,6 +535,7 @@ def main():
     parser.add_argument("--no-deterministic-eval", dest="deterministic_eval", action="store_false", help="Disable deterministic evaluation controls")
     parser.add_argument("--seed", type=int, default=None, help="Override eval seed")
     parser.add_argument("--summary-json", default=None, help="Write per-checkpoint and aggregate summary JSON")
+    parser.add_argument("--diagnostics-dir", default=None, help="Write per-layer/head heatmap and sibling diagnostic CSVs")
     parser.set_defaults(strict_checkpoint=True, deterministic_eval=True)
     args = parser.parse_args()
 
@@ -450,6 +630,8 @@ def main():
             seed_everything(expected_seed)
         state = torch.load(ckpt, map_location=device)
         model.load_state_dict(state, strict=True)
+        if device == "cuda" and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
 
         (
             val_loss,
@@ -460,6 +642,7 @@ def main():
             flops_total_est,
             flops_ratio,
             flops_reduction_pct,
+            attn_ratio,
             resolution_per_head_mean,
             branch_usage_mean,
         ) = evaluate(
@@ -469,6 +652,9 @@ def main():
             eval_batches,
             use_bf16=use_bf16,
         )
+        peak_memory_mb = None
+        if device == "cuda" and torch.cuda.is_available():
+            peak_memory_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
         ckpt_step = None
         if meta is not None:
             try:
@@ -490,6 +676,8 @@ def main():
             "flops_total_est": float(flops_total_est),
             "flops_ratio": float(flops_ratio),
             "flops_reduction_pct": float(flops_reduction_pct),
+            "ACR": float(attn_ratio),
+            "peak_memory_mb": peak_memory_mb,
             "resolution_per_head_mean": resolution_per_head_mean,
             "branch_usage_freq": branch_usage_mean,
             "run_name": meta.get("run_name") if meta else expected_run_name,
@@ -500,10 +688,15 @@ def main():
             "metadata_path": meta_path if meta else "",
         }
         results.append(row)
+        if args.diagnostics_dir:
+            heatmap_path, sibling_path = write_mechanism_diagnostics(model, cfg, row, args.diagnostics_dir)
+            row["heatmap_csv"] = heatmap_path
+            row["sibling_csv"] = sibling_path
+            print(f"diagnostics heatmap_csv={heatmap_path} sibling_csv={sibling_path}")
         print(
             f"[{idx+1}/{len(checkpoint_paths)}] checkpoint={ckpt} step={ckpt_step} "
             f"val_loss={val_loss:.6f} val_ppl={val_ppl:.4f} tok_s={tok_s:.2f} "
-            f"flops_ratio={flops_ratio:.6f}"
+            f"ACR={attn_ratio:.6f} flops_ratio={flops_ratio:.6f}"
         )
         if run is not None:
             try:
@@ -525,6 +718,7 @@ def main():
                         "aah/flops_total_est": flops_total_est,
                         "aah/flops_ratio": flops_ratio,
                         "aah/flops_reduction_%": flops_reduction_pct,
+                        "aah/ACR": attn_ratio,
                         "aah/resolution_per_head_mean": resolution_per_head_mean,
                         "aah/branch_usage_freq": branch_usage_mean,
                     }
@@ -607,7 +801,8 @@ def main():
         )
         print(
             f"aah/flops_attn_est={r['flops_attn_est']:.2f} aah/flops_total_est={r['flops_total_est']:.2f} "
-            f"aah/flops_ratio={r['flops_ratio']:.6f} aah/flops_reduction_%={r['flops_reduction_pct']:.4f}"
+            f"aah/ACR={r['ACR']:.6f} aah/flops_ratio={r['flops_ratio']:.6f} "
+            f"aah/flops_reduction_%={r['flops_reduction_pct']:.4f}"
         )
 
     if args.summary_json:
