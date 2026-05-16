@@ -14,21 +14,21 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DEFAULT_SEEDS = [0]
 
 
-MAIN_1024 = [
-    "main_1024_pure_baseline",
-    "main_1024_grouping_off",
-    "main_1024_full_adaptive",
-    "main_1024_shallow_freeze",
-    "main_1024_deep_practical_reuse",
+MAIN_2048 = [
+    "main_2048_pure_baseline",
+    "main_2048_grouping_off",
+    "main_2048_full_adaptive",
+    "main_2048_shallow_freeze",
+    "main_2048_deep_practical_reuse",
 ]
 
-APPENDIX_1024 = [
-    "appendix_1024_control_off",
-    "appendix_1024_fixed_random_grouping",
-    "appendix_1024_freeze_after_warmup_passthrough",
-    "appendix_1024_independent_scoring",
-    "appendix_1024_no_parent_constraint",
-    "appendix_1024_no_feature_ema",
+APPENDIX_2048 = [
+    "appendix_2048_control_off",
+    "appendix_2048_fixed_random_grouping",
+    "appendix_2048_freeze_after_warmup_passthrough",
+    "appendix_2048_independent_scoring",
+    "appendix_2048_no_parent_constraint",
+    "appendix_2048_no_feature_ema",
 ]
 
 
@@ -42,8 +42,8 @@ def deep_update(dst, src):
 
 
 def base_config(run_id, seed, context_length, aah_enabled=True):
-    windows = [128, 256, 512, context_length]
-    batch_size = 4
+    windows = [256, 512, 1024, context_length]
+    batch_size = 2
     return {
         "experiment": {
             "name": f"paper-{run_id}-seed{seed}",
@@ -105,11 +105,11 @@ def base_config(run_id, seed, context_length, aah_enabled=True):
         "train": {
             "batch_size": batch_size,
             "grad_accum": 1,
-            "max_steps": 1000,
+            "max_steps": 10000,
             "lr": 0.0003,
             "weight_decay": 0.1,
             "warmup_steps": 100,
-            "eval_interval": 500,
+            "eval_interval": 1000,
             "eval_batches": 20,
             "eval_log_progress": False,
             "log_interval": 50,
@@ -118,7 +118,7 @@ def base_config(run_id, seed, context_length, aah_enabled=True):
             "use_wandb": True,
             "log_csv": True,
             "save_checkpoints": True,
-            "checkpoint_steps": [1000],
+            "checkpoint_steps": [1000, 5000, 10000],
         },
     }
 
@@ -220,16 +220,16 @@ def apply_regime_overrides(cfg, run_id):
 
 def suite_run_ids(suite):
     if suite == "mandatory":
-        return MAIN_1024
+        return MAIN_2048
     if suite == "appendix":
-        return APPENDIX_1024
+        return APPENDIX_2048
     if suite == "all":
-        return MAIN_1024 + APPENDIX_1024
+        return MAIN_2048 + APPENDIX_2048
     raise ValueError(f"Unknown suite: {suite}")
 
 
 def context_for_run(run_id):
-    return 1024
+    return 2048
 
 
 def config_path_for(config_dir, run_id, seed):

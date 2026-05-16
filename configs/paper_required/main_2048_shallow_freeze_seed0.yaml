@@ -1,12 +1,12 @@
 experiment:
-  name: paper-main_1024_full_adaptive-seed0
+  name: paper-main_2048_shallow_freeze-seed0
   seed: 0
-  variant: main_1024_full_adaptive
+  variant: main_2048_shallow_freeze
   out_dir: experiments/paper
 data:
   dataset: wikitext-2-raw-v1
   tokenizer: gpt2
-  seq_len: 1024
+  seq_len: 2048
   num_workers: 2
 model:
   n_layer: 16
@@ -16,17 +16,17 @@ model:
   dropout: 0.1
   aah_v3_enabled: true
   aah_v3_windows:
-  - 128
   - 256
   - 512
   - 1024
+  - 2048
   aah_v3_grouping_enabled: true
   aah_v3_control_enabled: true
   aah_v3_control_dim: 16
   aah_v3_control_interval: 5
   aah_v3_sim_threshold: 0.72
   aah_v3_super_threshold: 0.76
-  aah_v3_max_depth: 4
+  aah_v3_max_depth: 1
   aah_v3_ema_alpha: 0.9
   aah_v3_churn_penalty: 0.02
   aah_v3_min_group_size: 3
@@ -53,17 +53,17 @@ model:
   aah_v3_build_hierarchy: true
   aah_v3_apply_window_control: true
   aah_v3_reuse_group_hierarchy: false
-  aah_v3_hierarchy_ablation_mode: adaptive
+  aah_v3_hierarchy_ablation_mode: freeze_learned_topology
   aah_v3_fixed_hierarchy_seed: 0
   aah_v3_parent_constraint: true
 train:
-  batch_size: 4
+  batch_size: 2
   grad_accum: 1
-  max_steps: 1000
+  max_steps: 10000
   lr: 0.0003
   weight_decay: 0.1
   warmup_steps: 100
-  eval_interval: 500
+  eval_interval: 1000
   eval_batches: 20
   eval_log_progress: false
   log_interval: 50
@@ -74,3 +74,5 @@ train:
   save_checkpoints: true
   checkpoint_steps:
   - 1000
+  - 5000
+  - 10000
