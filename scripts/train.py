@@ -571,6 +571,8 @@ def main():
             import wandb
             wandb_mod = wandb
             wandb_mod.init(project="ENA-AAH", name=exp["name"], config=cfg)
+            wandb_mod.define_metric("step")
+            wandb_mod.define_metric("*", step_metric="step")
             wandb_mod.log(
                 {
                     "run/started": 1,
@@ -579,7 +581,8 @@ def main():
                     "run/config_hash": config_hash,
                     "run/git_commit": git_commit or "unknown",
                     "run/seed": seed,
-                }
+                },
+                step=0,
             )
         except Exception:
             use_wandb = False
@@ -1294,7 +1297,14 @@ def main():
                     msg += f" | res_std {resolution_std:.2f}"
                 print(msg)
                 if use_wandb:
-                    payload = {"train/loss": loss.item(), "perf/tok_s": tok_per_sec, "perf/mem_mb": mem, "step": step}
+                    payload = {
+                        "train/loss": loss.item(),
+                        "train_loss": loss.item(),
+                        "perf/tok_s": tok_per_sec,
+                        "perf/mem_mb": mem,
+                        "global_step": step,
+                        "step": step,
+                    }
                     if gpu_alloc is not None:
                         payload["perf/gpu_alloc_mb"] = gpu_alloc
                     if gpu_reserved is not None:
@@ -1517,7 +1527,7 @@ def main():
                         payload["aah/head_reassign_rate"] = avg_reassign
                     if lifespan_ema is not None:
                         payload["aah/group_lifespan_ema"] = lifespan_ema
-                    wandb.log(payload)
+                    wandb.log(payload, step=step)
                 if csv_writer:
                     lk_serialized = ""
                     if lk_layers:
@@ -1714,7 +1724,15 @@ def main():
                 print(f"eval step {step} | loss {val_loss:.4f} | ppl {val_ppl:.2f}")
                 val_group_count_total, val_group_count_level0, val_group_count_per_level = get_group_count_metrics(model)
                 if use_wandb:
-                    payload = {"val/loss": val_loss, "val/ppl": val_ppl, "step": step, "perf/eval_time_s": eval_time}
+                    payload = {
+                        "val/loss": val_loss,
+                        "val_loss": val_loss,
+                        "val/ppl": val_ppl,
+                        "val_ppl": val_ppl,
+                        "global_step": step,
+                        "step": step,
+                        "perf/eval_time_s": eval_time,
+                    }
                     if val_group_count_total is not None:
                         payload["aah/group_count_total"] = val_group_count_total
                     if val_group_count_level0 is not None:
@@ -1723,7 +1741,7 @@ def main():
                         payload["aah/group_count_per_level"] = val_group_count_per_level
                         for i, v in enumerate(val_group_count_per_level):
                             payload[f"aah/group_count_level{i}"] = v
-                    wandb.log(payload)
+                    wandb.log(payload, step=step)
                 if csv_writer:
                     row = [""] * len(csv_headers)
                     row[csv_idx["step"]] = str(step)
@@ -1755,7 +1773,10 @@ def main():
             pass
         if use_wandb and wandb_mod is not None:
             try:
-                wandb_mod.log({"run/crashed": 1, "run/error": str(exc)[:500], "step": step})
+                wandb_mod.log(
+                    {"run/crashed": 1, "run/error": str(exc)[:500], "global_step": step, "step": step},
+                    step=step,
+                )
             except Exception:
                 pass
         raise
