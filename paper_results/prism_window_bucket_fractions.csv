@@ -1,0 +1,17 @@
+method,variant,context,seed,checkpoint_step,window_size,fraction
+grouping_off,main_4096_grouping_off,4096,0,10000,512,0.3273565573770491
+grouping_off,main_4096_grouping_off,4096,0,10000,1024,0.0884562841530054
+grouping_off,main_4096_grouping_off,4096,0,10000,2048,0.1356728142076503
+grouping_off,main_4096_grouping_off,4096,0,10000,4096,0.4485143442622942
+Full adaptive,main_4096_full_adaptive,4096,0,10000,512,0.6324282786885249
+Full adaptive,main_4096_full_adaptive,4096,0,10000,1024,0.1773394808743171
+Full adaptive,main_4096_full_adaptive,4096,0,10000,2048,0.1121926229508197
+Full adaptive,main_4096_full_adaptive,4096,0,10000,4096,0.0780396174863388
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,512,0.5140881147540992
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,1024,0.1694842896174864
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,2048,0.1675204918032786
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,4096,0.1489071038251365
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,512,0.5024760928961745
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,1024,0.1995389344262294
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,2048,0.0963968579234973
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,4096,0.2015881147540983

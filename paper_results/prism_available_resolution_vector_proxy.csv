@@ -1,0 +1,49 @@
+method,variant,context,seed,checkpoint_step,layer_or_head_index_from_wandb_vector,mean_window_size_proxy
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,0,1333.5081787109375
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,1,1351.868896484375
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,2,1357.11474609375
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,3,1291.016357421875
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,4,1392.2623291015625
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,5,1230.6884765625
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,6,1585.8360595703125
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,7,1513.9671630859375
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,8,1138.88525390625
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,9,1765.245849609375
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,10,1332.983642578125
+Shallow freeze,main_4096_shallow_freeze,4096,0,10000,11,1383.868896484375
+grouping_off,main_4096_grouping_off,4096,0,10000,0,2519.08203125
+grouping_off,main_4096_grouping_off,4096,0,10000,1,2228.458984375
+grouping_off,main_4096_grouping_off,4096,0,10000,2,2298.754150390625
+grouping_off,main_4096_grouping_off,4096,0,10000,3,2226.360595703125
+grouping_off,main_4096_grouping_off,4096,0,10000,4,2552.131103515625
+grouping_off,main_4096_grouping_off,4096,0,10000,5,2234.754150390625
+grouping_off,main_4096_grouping_off,4096,0,10000,6,2303.475341796875
+grouping_off,main_4096_grouping_off,4096,0,10000,7,2521.704833984375
+grouping_off,main_4096_grouping_off,4096,0,10000,8,2332.8525390625
+grouping_off,main_4096_grouping_off,4096,0,10000,9,2334.950927734375
+grouping_off,main_4096_grouping_off,4096,0,10000,10,2405.245849609375
+grouping_off,main_4096_grouping_off,4096,0,10000,11,2520.131103515625
+Full adaptive,main_4096_full_adaptive,4096,0,10000,0,956.8524780273438
+Full adaptive,main_4096_full_adaptive,4096,0,10000,1,992.5245971679688
+Full adaptive,main_4096_full_adaptive,4096,0,10000,2,1056.5245361328125
+Full adaptive,main_4096_full_adaptive,4096,0,10000,3,1140.458984375
+Full adaptive,main_4096_full_adaptive,4096,0,10000,4,961.0491943359376
+Full adaptive,main_4096_full_adaptive,4096,0,10000,5,1078.557373046875
+Full adaptive,main_4096_full_adaptive,4096,0,10000,6,948.9835815429688
+Full adaptive,main_4096_full_adaptive,4096,0,10000,7,1032.3934326171875
+Full adaptive,main_4096_full_adaptive,4096,0,10000,8,1076.458984375
+Full adaptive,main_4096_full_adaptive,4096,0,10000,9,1057.57373046875
+Full adaptive,main_4096_full_adaptive,4096,0,10000,10,1304.65576171875
+Full adaptive,main_4096_full_adaptive,4096,0,10000,11,1051.80322265625
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,0,1424.2623291015625
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,1,1265.3115234375
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,2,1751.0819091796875
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,3,1262.6884765625
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,4,1566.42626953125
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,5,1670.8197021484375
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,6,1483.016357421875
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,7,1456.786865234375
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,8,1454.1639404296875
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,9,1669.7705078125
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,10,1640.9180908203125
+Deep practical reuse,main_4096_deep_practical_reuse,4096,0,10000,11,1171.4097900390625
