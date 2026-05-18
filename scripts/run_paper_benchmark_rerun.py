@@ -127,8 +127,28 @@ class Orchestrator:
         if self.args.skip_pip_install:
             self.log("skip optional pip install")
             return
+        base_packages = [
+            "transformers",
+            "datasets",
+            "accelerate",
+            "tokenizers",
+            "numpy",
+            "scipy",
+            "pandas",
+            "matplotlib",
+            "tqdm",
+            "pyyaml",
+            "wandb",
+            "rich",
+            "loguru",
+        ]
         self.run_cmd(
-            [sys.executable, "-m", "pip", "install", "--user", "lm_eval"],
+            [sys.executable, "-m", "pip", "install", "--user", *base_packages],
+            "pip_install_requirements.log",
+            check=False,
+        )
+        self.run_cmd(
+            [sys.executable, "-m", "pip", "install", "--user", "lm-eval"],
             "pip_install_lm_eval.log",
             check=False,
         )
