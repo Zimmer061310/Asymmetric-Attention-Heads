@@ -128,7 +128,7 @@ class Orchestrator:
             self.log("skip optional pip install")
             return
         base_packages = [
-            "transformers",
+            "transformers==4.41.2",
             "datasets",
             "accelerate",
             "tokenizers",
