@@ -259,12 +259,24 @@ def make_aah_forward(attn: nn.Module, state: AAHRuntimeState):
             )
 
         bsz, q_len, _ = hidden_states.size()
-        num_heads = int(getattr(self, "num_heads", getattr(self, "num_attention_heads", state.n_heads)))
-        num_kv_heads = int(getattr(self, "num_key_value_heads", num_heads))
-        head_dim = int(getattr(self, "head_dim", self.q_proj.out_features // num_heads))
-        q = self.q_proj(hidden_states).view(bsz, q_len, num_heads, head_dim).transpose(1, 2)
-        k = self.k_proj(hidden_states).view(bsz, q_len, num_kv_heads, head_dim).transpose(1, 2)
-        v = self.v_proj(hidden_states).view(bsz, q_len, num_kv_heads, head_dim).transpose(1, 2)
+        head_dim = int(getattr(self, "head_dim", 0) or 0)
+        if head_dim <= 0:
+            guessed_heads = int(getattr(self, "num_heads", getattr(self, "num_attention_heads", state.n_heads)))
+            head_dim = int(self.q_proj.out_features // max(1, guessed_heads))
+        # Qwen3 grouped-query attention exposes inconsistent metadata across
+        # transformers versions, so derive both counts from projection widths.
+        num_heads = int(self.q_proj.out_features // head_dim)
+        num_kv_heads = int(self.k_proj.out_features // head_dim)
+        q = self.q_proj(hidden_states).view(bsz, q_len, num_heads, head_dim)
+        k = self.k_proj(hidden_states).view(bsz, q_len, num_kv_heads, head_dim)
+        v = self.v_proj(hidden_states).view(bsz, q_len, num_kv_heads, head_dim)
+        if hasattr(self, "q_norm"):
+            q = self.q_norm(q)
+        if hasattr(self, "k_norm"):
+            k = self.k_norm(k)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
 
         if position_embeddings is not None:
             cos, sin = position_embeddings
