@@ -241,6 +241,7 @@ class Orchestrator:
 
             if self.args.resume and train_done:
                 self.log(f"skip_train existing_checkpoint={final_persist}")
+                self.upload_wandb_artifact(cfg)
             else:
                 self.log(f"stage=train run={run_name}")
                 self.run_cmd([sys.executable, "scripts/train.py", "--config", path], f"train_{run_name}.log")
