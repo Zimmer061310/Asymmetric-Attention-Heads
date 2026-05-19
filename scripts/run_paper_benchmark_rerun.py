@@ -187,8 +187,9 @@ class Orchestrator:
 
     def persist_training_outputs(self, cfg):
         out_dir = cfg["experiment"]["out_dir"]
-        self.copy_glob(os.path.join(out_dir, "*.pt"), self.persist_dirs["checkpoints"])
-        self.copy_glob(os.path.join(out_dir, "*.pt.meta.json"), self.persist_dirs["checkpoints"])
+        run_name = cfg["experiment"]["name"]
+        for suffix in [".pt", ".pt.meta.json"]:
+            self.copy_file(os.path.join(out_dir, f"{run_name}{suffix}"), self.persist_dirs["checkpoints"])
         self.copy_glob(os.path.join(out_dir, "*.csv"), self.persist_dirs["logs"])
         self.copy_glob(os.path.join(out_dir, "*crash*.log"), self.persist_dirs["logs"])
         self.log(f"persisted_training_outputs run={cfg['experiment']['name']}")
@@ -232,14 +233,19 @@ class Orchestrator:
             final_persist = self.persistent_checkpoint_path(cfg)
             summary_persist = os.path.join(self.persist_dirs["summaries"], f"{run_name}_infer.json")
 
-            if self.args.resume and os.path.exists(final_persist) and os.path.exists(summary_persist):
+            train_done = os.path.exists(final_persist)
+            infer_done = os.path.exists(summary_persist)
+            if self.args.resume and train_done and infer_done:
                 self.log(f"skip_train_infer existing run={run_name}")
                 continue
 
-            self.log(f"stage=train run={run_name}")
-            self.run_cmd([sys.executable, "scripts/train.py", "--config", path], f"train_{run_name}.log")
-            self.persist_training_outputs(cfg)
-            self.upload_wandb_artifact(cfg)
+            if self.args.resume and train_done:
+                self.log(f"skip_train existing_checkpoint={final_persist}")
+            else:
+                self.log(f"stage=train run={run_name}")
+                self.run_cmd([sys.executable, "scripts/train.py", "--config", path], f"train_{run_name}.log")
+                self.persist_training_outputs(cfg)
+                self.upload_wandb_artifact(cfg)
 
             ckpt = self.final_checkpoint_path(cfg)
             if not os.path.exists(ckpt):
