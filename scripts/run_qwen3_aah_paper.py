@@ -147,7 +147,7 @@ class Runner:
             "--out-dir",
             out_dir,
             "--seq-len",
-            str(self.args.seq_len),
+            str(self.args.adapt_seq_len),
             "--precision",
             self.args.precision,
             "--device",
@@ -352,6 +352,7 @@ def main():
     parser.add_argument("--persist-root", default=PERSIST_ROOT)
     parser.add_argument("--model", default=MODEL_NAME)
     parser.add_argument("--seq-len", type=int, default=4096)
+    parser.add_argument("--adapt-seq-len", type=int, default=1024)
     parser.add_argument("--precision", default="bf16")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--adapt-steps", type=int, default=1000)
