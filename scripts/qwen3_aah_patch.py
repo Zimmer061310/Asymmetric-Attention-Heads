@@ -177,7 +177,8 @@ class AAHRuntimeState(nn.Module):
         final_idx = final_group_idx[head_to_group]
         if float(self.config.resolution_ema_alpha) > 0:
             alpha = float(self.config.resolution_ema_alpha)
-            self.ema_window_idx.mul_(1.0 - alpha).add_(final_idx.detach().float().cpu() * alpha)
+            ema_update = final_idx.detach().float().to(self.ema_window_idx.device)
+            self.ema_window_idx.mul_(1.0 - alpha).add_(ema_update * alpha)
             final_idx = self.ema_window_idx.round().long().clamp(0, len(self.config.windows) - 1).to(q.device)
 
         self.cached_raw_idx = raw_idx.detach().cpu()
