@@ -111,6 +111,9 @@ def load_qwen_model(args, regime: str, adapter_path: Optional[str] = None):
         states = patch_model_attention(model, patch_cfg)
         if adapter_path and os.path.exists(adapter_path):
             load_aah_adapter(model, adapter_path)
+        # AAH controller modules are attached after the initial model.to(...).
+        # Move the patched modules as well before the first forward pass.
+        model.to(device)
     model.eval()
     return model, tokenizer, states, device
 
