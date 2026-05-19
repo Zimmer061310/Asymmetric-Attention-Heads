@@ -144,12 +144,7 @@ class AAHRuntimeState(nn.Module):
         self.cached_head_to_group = head_to_group.detach().cpu()
         return head_to_group
 
-    def choose_windows(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        should_update = self.cached_final_idx is None or (self.step % max(1, int(self.config.control_interval)) == 0)
-        self.step += 1
-        if not should_update:
-            return self.cached_raw_idx.to(q.device), self.cached_final_idx.to(q.device)
-
+    def controller_logits(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         feats = self._features(q, k, v)
         head_to_group = self._grouping(feats)
         n_groups = int(head_to_group.max().item()) + 1
@@ -160,6 +155,16 @@ class AAHRuntimeState(nn.Module):
         group_feats = group_feats / group_counts.clamp_min(1.0).unsqueeze(-1)
 
         logits = self.controller(group_feats)
+        return head_to_group, logits
+
+    def choose_windows(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        should_update = self.cached_final_idx is None or (self.step % max(1, int(self.config.control_interval)) == 0)
+        self.step += 1
+        if not should_update:
+            return self.cached_raw_idx.to(q.device), self.cached_final_idx.to(q.device)
+
+        head_to_group, logits = self.controller_logits(q, k, v)
+        n_groups = logits.size(0)
         raw_group_idx = logits.argmax(dim=-1)
         final_group_idx = raw_group_idx
         if self.config.parent_constraint and self.config.regime in {"full_adaptive", "deep_practical_reuse", "shallow_freeze"}:
@@ -230,6 +235,42 @@ def grouped_local_attention(
     return out, attn_weights_out, stats
 
 
+def soft_window_local_attention(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    head_window_probs: torch.Tensor,
+    windows: Tuple[int, ...],
+    scale: float,
+    attention_mask: Optional[torch.Tensor],
+) -> Tuple[torch.Tensor, Dict[str, float]]:
+    bsz, n_heads, t, _ = q.shape
+    out = torch.zeros_like(q)
+    total_elements = 0.0
+    for idx, window_value in enumerate(windows):
+        window = min(int(window_value), t)
+        scores = torch.matmul(q, k.transpose(-2, -1)) * scale
+        mask = build_local_mask(t, window, q.device)
+        scores = scores.masked_fill(~mask.view(1, 1, t, t), torch.finfo(scores.dtype).min)
+        if attention_mask is not None and attention_mask.dim() == 4:
+            scores = scores + attention_mask[:, :, :t, :t]
+        elif attention_mask is not None and attention_mask.dim() == 2:
+            pad_mask = attention_mask[:, None, None, :t].to(dtype=torch.bool)
+            scores = scores.masked_fill(~pad_mask, torch.finfo(scores.dtype).min)
+        probs = F.softmax(scores.float(), dim=-1).to(q.dtype)
+        y = torch.matmul(probs, v)
+        weight = head_window_probs[:, idx].to(dtype=q.dtype).view(1, n_heads, 1, 1)
+        out = out + y * weight
+        total_elements += float(bsz * t * window) * float(head_window_probs[:, idx].detach().float().sum().item())
+    baseline_elements = float(bsz * n_heads * t * t)
+    stats = {
+        "total_elements": total_elements,
+        "baseline_elements": baseline_elements,
+        "ACR": total_elements / baseline_elements if baseline_elements > 0 else 1.0,
+    }
+    return out, stats
+
+
 def make_aah_forward(attn: nn.Module, state: AAHRuntimeState):
     def forward(
         self,
@@ -290,18 +331,35 @@ def make_aah_forward(attn: nn.Module, state: AAHRuntimeState):
         k = repeat_kv(k, n_rep)
         v = repeat_kv(v, n_rep)
 
-        raw_idx, final_idx = state.choose_windows(q, k, v)
         scale = float(getattr(self, "scaling", head_dim ** -0.5))
-        attn_output, attn_weights, stats = grouped_local_attention(
-            q,
-            k,
-            v,
-            final_idx,
-            state.config.windows,
-            scale,
-            attention_mask,
-            output_attentions=output_attentions,
-        )
+        if state.training:
+            head_to_group, logits = state.controller_logits(q, k, v)
+            group_probs = F.softmax(logits.float(), dim=-1).to(q.dtype)
+            head_window_probs = group_probs[head_to_group]
+            raw_idx = head_window_probs.argmax(dim=-1)
+            final_idx = raw_idx
+            attn_output, stats = soft_window_local_attention(
+                q,
+                k,
+                v,
+                head_window_probs,
+                state.config.windows,
+                scale,
+                attention_mask,
+            )
+            attn_weights = None
+        else:
+            raw_idx, final_idx = state.choose_windows(q, k, v)
+            attn_output, attn_weights, stats = grouped_local_attention(
+                q,
+                k,
+                v,
+                final_idx,
+                state.config.windows,
+                scale,
+                attention_mask,
+                output_attentions=output_attentions,
+            )
         attn_output = attn_output.transpose(1, 2).contiguous().reshape(bsz, q_len, num_heads * head_dim)
         attn_output = self.o_proj(attn_output)
 
