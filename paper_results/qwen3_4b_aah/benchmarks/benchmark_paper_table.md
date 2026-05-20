@@ -1,9 +1,9 @@
-| Method | MMLU | MMLU-Pro | GPQA-Diamond | BBH | ARC-Challenge | HellaSwag | TriviaQA | GSM8K | MGSM | MATH | CMath | HumanEval | MBPP | CMMLU | C-Eval | Overall |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Full attention | 70.9 | 28.5 | 34.8 | 0.0 | 86.3 | 44.3 | 37.5 | 13.3 | 0.0 | -- | 0.0 | 34.4 | 3.1 | -- | 71.5 | 32.7 |
-| Full adaptive | 71.1 | 27.7 | 34.3 | 0.0 | 86.3 | 44.3 | 37.5 | 13.3 | 0.0 | -- | 0.0 | 34.4 | 3.1 | -- | 71.5 | 32.6 |
-| Deep practical reuse | 70.9 | 27.7 | 34.3 | 0.0 | 86.3 | 44.3 | 37.5 | 13.3 | 0.0 | -- | 0.0 | 34.4 | 3.1 | -- | 71.5 | 32.6 |
-| Shallow freeze | 70.7 | 27.7 | 33.8 | 0.0 | 86.3 | 44.3 | 37.5 | 14.8 | 0.0 | -- | 0.0 | 34.4 | 3.1 | -- | 71.5 | 32.6 |
-| Grouping off | 70.9 | 28.5 | 35.4 | 0.0 | 86.3 | 44.5 | 37.5 | 13.3 | 0.0 | -- | 0.0 | 34.4 | 3.1 | -- | 71.9 | 32.8 |
+| Method | MMLU | MMLU-Pro | GPQA-Diamond | ARC-Challenge | HellaSwag | TriviaQA | GSM8K | HumanEval | MBPP | C-Eval |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Full attention | 70.9 | 28.5 | 34.8 | 86.3 | 44.3 | 37.5 | 13.3 | 34.4 | 3.1 | 71.5 |
+| Full adaptive | 71.1 | 27.7 | 34.3 | 86.3 | 44.3 | 37.5 | 13.3 | 34.4 | 3.1 | 71.5 |
+| Deep practical reuse | 70.9 | 27.7 | 34.3 | 86.3 | 44.3 | 37.5 | 13.3 | 34.4 | 3.1 | 71.5 |
+| Shallow freeze | 70.7 | 27.7 | 33.8 | 86.3 | 44.3 | 37.5 | 14.8 | 34.4 | 3.1 | 71.5 |
+| Grouping off | 70.9 | 28.5 | 35.4 | 86.3 | 44.5 | 37.5 | 13.3 | 34.4 | 3.1 | 71.9 |
 
-Scores are percentages. `--` indicates that the task failed or was unavailable in this capped run.
+Scores are percentages. We evaluated Qwen3-4B-Base with the same tokenizer, context length 4096, bf16 inference, and identical fixed evaluation subsets across all methods. Multiple-choice tasks were scored by normalized log-likelihood over answer choices. Open-ended QA/math tasks used greedy decoding with temperature 0 and exact-match style answer extraction. Code tasks used greedy decoding and pass@1 execution against the provided unit tests. AAH variants used the pretrained Qwen3 backbone with the corresponding adapted AAH controller/topology parameters loaded; the full-attention row uses the original Qwen3 attention path.
