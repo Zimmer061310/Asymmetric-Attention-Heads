@@ -23,11 +23,13 @@ MODEL_NAME = "Qwen/Qwen3-4B-Base"
 
 REGIMES = [
     ("qwen3_4b_full_attention_baseline", "full_attention_baseline"),
-    ("qwen3_4b_grouping_off", "grouping_off"),
     ("qwen3_4b_full_adaptive", "full_adaptive"),
-    ("qwen3_4b_shallow_freeze", "shallow_freeze"),
     ("qwen3_4b_deep_practical_reuse", "deep_practical_reuse"),
+    ("qwen3_4b_shallow_freeze", "shallow_freeze"),
+    ("qwen3_4b_grouping_off", "grouping_off"),
 ]
+
+METHOD_ORDER = {method: i for i, (method, _) in enumerate(REGIMES)}
 
 TASKS = [
     "mmlu",
@@ -302,7 +304,7 @@ class Runner:
             grouped.setdefault(method, {}).setdefault(group, []).append(score)
             grouped.setdefault(method, {}).setdefault("overall", []).append(score)
         out = []
-        for method in sorted(grouped):
+        for method in sorted(grouped, key=lambda name: (METHOD_ORDER.get(name, len(METHOD_ORDER)), name)):
             def avg(name):
                 vals = grouped[method].get(name, [])
                 return f"{sum(vals) / len(vals):.6f}" if vals else ""
