@@ -223,16 +223,25 @@ def load_mc_examples(task, max_samples):
         return
 
     if task == "gpqa_diamond":
-        ds = load_dataset("Idavidrein/gpqa", "gpqa_diamond")
-        split = choose_split(ds, ("train", "test", "validation"))
-        for row in limited_iter(ds[split], max_samples):
-            choices = [
-                row.get("Correct Answer", ""),
-                row.get("Incorrect Answer 1", ""),
-                row.get("Incorrect Answer 2", ""),
-                row.get("Incorrect Answer 3", ""),
-            ]
-            yield build_mc_prompt(row.get("Question", ""), choices), 0
+        try:
+            ds = load_dataset("Idavidrein/gpqa", "gpqa_diamond")
+            split = choose_split(ds, ("train", "test", "validation"))
+            for row in limited_iter(ds[split], max_samples):
+                choices = [
+                    row.get("Correct Answer", ""),
+                    row.get("Incorrect Answer 1", ""),
+                    row.get("Incorrect Answer 2", ""),
+                    row.get("Incorrect Answer 3", ""),
+                ]
+                yield build_mc_prompt(row.get("Question", ""), choices), 0
+        except Exception:
+            # The original GPQA repository can be gated. This public mirror stores
+            # the Diamond questions with choices already embedded in the prompt.
+            ds = load_dataset("fingertap/GPQA-Diamond")
+            split = choose_split(ds, ("test", "train", "validation"))
+            for row in limited_iter(ds[split], max_samples):
+                prompt = f"{str(row.get('question', '')).strip()}\n\nAnswer:"
+                yield (prompt, ["A", "B", "C", "D"]), answer_to_index(row.get("answer"))
         return
 
     if task == "arc_challenge":
