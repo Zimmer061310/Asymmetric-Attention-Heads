@@ -291,6 +291,9 @@ def benchmark(args) -> None:
     model, tokenizer, states, device = load_qwen_model(args, args.regime, args.adapter)
     scorer = HFScorer(model, tokenizer, device, args.seq_len, args.precision)
     tasks = [t.strip() for item in args.tasks for t in item.split(",") if t.strip()]
+    task_sample_limits = {}
+    if args.task_sample_limits:
+        task_sample_limits = json.loads(args.task_sample_limits)
     ckpt_sha = sha256_text(f"{args.model}:{args.regime}:{args.adapter or 'base'}")
     if args.adapter and os.path.exists(args.adapter):
         ckpt_sha = file_sha256(args.adapter)
@@ -298,16 +301,17 @@ def benchmark(args) -> None:
     failures = []
     missing = []
     for task in tasks:
+        task_max_samples = int(task_sample_limits.get(task, args.max_samples_per_task))
         t0 = time.time()
         try:
             if task in {"mmlu", "mmlu_pro", "gpqa_diamond", "arc_challenge", "hellaswag", "cmmlu", "ceval"}:
-                (score, stderr), n_examples = score_mc(scorer, task, args.max_samples_per_task)
+                (score, stderr), n_examples = score_mc(scorer, task, task_max_samples)
                 metric = "accuracy"
             elif task in {"triviaqa", "gsm8k", "mgsm", "math", "cmath", "bbh"}:
-                (score, stderr), n_examples = score_generation(scorer, task, args.max_samples_per_task)
+                (score, stderr), n_examples = score_generation(scorer, task, task_max_samples)
                 metric = "exact_match"
             elif task in {"humaneval", "mbpp"}:
-                (score, stderr), n_examples = score_code(scorer, task, args.max_samples_per_task, args.code_timeout_s)
+                (score, stderr), n_examples = score_code(scorer, task, task_max_samples, args.code_timeout_s)
                 metric = "pass@1"
             else:
                 missing.append({"task": task, "reason": "unknown task alias"})
@@ -377,6 +381,7 @@ def main():
     p_bench.add_argument("--method", required=True)
     p_bench.add_argument("--tasks", nargs="+", default=DEFAULT_TASKS)
     p_bench.add_argument("--max-samples-per-task", type=int, default=0)
+    p_bench.add_argument("--task-sample-limits", default="")
     p_bench.add_argument("--checkpoint-step", type=int, default=0)
     p_bench.add_argument("--code-timeout-s", type=int, default=5)
     p_bench.set_defaults(func=benchmark)

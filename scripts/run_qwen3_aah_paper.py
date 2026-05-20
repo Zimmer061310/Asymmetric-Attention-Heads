@@ -49,6 +49,24 @@ TASKS = [
     "ceval",
 ]
 
+FAST_PAPER_SAMPLE_LIMITS = {
+    "mmlu": 512,
+    "mmlu_pro": 256,
+    "gpqa_diamond": 198,
+    "bbh": 128,
+    "arc_challenge": 256,
+    "hellaswag": 512,
+    "triviaqa": 128,
+    "gsm8k": 128,
+    "mgsm": 100,
+    "math": 64,
+    "cmath": 64,
+    "humaneval": 32,
+    "mbpp": 32,
+    "cmmlu": 256,
+    "ceval": 256,
+}
+
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -240,6 +258,8 @@ class Runner:
             "--tasks",
             ",".join(tasks),
         ]
+        if log_suffix == "full" and self.args.benchmark_profile == "fast_paper":
+            cmd.extend(["--task-sample-limits", json.dumps(FAST_PAPER_SAMPLE_LIMITS, sort_keys=True)])
         adapter = self.adapter_path(regime)
         if regime != "full_attention_baseline":
             cmd.extend(["--adapter", adapter])
@@ -363,6 +383,7 @@ def main():
     parser.add_argument("--dataset-config", default="wikitext-103-v1")
     parser.add_argument("--split", default="train")
     parser.add_argument("--max-samples-per-task", type=int, default=0)
+    parser.add_argument("--benchmark-profile", choices=["full", "fast_paper"], default="fast_paper")
     parser.add_argument("--sanity-samples", type=int, default=20)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--skip-pip-install", action="store_true")

@@ -175,6 +175,10 @@ def limited_iter(ds, max_samples):
             break
 
 
+def cap_reached(max_samples, count):
+    return bool(max_samples and count >= max_samples)
+
+
 def answer_to_index(answer, labels=None):
     if isinstance(answer, int):
         return answer
@@ -206,11 +210,15 @@ def load_mc_examples(task, max_samples):
         configs = ["all"]
         if "all" not in safe_configs("cais/mmlu", ["all"]):
             configs = safe_configs("cais/mmlu", [])
+        emitted = 0
         for config in configs:
             ds = load_dataset("cais/mmlu", config)
             split = choose_split(ds, ("test", "validation", "dev"))
             for row in limited_iter(ds[split], max_samples):
+                if cap_reached(max_samples, emitted):
+                    return
                 choices = row.get("choices") or [row.get(k) for k in ["A", "B", "C", "D"] if row.get(k) is not None]
+                emitted += 1
                 yield build_mc_prompt(row.get("question", ""), choices), answer_to_index(row.get("answer"))
         return
 
@@ -269,13 +277,17 @@ def load_mc_examples(task, max_samples):
         available = safe_configs("haonan-li/cmmlu", [])
         if "all" not in available and available:
             configs = available
+        emitted = 0
         for config in configs:
             ds = load_dataset("haonan-li/cmmlu", config)
             split = choose_split(ds, ("test", "dev", "validation"))
             for row in limited_iter(ds[split], max_samples):
+                if cap_reached(max_samples, emitted):
+                    return
                 choices = [row.get(k, "") for k in ["A", "B", "C", "D"]]
                 question = row.get("Question") or row.get("question") or ""
                 answer = row.get("Answer") or row.get("answer")
+                emitted += 1
                 yield build_mc_prompt(question, choices), answer_to_index(answer)
         return
 
@@ -284,13 +296,17 @@ def load_mc_examples(task, max_samples):
         available = safe_configs("ceval/ceval-exam", [])
         if "all" not in available and available:
             configs = available
+        emitted = 0
         for config in configs:
             ds = load_dataset("ceval/ceval-exam", config)
             split = choose_split(ds, ("test", "val", "validation", "dev"))
             for row in limited_iter(ds[split], max_samples):
+                if cap_reached(max_samples, emitted):
+                    return
                 choices = [row.get(k, "") for k in ["A", "B", "C", "D"]]
                 question = row.get("question") or row.get("Question") or ""
                 answer = row.get("answer") or row.get("Answer")
+                emitted += 1
                 yield build_mc_prompt(question, choices), answer_to_index(answer)
         return
 
@@ -315,10 +331,14 @@ def load_generation_examples(task, max_samples):
 
     if task == "mgsm":
         configs = [c for c in ["en", "zh"] if c in safe_configs("juletxara/mgsm", ["en"])] or ["en"]
+        emitted = 0
         for config in configs:
             ds = load_dataset("juletxara/mgsm", config)
             split = choose_split(ds, ("test", "validation"))
             for row in limited_iter(ds[split], max_samples):
+                if cap_reached(max_samples, emitted):
+                    return
+                emitted += 1
                 yield f"Question: {row.get('question', '')}\nAnswer:", row.get("answer", ""), "number"
         return
 
@@ -353,10 +373,14 @@ def load_generation_examples(task, max_samples):
         configs = safe_configs("lukaemon/bbh", [])
         if not configs:
             raise RuntimeError("No BBH configs found")
+        emitted = 0
         for config in configs:
             ds = load_dataset("lukaemon/bbh", config)
             split = choose_split(ds, ("test", "validation", "train"))
             for row in limited_iter(ds[split], max_samples):
+                if cap_reached(max_samples, emitted):
+                    return
+                emitted += 1
                 yield f"{row.get('input', '')}\nAnswer:", row.get("target", ""), "exact"
         return
 
@@ -496,7 +520,7 @@ def score_mc(scorer, task, max_samples):
 def score_generation(scorer, task, max_samples):
     scores = []
     n = 0
-    max_new = 96 if task in ("triviaqa", "gsm8k", "mgsm", "math", "cmath") else 128
+    max_new = 64 if task in ("triviaqa", "gsm8k", "mgsm", "math", "cmath") else 96
     for prompt, gold, mode in load_generation_examples(task, max_samples):
         pred = scorer.greedy(prompt, max_new)
         if mode == "number":
@@ -545,7 +569,7 @@ def score_code(scorer, task, max_samples, code_timeout_s):
     scores = []
     n = 0
     for row in load_code_examples(task, max_samples):
-        completion = scorer.greedy(row["prompt"], max_new_tokens=192)
+        completion = scorer.greedy(row["prompt"], max_new_tokens=96)
         source = row["prompt"] + completion
         ok = run_python_tests(source, row["tests"], row.get("entry_point", ""), code_timeout_s)
         scores.append(1.0 if ok else 0.0)
