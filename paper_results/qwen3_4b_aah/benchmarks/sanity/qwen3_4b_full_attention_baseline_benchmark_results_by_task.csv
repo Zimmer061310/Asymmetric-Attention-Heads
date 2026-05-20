@@ -1,0 +1,4 @@
+method,checkpoint_step,task,metric,score,stderr_or_std,n_examples,checkpoint_sha256,eval_runtime_s,task_group
+qwen3_4b_full_attention_baseline,0,arc_challenge,accuracy,0.80000000,0.09176629,20,ab512c42eb4622545690d9e76c13bcb068c3faaadb66010c85f983f906ab80bc,12.04,core
+qwen3_4b_full_attention_baseline,0,hellaswag,accuracy,0.35000000,0.10942433,20,ab512c42eb4622545690d9e76c13bcb068c3faaadb66010c85f983f906ab80bc,10.08,core
+qwen3_4b_full_attention_baseline,0,gsm8k,exact_match,0.15000000,0.08191780,20,ab512c42eb4622545690d9e76c13bcb068c3faaadb66010c85f983f906ab80bc,64.37,math_code

@@ -1,0 +1,12 @@
+{
+  "aah_summary": {
+    "mean_ACR": 1.0,
+    "n_layers": 36
+  },
+  "diagnostics_csv": "/home/featurize/data/AAH-qwen3-4b-paper/scratch/qwen3_4b_grouping_off/smoke/grouping_off_smoke_heatmap.csv",
+  "generated_text": "The purpose of adaptive attention is to allow the model to focus on different parts of the input sequence depending on the task at hand. For example, in a machine translation task, the model may",
+  "logits_finite": true,
+  "loss": 5.636561393737793,
+  "model": "Qwen/Qwen3-4B-Base",
+  "regime": "grouping_off"
+}

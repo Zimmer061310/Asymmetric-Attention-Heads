@@ -1,0 +1,42 @@
+[
+  {
+    "error": "DatasetNotFoundError(\"Dataset 'hendrycks/competition_math' doesn't exist on the Hub or cannot be accessed.\")",
+    "task": "math"
+  },
+  {
+    "error": "RuntimeError('Dataset scripts are no longer supported, but found cmmlu.py')",
+    "task": "cmmlu"
+  },
+  {
+    "error": "DatasetNotFoundError(\"Dataset 'hendrycks/competition_math' doesn't exist on the Hub or cannot be accessed.\")",
+    "task": "math"
+  },
+  {
+    "error": "RuntimeError('Dataset scripts are no longer supported, but found cmmlu.py')",
+    "task": "cmmlu"
+  },
+  {
+    "error": "DatasetNotFoundError(\"Dataset 'hendrycks/competition_math' doesn't exist on the Hub or cannot be accessed.\")",
+    "task": "math"
+  },
+  {
+    "error": "RuntimeError('Dataset scripts are no longer supported, but found cmmlu.py')",
+    "task": "cmmlu"
+  },
+  {
+    "error": "DatasetNotFoundError(\"Dataset 'hendrycks/competition_math' doesn't exist on the Hub or cannot be accessed.\")",
+    "task": "math"
+  },
+  {
+    "error": "RuntimeError('Dataset scripts are no longer supported, but found cmmlu.py')",
+    "task": "cmmlu"
+  },
+  {
+    "error": "DatasetNotFoundError(\"Dataset 'hendrycks/competition_math' doesn't exist on the Hub or cannot be accessed.\")",
+    "task": "math"
+  },
+  {
+    "error": "RuntimeError('Dataset scripts are no longer supported, but found cmmlu.py')",
+    "task": "cmmlu"
+  }
+]

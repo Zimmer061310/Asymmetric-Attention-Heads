@@ -1,0 +1,14 @@
+method,checkpoint_step,task,metric,score,stderr_or_std,n_examples,checkpoint_sha256,eval_runtime_s,task_group
+qwen3_4b_full_adaptive,0,mmlu,accuracy,0.71093750,0.02005401,512,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,116.17,core
+qwen3_4b_full_adaptive,0,mmlu_pro,accuracy,0.27734375,0.02803529,256,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,141.85,core
+qwen3_4b_full_adaptive,0,gpqa_diamond,accuracy,0.34343434,0.03383201,198,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,49.78,core
+qwen3_4b_full_adaptive,0,bbh,exact_match,0.00000000,0.00000000,128,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,616.67,core
+qwen3_4b_full_adaptive,0,arc_challenge,accuracy,0.86328125,0.02151395,256,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,58.62,core
+qwen3_4b_full_adaptive,0,hellaswag,accuracy,0.44335938,0.02197632,512,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,112.80,core
+qwen3_4b_full_adaptive,0,triviaqa,exact_match,0.37500000,0.04295896,128,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,210.80,core
+qwen3_4b_full_adaptive,0,gsm8k,exact_match,0.13281250,0.03011439,128,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,499.47,math_code
+qwen3_4b_full_adaptive,0,mgsm,exact_match,0.00000000,0.00000000,100,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,366.30,math_code
+qwen3_4b_full_adaptive,0,cmath,exact_match,0.00000000,0.00000000,64,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,177.56,math_code
+qwen3_4b_full_adaptive,0,humaneval,pass@1,0.34375000,0.08530513,32,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,132.48,math_code
+qwen3_4b_full_adaptive,0,mbpp,pass@1,0.03125000,0.03125000,32,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,164.21,math_code
+qwen3_4b_full_adaptive,0,ceval,accuracy,0.71484375,0.02827333,256,5c305c0ee17ab41b592b34bfbe44646f9ada1746de3f383d06599639ab74f491,80.46,chinese
