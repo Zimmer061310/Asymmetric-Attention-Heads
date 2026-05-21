@@ -84,17 +84,20 @@ The Qwen3 benchmark table is a capped-subset compatibility check, not an
 official full benchmark report. The custom 1B/4096 suite is the main
 mechanism/efficiency evidence for ACR and hierarchy diagnostics.
 
+## License
+
+This repository is released under the Apache License 2.0. See `LICENSE`.
+
 ## Repository Release Checklist
 
 Before making the repository public:
 
-1. Choose and add an explicit open-source license.
-2. Add the final arXiv citation and link.
-3. Confirm the paper's unresolved provenance fields are either completed or
+1. Add the final arXiv citation and link.
+2. Confirm the paper's unresolved provenance fields are either completed or
    clearly marked as limitations.
-4. Keep checkpoints out of Git; publish large artifacts through an artifact
+3. Keep checkpoints out of Git; publish large artifacts through an artifact
    store with SHA-256 hashes.
-5. Verify no private tokens, server passwords, raw W&B credentials, or local
+4. Verify no private tokens, server passwords, raw W&B credentials, or local
    machine paths are committed.
 
 ## Citation
