@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2600" height="1450" viewBox="0 0 2600 1450">
+<defs>
+<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L10,6 L2,10 Z" fill="#1F2937"/></marker>
+<filter id="shadow" x="-5%" y="-5%" width="110%" height="110%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.08"/></filter>
+<style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; } .panel { filter:url(#shadow); }</style>
+</defs><rect x="0" y="0" width="2600" height="1450" fill="#fff"/>
+
+<text x="1300.0" y="62" font-size="40" font-weight="750" fill="#1F2937" text-anchor="middle">Figure X: Overview of AAH-v3</text>
+<text x="1300.0" y="105" font-size="26" font-weight="400" fill="#4B5563" text-anchor="middle">AAH-v3 augments standard attention with learned hierarchy construction, joint sibling scoring, and grouped local causal execution.</text>
+<rect class="panel" x="70" y="165" width="570" height="1085" rx="24" fill="#fff" stroke="#CBD5E1" stroke-width="1.8"/>
+<text x="355.0" y="223" font-size="29" font-weight="750" fill="#1F2937" text-anchor="middle">(a) Standard Attention</text>
+<rect class="panel" x="715" y="165" width="1125" height="1085" rx="24" fill="#fff" stroke="#CBD5E1" stroke-width="1.8"/>
+<text x="1277.5" y="223" font-size="29" font-weight="750" fill="#1F2937" text-anchor="middle">(b) AAH-v3 Control Pipeline</text>
+<rect class="panel" x="1915" y="165" width="615" height="1085" rx="24" fill="#fff" stroke="#CBD5E1" stroke-width="1.8"/>
+<text x="2222.5" y="223" font-size="29" font-weight="750" fill="#1F2937" text-anchor="middle">(c) Grouped Local Execution</text>
+<rect class="" x="200.0" y="255" width="310" height="88" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+<text x="355.0" y="306.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">Input hidden states</text>
+<rect class="" x="200.0" y="405" width="310" height="88" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+<text x="355.0" y="456.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">Q, K, V projection</text>
+<line x1="355.0" y1="343" x2="355.0" y2="405" stroke="#1F2937" stroke-width="2.8" marker-end="url(#arrow)"/>
+<rect class="" x="200.0" y="570" width="310" height="118" rx="16" fill="#DFF4E4" stroke="#23864A" stroke-width="2"/>
+<text x="355.0" y="623.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">Per-head full</text>
+<text x="355.0" y="649.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">causal attention</text>
+<line x1="355.0" y1="493" x2="355.0" y2="570" stroke="#1F2937" stroke-width="2.8" marker-end="url(#arrow)"/>
+<rect class="" x="200.0" y="780" width="310" height="88" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+<text x="355.0" y="831.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">Output</text>
+<line x1="355.0" y1="688" x2="355.0" y2="780" stroke="#1F2937" stroke-width="2.8" marker-end="url(#arrow)"/>
+<rect class="" x="205.0" y="720" width="60" height="38" rx="19.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="235.0" y="745.0" font-size="16" font-weight="650" fill="#1F2937" text-anchor="middle">h1</text>
+<line x1="235.0" y1="688" x2="235.0" y2="720" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="285.0" y="720" width="60" height="38" rx="19.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="315.0" y="745.0" font-size="16" font-weight="650" fill="#1F2937" text-anchor="middle">h2</text>
+<line x1="315.0" y1="688" x2="315.0" y2="720" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="365.0" y="720" width="60" height="38" rx="19.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="395.0" y="745.0" font-size="16" font-weight="650" fill="#1F2937" text-anchor="middle">h3</text>
+<line x1="395.0" y1="688" x2="395.0" y2="720" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="445.0" y="720" width="60" height="38" rx="19.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="475.0" y="745.0" font-size="16" font-weight="650" fill="#1F2937" text-anchor="middle">h4</text>
+<line x1="475.0" y1="688" x2="475.0" y2="720" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="760" y="255" width="310" height="90" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+<text x="915.0" y="307.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Per-head Q/K/V</text>
+<rect class="" x="760" y="385" width="310" height="90" rx="16" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="2"/>
+<text x="915.0" y="424.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Base head features</text>
+<text x="915.0" y="450.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Q/K/V stats + prior usage</text>
+<line x1="915.0" y1="345" x2="915.0" y2="385" stroke="#2F6FCB" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect class="" x="760" y="515" width="310" height="90" rx="16" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="2"/>
+<text x="915.0" y="567.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">EMA smoothing</text>
+<line x1="915.0" y1="475" x2="915.0" y2="515" stroke="#2F6FCB" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect class="" x="760" y="645" width="310" height="90" rx="16" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="2"/>
+<text x="915.0" y="684.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Level-0 grouping</text>
+<text x="915.0" y="710.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">cosine + fallback</text>
+<line x1="915.0" y1="605" x2="915.0" y2="645" stroke="#2F6FCB" stroke-width="2.2" marker-end="url(#arrow)"/>
+<rect class="" x="760" y="775" width="310" height="90" rx="16" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="2"/>
+<text x="915.0" y="814.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Upper hierarchy</text>
+<text x="915.0" y="840.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">cosine_normdiff</text>
+<line x1="915.0" y1="735" x2="915.0" y2="775" stroke="#2F6FCB" stroke-width="2.2" marker-end="url(#arrow)"/>
+<text x="1215" y="615" font-size="18" font-weight="650" fill="#4B5563" text-anchor="middle">learned hierarchy</text>
+<line x1="1215" y1="655" x2="1160" y2="725" stroke="#2F6FCB" stroke-width="1.8"/>
+<line x1="1215" y1="655" x2="1270" y2="725" stroke="#2F6FCB" stroke-width="1.8"/>
+<line x1="1160" y1="725" x2="1130" y2="795" stroke="#2F6FCB" stroke-width="1.8"/>
+<line x1="1160" y1="725" x2="1188" y2="795" stroke="#2F6FCB" stroke-width="1.8"/>
+<line x1="1270" y1="725" x2="1242" y2="795" stroke="#2F6FCB" stroke-width="1.8"/>
+<line x1="1270" y1="725" x2="1300" y2="795" stroke="#2F6FCB" stroke-width="1.8"/>
+<rect class="" x="1201" y="641" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1146" y="711" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1256" y="711" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1116" y="781" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1174" y="781" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1228" y="781" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1286" y="781" width="28" height="28" rx="6" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.5"/>
+<rect class="" x="1365" y="255" width="410" height="104" rx="16" fill="#FFE5BE" stroke="#D97706" stroke-width="2"/>
+<text x="1570.0" y="301.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Enriched controller inputs</text>
+<text x="1570.0" y="327.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">level | parent diff | offset | size</text>
+<rect class="" x="1365" y="425" width="410" height="118" rx="16" fill="#FFE5BE" stroke="#D97706" stroke-width="2"/>
+<text x="1570.0" y="478.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Wide joint sibling scorer</text>
+<text x="1570.0" y="504.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">pair: [u_a, u_b, u_a-u_b, u_b-u_a]</text>
+<line x1="1570.0" y1="359" x2="1570.0" y2="425" stroke="#D97706" stroke-width="2.4" marker-end="url(#arrow)"/>
+<rect class="" x="1365" y="615" width="410" height="104" rx="16" fill="#FFE5BE" stroke="#D97706" stroke-width="2"/>
+<text x="1570.0" y="661.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Top-down parent constraint</text>
+<text x="1570.0" y="687.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">child index &lt;= parent index</text>
+<line x1="1570.0" y1="543" x2="1570.0" y2="615" stroke="#D97706" stroke-width="2.4" marker-end="url(#arrow)"/>
+<rect class="" x="1365" y="785" width="410" height="90" rx="16" fill="#FFE5BE" stroke="#D97706" stroke-width="2"/>
+<text x="1570.0" y="837.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">Head-level window assignment</text>
+<line x1="1570.0" y1="719" x2="1570.0" y2="785" stroke="#D97706" stroke-width="2.4" marker-end="url(#arrow)"/>
+<path d="M 1070 820 C 1125 850, 1210 330, 1365 307" fill="none" stroke="#2F6FCB" stroke-width="2.2" stroke-dasharray="8 7" marker-end="url(#arrow)"/>
+<path d="M 1775 830 C 1840 830, 1870 520, 1915 520" fill="none" stroke="#1F2937" stroke-width="3" marker-end="url(#arrow)"/>
+<rect class="" x="765" y="1015" width="310" height="84" rx="14" fill="#FFF8D6" stroke="#D0A300" stroke-width="1.7"/>
+<text x="920.0" y="1051.0" font-size="18" font-weight="650" fill="#1F2937" text-anchor="middle">wide joint scoring breaks</text>
+<text x="920.0" y="1073.0" font-size="18" font-weight="650" fill="#1F2937" text-anchor="middle">sibling-symmetry collapse</text>
+<rect class="" x="1115" y="1015" width="300" height="84" rx="14" fill="#FFF8D6" stroke="#D0A300" stroke-width="1.7"/>
+<text x="1265.0" y="1051.0" font-size="18" font-weight="650" fill="#1F2937" text-anchor="middle">shallow [2] and deep</text>
+<text x="1265.0" y="1073.0" font-size="18" font-weight="650" fill="#1F2937" text-anchor="middle">[2,2,2,2] supported</text>
+<rect class="" x="1460" y="1015" width="300" height="84" rx="14" fill="#FFF8D6" stroke="#D0A300" stroke-width="1.7"/>
+<text x="1610.0" y="1051.0" font-size="18" font-weight="650" fill="#1F2937" text-anchor="middle">current successful regime</text>
+<text x="1610.0" y="1073.0" font-size="18" font-weight="650" fill="#1F2937" text-anchor="middle">uses no ramp</text>
+<rect class="" x="2077.5" y="255" width="290" height="90" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+<text x="2222.5" y="307.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">Assigned heads</text>
+<rect class="" x="1996.5" y="405" width="72" height="42" rx="21.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="2032.5" y="432.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">h1</text>
+<line x1="2222.5" y1="345" x2="2032.5" y2="405" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="2121.5" y="405" width="72" height="42" rx="21.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="2157.5" y="432.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">h2</text>
+<line x1="2222.5" y1="345" x2="2157.5" y2="405" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="2251.5" y="405" width="72" height="42" rx="21.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="2287.5" y="432.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">h3</text>
+<line x1="2222.5" y1="345" x2="2287.5" y2="405" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="2376.5" y="405" width="72" height="42" rx="21.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="2412.5" y="432.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">h4</text>
+<line x1="2222.5" y1="345" x2="2412.5" y2="405" stroke="#23864A" stroke-width="1.7"/>
+<rect class="" x="2020" y="530" width="405" height="70" rx="16" fill="#DFF4E4" stroke="#23864A" stroke-width="2"/>
+<text x="2222.5" y="572.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">local causal window 64</text>
+<line x1="2032.5" y1="447" x2="2220" y2="530" stroke="#23864A" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect class="" x="2045" y="550" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="550" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="550" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="550" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="550" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="557" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="557" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="557" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="557" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="557" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="564" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2052" y="564" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="564" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="564" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="564" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="571" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2052" y="571" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="571" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="571" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="571" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="578" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2052" y="578" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="578" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="578" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="578" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2020" y="650" width="405" height="70" rx="16" fill="#DFF4E4" stroke="#23864A" stroke-width="2"/>
+<text x="2222.5" y="692.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">local causal window 128</text>
+<line x1="2157.5" y1="447" x2="2220" y2="650" stroke="#23864A" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect class="" x="2045" y="670" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="670" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="670" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="670" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="670" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="677" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="677" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="677" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="677" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="677" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="684" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="684" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="684" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="684" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="684" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="691" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2052" y="691" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="691" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="691" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="691" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="698" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2052" y="698" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="698" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="698" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="698" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2020" y="770" width="405" height="70" rx="16" fill="#DFF4E4" stroke="#23864A" stroke-width="2"/>
+<text x="2222.5" y="812.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">local causal window 256</text>
+<line x1="2287.5" y1="447" x2="2220" y2="770" stroke="#23864A" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect class="" x="2045" y="790" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="790" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="790" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="790" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="790" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="797" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="797" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="797" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="797" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="797" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="804" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="804" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="804" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="804" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="804" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="811" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="811" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="811" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="811" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="811" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="818" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2052" y="818" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="818" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="818" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="818" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2020" y="890" width="405" height="70" rx="16" fill="#DFF4E4" stroke="#23864A" stroke-width="2"/>
+<text x="2222.5" y="932.0" font-size="20" font-weight="650" fill="#1F2937" text-anchor="middle">local causal window 512</text>
+<line x1="2412.5" y1="447" x2="2220" y2="890" stroke="#23864A" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect class="" x="2045" y="910" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="910" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2059" y="910" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="910" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="910" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="917" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="917" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="917" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2066" y="917" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="917" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="924" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="924" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="924" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="924" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2073" y="924" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="931" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="931" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="931" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="931" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="931" width="6" height="6" rx="1" fill="#E5E7EB" stroke="#E5E7EB" stroke-width="0"/>
+<rect class="" x="2045" y="938" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2052" y="938" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2059" y="938" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2066" y="938" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2073" y="938" width="6" height="6" rx="1" fill="#23864A" stroke="#23864A" stroke-width="0"/>
+<rect class="" x="2067.5" y="1070" width="310" height="90" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+<text x="2222.5" y="1122.0" font-size="22" font-weight="650" fill="#1F2937" text-anchor="middle">Final attention output</text>
+<path d="M 2425 565 C 2485 565, 2485 1115, 2377.5 1115" fill="none" stroke="#23864A" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+<path d="M 2425 685 C 2485 685, 2485 1115, 2377.5 1115" fill="none" stroke="#23864A" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+<path d="M 2425 805 C 2485 805, 2485 1115, 2377.5 1115" fill="none" stroke="#23864A" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+<path d="M 2425 925 C 2485 925, 2485 1115, 2377.5 1115" fill="none" stroke="#23864A" stroke-width="1.8" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+<rect class="" x="760" y="1345" width="150" height="42" rx="21.0" fill="#DCEBFF" stroke="#2F6FCB" stroke-width="1.8"/>
+<text x="835.0" y="1372.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">hierarchy</text>
+<rect class="" x="940" y="1345" width="165" height="42" rx="21.0" fill="#FFE5BE" stroke="#D97706" stroke-width="1.8"/>
+<text x="1022.5" y="1372.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">controller</text>
+<rect class="" x="1135" y="1345" width="150" height="42" rx="21.0" fill="#DFF4E4" stroke="#23864A" stroke-width="1.8"/>
+<text x="1210.0" y="1372.0" font-size="17" font-weight="650" fill="#1F2937" text-anchor="middle">execution</text>
+<line x1="1350" y1="1366" x2="1430" y2="1366" stroke="#1F2937" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="1450" y="1372" font-size="17" font-weight="500" fill="#4B5563" text-anchor="start">main flow</text>
+<line x1="1580" y1="1366" x2="1660" y2="1366" stroke="#1F2937" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#arrow)"/>
+<text x="1680" y="1372" font-size="17" font-weight="500" fill="#4B5563" text-anchor="start">control path</text>
+</svg>

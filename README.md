@@ -1,239 +1,112 @@
-# AI Research Plan
+# ENA-AAH-v3
 
-## Goals
+Research code and paper-result summaries for **Asymmetric Attention Heads
+(AAH-v3)**, an execution-aware extension of multi-head attention. AAH-v3 keeps
+the standard Transformer block interface while using a separate control path to
+assign different local causal attention windows to different heads or head
+groups.
 
-* Do AI research during vacation using Python in this repository.
-* Track both repo/code progress and research progress.
-* Produce a thesis with Prism based on our experiments and research.
+The repository is currently intended as a private research artifact until the
+paper is posted publicly. It does not include large model checkpoints, raw W&B
+run directories, or local virtual environments.
 
-## Roles
+## What Is Included
 
-* ChatGPT (teacher): research guidance, advice, teaching.
-* Warp (terminal runner): run code and manage repo files.
-* Prism (thesis writer): write thesis from experiment and research summaries.
-* This passage will sync to all three AI's prompt, AIs must update their Idea, Plan, Summary in this passage. current idea on the "Idea" paragraph, and the current works summarize on the "Summary" paragraph, and the current plan update on the "Plan" paragraph.
-* The repo is [https://github.com/Zimmer061310/Ena](https://github.com/Zimmer061310/Ena)
+- `src/models/transformer.py` contains the decoder-only Transformer baseline
+  and the AAH-v3 attention/controller implementation.
+- `scripts/train.py` and `scripts/infer.py` are the main local training and
+  inference/diagnostic entry points for the custom Transformer runs.
+- `scripts/qwen3_aah_patch.py` and `scripts/qwen3_aah_paper.py` contain the
+  Qwen3-4B compatibility utilities used for the capped downstream checks.
+- `configs/` contains experiment configuration files, including paper-facing
+  AAH-v3 regimes and earlier diagnostic variants.
+- `paper_results/` contains compact paper-facing result summaries, tables, and
+  diagnostic CSVs that are small enough to version.
 
-## Basic Plan
+## What Is Not Included
 
-1. Find the topic
-2. Do the research
-3. Write the thesis
+- `.pt` checkpoints and adapter weights.
+- Raw W&B run directories.
+- Local logs, scratch outputs, and Python virtual environments.
+- Datasets or downloaded Hugging Face model weights.
 
-## Hardware
+For release-quality reproduction, store large artifacts in an external artifact
+store and record immutable hashes or model revisions. The paper appendix lists
+remaining provenance fields that should be filled before claiming independent
+reproducibility.
 
-* MacBook Pro (M1 Pro)
-* PC with Radeon 7900XT GPU
+## Setup
 
-## Environment Snapshot (2026-01-31)
+Use Python 3.10+ with PyTorch. A minimal local setup is:
 
-### Conda
+```bash
+python -m pip install -r requirements.txt
+```
 
-* base: /opt/homebrew/Caskroom/miniconda/base
-* torch: /opt/homebrew/Caskroom/miniconda/base/envs/torch
+For Featurize-style remote runs, keep code and important model artifacts under
+`/home/featurize/work`, and use `/home/featurize/data` only for fast scratch
+storage.
 
-### Python venvs
+## Typical Commands
 
-* ~/venvs/base (Python 3.12.10)
-* ~/venvs/torch (Python 3.12.10)
+Train from a YAML config:
 
-### Key installed packages (venv base)
+```bash
+python scripts/train.py --config configs/aah_v3_base.yaml
+```
 
-* torch 2.10.0, transformers 5.0.0, datasets 4.5.0, accelerate 1.12.0, tokenizers 0.22.2
-* numpy 2.4.1, scipy 1.17.0, pandas 3.0.0, matplotlib 3.10.8
-* wandb 0.24.1, rich 14.3.1, loguru 0.7.3
+Run inference and collect diagnostics:
 
-### Key installed packages (venv torch)
+```bash
+python scripts/infer.py --config configs/aah_v3_base.yaml --checkpoint path/to/checkpoint.pt
+```
 
-* torch 2.10.0, torchvision 0.25.0, numpy 2.4.1, sympy 1.14.0, pillow 12.1.0
+Run the Qwen3-4B AAH paper workflow:
 
-## Plan
+```bash
+python scripts/run_qwen3_aah_paper.py --benchmark-profile fast_paper
+```
 
-### Phase 0 — Baseline and Scope Lock
+Exact flags may differ by config and checkpoint layout; inspect the target
+script's `--help` output before launching expensive runs.
 
-* Implement or reuse a standard decoder-only Transformer with vanilla multi-head attention (MHA).
-* Fix model scale (e.g. 100M–300M parameters) and datasets for all experiments.
-* Establish baseline metrics: perplexity, decode latency, attention head statistics.
+## Paper Result Files
 
-### Phase 0 — Immediate Action Items (Kickoff)
+Key compact result files are:
 
-* **Baseline model (v0):** decoder-only Transformer, GPT-2 tokenizer, seq len 512.
-* **Model scale:** start with a **small sanity model (~20–50M params)**, then scale to **~100M** for main runs.
-* **Datasets:**
-  * **Dev/sanity:** `wikitext-2-raw-v1`
-  * **Main (if resources allow):** `wikitext-103-raw-v1`
-* **Metrics:** validation perplexity, tokens/sec (train + eval), peak GPU memory, attention head entropy.
-* **Logging:** use `wandb` when available; otherwise log CSV locally.
+- `paper_results/aah_v3_4096_table1_training.csv`
+- `paper_results/aah_v3_4096_table2_inference.csv`
+- `paper_results/wandb_results_new/`
+- `paper_results/qwen3_4b_aah/benchmarks/benchmark_paper_table.md`
+- `paper_results/qwen3_4b_aah/benchmarks/benchmark_paper_table.tex`
 
-### Phase 1 — Asymmetric Attention Heads (AAH) Design
+The Qwen3 benchmark table is a capped-subset compatibility check, not an
+official full benchmark report. The custom 1B/4096 suite is the main
+mechanism/efficiency evidence for ACR and hierarchy diagnostics.
 
-* Define head partitions (e.g. short-range vs long-range heads).
-* Design at least two asymmetry mechanisms:
+## Repository Release Checklist
 
-  * **Range asymmetry:** different attention masks / context lengths per head group.
-  * **Resolution asymmetry:** downsampled keys/values for selected head groups.
-* Ensure output interface matches standard attention.
+Before making the repository public:
 
-### Phase 2 — Implementation
+1. Choose and add an explicit open-source license.
+2. Add the final arXiv citation and link.
+3. Confirm the paper's unresolved provenance fields are either completed or
+   clearly marked as limitations.
+4. Keep checkpoints out of Git; publish large artifacts through an artifact
+   store with SHA-256 hashes.
+5. Verify no private tokens, server passwords, raw W&B credentials, or local
+   machine paths are committed.
 
-* Modify the attention module to support heterogeneous head configurations.
-* Keep all non-attention components unchanged.
-* Support toggling AAH on/off for controlled ablation.
+## Citation
 
-### Phase 3 — Experiments
-
-* Sweep the proportion of asymmetric heads.
-* Measure:
-
-  * Accuracy / perplexity
-  * Training and inference cost
-  * Contribution and entropy per head group
-
-### Phase 4 — Analysis and Interpretation
-
-* Analyze which head types dominate information flow.
-* Identify failure modes (e.g. long-context degradation).
-* Compare against vanilla MHA under equal compute budgets.
-
-### Phase 5 — Write-up
-
-* Formalize AAH as an attention generalization.
-* Present empirical trade-offs and mechanistic insights.
-## Implementation Summary (AAH‑v3)
-
-**Baseline (MHA):**
-* Standard causal self‑attention with full context for all heads.
-* No control policy, grouping, or windowing.
-
-**AAH‑v3 core structures:**
-* **AAHV3Controller + AAHV3Attention** in `src/models/transformer.py`.
-* **Hierarchical grouping** of heads (head → group → supergroup) and top‑down window selection.
-* **Group‑level control**: controller operates on group features, window choices broadcast to heads.
-* **Control interval**: window assignments reused across steps to reduce overhead.
-* **Group‑feature caching** for the control interval.
-* **Control‑off fast path** uses full attention when disabled.
-* **Window clamp** (`W_min_gpu`) for GPU‑efficient minimum window size.
-* **Mask cache** for reusable window masks.
-
-**Instrumentation & logging:**
-* Timing metrics: control/attention/mask/overhead time (ms).
-* Effective‑length metrics: `Lk_mean`, `Lk_p90`, `W_mean`, `W_min`, `W_max`.
-* CSV + W&B logging in `scripts/train.py`.
-
-**Explicitly removed (not in current code):**
-* Skip deep hierarchy when few groups.
-* Precompute per‑window masks at init.
-* Disable shadow stats during training.
-
-## Idea
-
-### Idea 1 — Head-Grouped KV Cache (HG-KV)
-
-**Core question:** How much attention head independence is actually necessary during autoregressive inference?
-
-**Description:**
-Standard multi-head attention maintains a full, independent KV cache per head, leading to high memory usage and bandwidth pressure during decoding. This idea proposes **grouping attention heads** so that multiple heads share the same K/V representations, forming a *continuous design space* between:
-
-* **MHA** (H groups, fully independent KV)
-* **GQA** (intermediate number of groups)
-* **MQA** (1 group, fully shared KV)
-
-By sweeping the number of KV groups, we explicitly study the trade-off between expressiveness and efficiency.
-
-**What changes in the Transformer chain:**
-
-* Replace per-head K/V projection with **per-group K/V projection**
-* Heads map deterministically to KV groups during inference
-* KV cache is stored per group instead of per head
-
-**Why this is interesting:**
-
-* Reduces KV cache size and memory bandwidth
-* Provides a unifying framework for MHA / GQA / MQA
-* Enables controlled ablation on head redundancy
-
-**Planned analysis:**
-
-* Decode latency and memory usage vs group count
-* Accuracy / perplexity degradation curves
-* Attention entropy and inter-head similarity analysis
-
-**Scope:**
-
-* Decoder-only Transformer
-* Autoregressive inference
-* Small–medium scale models for reproducibility
-
----
-
-### Idea 2 — Asymmetric Attention Heads (AAH)
-
-**Core question:** Do all attention heads need the same attention resolution and computation pattern?
-
-**Description:**
-Standard Transformers enforce *homogeneous attention heads*: each head uses the same sequence length, attention computation, and update frequency. This idea proposes **asymmetric attention heads**, where different heads are explicitly assigned different computational roles.
-
-Typical head roles include:
-
-* Short-range, high-resolution heads
-* Long-range, low-resolution heads
-* Optional global or summary heads
-
-The external attention interface remains unchanged, while internal heads operate under heterogeneous constraints.
-
-**What changes in the Transformer chain:**
-
-* Attention heads are partitioned into functional classes
-* Each class applies a different attention mask, context length, or resolution
-* Outputs are concatenated and projected identically to standard MHA
-
-**Why this is interesting:**
-
-* Makes head redundancy explicit and controllable
-* Redistributes compute inside the attention module
-* Pure structural modification (no KV cache, no sparse indexing)
-
----
-
-### Originality and Related-Work Boundary (Important)
-
-To ensure the research topic is **clearly original**, we explicitly separate this work from existing literature:
-
-**What existing work studies:**
-
-* *Asymmetric attention formulations* (e.g. query–key asymmetry, theoretical expressivity)
-* *Sparse / approximate attention* (e.g. asymmetric indexing, LSH, retrieval-style attention)
-* *KV cache optimizations* (e.g. MQA, GQA, paging, quantization)
-
-**What this work does NOT do:**
-
-* Does not modify the attention formula itself
-* Does not approximate attention via sparsity or external indexing
-* Does not reuse existing asymmetric attention theory
-
-**What this work uniquely studies:**
-
-* Head-level **computational asymmetry** inside multi-head attention
-* Attention heads with different context ranges and resolutions
-* Controlled ablation of head heterogeneity under fixed model size
-
-**Open gap addressed by this work:**
-
-> How attention computation should be *unevenly allocated across heads* to maximize efficiency without sacrificing model quality.
-
-This head-centric, compute-allocation perspective is not directly addressed in prior work.
-
-## Summary
-
-### Current Status
-
-* Research direction **locked** on **Asymmetric Attention Heads (AAH)**.
-* AAH‑v3 implementation is stable with hierarchical group control, caching, and instrumentation.
-* Baseline and AAH‑v3 configs include 400‑step and 10k‑step runs (W&B + CSV).
-* The three experimental optimizations (skip deep hierarchy, precompute masks, disable shadow stats) were tested and removed.
-
-### Next Steps (paper)
-
-* Use the 10k baseline vs AAH‑v3 runs as primary results.
-* Summarize speed/accuracy trade‑offs and control overhead with the logged metrics.
-* Write methodology and ablation notes using the Implementation Summary above.
+The arXiv record is not public yet. Use this placeholder until the final record
+exists:
+
+```bibtex
+@misc{zhao2026aahv3,
+  title  = {Asymmetric Attention Heads: Hierarchical Group-Level Control for Quality-Constrained Attention Compute Efficiency},
+  author = {Zimu Zhao},
+  year   = {2026},
+  note   = {arXiv preprint, forthcoming}
+}
+```

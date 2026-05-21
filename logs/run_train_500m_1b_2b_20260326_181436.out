@@ -1,7 +1,0 @@
-nohup: ignoring input
-=== Training: configs/baseline_500m_10000.yaml -> logs/train_baseline_500m_10000_20260326_181436.log ===
-=== Inference: configs/baseline_500m_10000.yaml | checkpoints=['experiments/baseline-500m-10k-wt2_step9000.pt', 'experiments/baseline-500m-10k-wt2_step9500.pt', 'experiments/baseline-500m-10k-wt2_step10000.pt'] -> logs/infer_baseline_500m_10000_20260326_181436.log ===
-=== Training: configs/baseline_1b_10000.yaml -> logs/train_baseline_1b_10000_20260326_181436.log ===
-=== Inference: configs/baseline_1b_10000.yaml | checkpoints=['experiments/baseline-1b-10k-wt2_step9000.pt', 'experiments/baseline-1b-10k-wt2_step9500.pt', 'experiments/baseline-1b-10k-wt2_step10000.pt'] -> logs/infer_baseline_1b_10000_20260326_181436.log ===
-=== Training: configs/baseline_qwen2b_10000.yaml -> logs/train_baseline_qwen2b_10000_20260326_181436.log ===
-Training failed for configs/baseline_qwen2b_10000.yaml (exit 1)

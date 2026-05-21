@@ -3,10 +3,28 @@ Thumbs.db
 __pycache__/
 *.pyc
 .venv/
+venv/
+env/
 
 # Experiment artifacts
 wandb/
-experiments/*.pt
+*.pt
+*.pt.meta.json
+*.ckpt
+*.safetensors
 
 # Experiment logs
-experiments/*.log
+*.log
+logs/
+output/
+tmp/
+
+# Local papers, screenshots, and scratch notes
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+paper review/

@@ -1,6 +1,6 @@
 # AAH-v3 4096 Result Analysis
 
-Source: `/Users/zimmerzhao/Downloads/wandb_results.csv` exported from W&B. Rows ending in `-infer` are final checkpoint inference rows; non-infer rows are final training-loop rows.
+Source: W&B CSV export for the paper-facing 4096-token runs. Rows ending in `-infer` are final checkpoint inference rows; non-infer rows are final training-loop rows.
 
 ## Table 1 Training Values
 

@@ -1,4 +1,0 @@
-nohup: ignoring input
-=== Running /home/featurize/data/ENA-AAH-v3-v3branch/configs/aah_v3_identity_100m_10000.yaml -> /home/featurize/data/ENA-AAH-v3-v3branch/logs/aah_v3_identity_100m_10000_20260330_155551.log ===
-=== Running /home/featurize/data/ENA-AAH-v3-v3branch/configs/aah_v3_identity_200m_10000.yaml -> /home/featurize/data/ENA-AAH-v3-v3branch/logs/aah_v3_identity_200m_10000_20260330_161946.log ===
-=== Running /home/featurize/data/ENA-AAH-v3-v3branch/configs/aah_v3_identity_500m_10000.yaml -> /home/featurize/data/ENA-AAH-v3-v3branch/logs/aah_v3_identity_500m_10000_20260330_170101.log ===
