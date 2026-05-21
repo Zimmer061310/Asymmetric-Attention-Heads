@@ -35,6 +35,9 @@ store and record immutable hashes or model revisions. The paper appendix lists
 remaining provenance fields that should be filled before claiming independent
 reproducibility.
 
+See `REPRODUCIBILITY.md` for the precise scope of the released artifacts and
+`PUBLIC_RELEASE.md` for the safe public-release checklist.
+
 ## Setup
 
 Use Python 3.10+ with PyTorch. A minimal local setup is:
@@ -87,6 +90,9 @@ mechanism/efficiency evidence for ACR and hierarchy diagnostics.
 ## License
 
 This repository is released under the Apache License 2.0. See `LICENSE`.
+
+Machine-readable citation metadata is provided in `CITATION.cff`. Update it
+with the final arXiv identifier before the public release.
 
 ## Repository Release Checklist
 

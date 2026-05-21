@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this code or results, please cite the arXiv version once it is public."
+title: "Asymmetric Attention Heads: Hierarchical Group-Level Control for Quality-Constrained Attention Compute Efficiency"
+authors:
+  - family-names: Zhao
+    given-names: Zimu
+year: 2026
+license: Apache-2.0
+repository-code: "https://github.com/Zimmer061310/AAH-v3"
+abstract: "Research code and compact result summaries for AAH-v3, an execution-aware extension of multi-head attention that assigns hierarchy-constrained local attention windows to heads while preserving the standard Transformer block interface."
+keywords:
+  - attention
+  - transformer
+  - efficient inference
+  - adaptive computation
+  - language models
+preferred-citation:
+  type: article
+  title: "Asymmetric Attention Heads: Hierarchical Group-Level Control for Quality-Constrained Attention Compute Efficiency"
+  authors:
+    - family-names: Zhao
+      given-names: Zimu
+  year: 2026
+  notes: "arXiv preprint, forthcoming"
