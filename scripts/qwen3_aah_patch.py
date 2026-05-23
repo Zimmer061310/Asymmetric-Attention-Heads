@@ -111,6 +111,7 @@ class AAHRuntimeState(nn.Module):
         vf = v.detach().float()
         feats = torch.stack(
             [
+                # Mean absolute activation, not absolute value of the scalar mean.
                 qf.abs().mean(dim=(0, 2, 3)),
                 qf.std(dim=(0, 2, 3)),
                 kf.abs().mean(dim=(0, 2, 3)),

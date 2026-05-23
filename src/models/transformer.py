@@ -215,6 +215,7 @@ class AAHV2Attention(nn.Module):
         q_f = q.float()
         k_f = k.float()
         v_f = v.float()
+        # Magnitude features are mean absolute activations, not abs(mean(.)).
         q_mean = q_f.abs().mean(dim=(0, 2, 3))
         q_std = q_f.std(dim=(0, 2, 3))
         k_mean = k_f.abs().mean(dim=(0, 2, 3))
@@ -656,6 +657,7 @@ class AAHV3Attention(nn.Module):
         q_f = q.float()
         k_f = k.float()
         v_f = v.float()
+        # Magnitude features are mean absolute activations, not abs(mean(.)).
         q_mean = q_f.abs().mean(dim=(0, 2, 3))
         q_std = q_f.std(dim=(0, 2, 3))
         k_mean = k_f.abs().mean(dim=(0, 2, 3))
@@ -800,6 +802,7 @@ class AAHV3Attention(nn.Module):
             qg = q[:, heads].float()
             kg = k[:, heads].float()
             vg = v[:, heads].float()
+            # Match per-head features: mean absolute activation before reduction.
             q_mean = qg.abs().mean(dim=(0, 1, 2, 3))
             q_std = qg.std(dim=(0, 1, 2, 3))
             k_mean = kg.abs().mean(dim=(0, 1, 2, 3))

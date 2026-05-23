@@ -29,6 +29,12 @@ to show that the Hugging Face patch preserves a pretrained model interface and
 can run standard downstream evaluations. It should not be described as an
 official full benchmark report.
 
+The AAH-v3 Q/K/V magnitude feature is mean absolute activation, `mu(abs(q_h))`,
+not absolute value after scalar reduction, `abs(mu(q_h))`. See
+`paper_results/aah_v3_feature_definition.md` for the formula lock. The Qwen3
+downstream transfer/load and benchmark provenance status is recorded in
+`paper_results/qwen3_4b_aah/downstream_provenance_manifest.md`.
+
 When publishing an artifact bundle, include:
 
 - exact Git commit;
