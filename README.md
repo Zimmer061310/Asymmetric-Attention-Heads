@@ -1,14 +1,32 @@
-# ENA-AAH-v3
+# Asymmetric Attention Heads
 
-Research code and paper-result summaries for **Asymmetric Attention Heads
-(AAH-v3)**, an execution-aware extension of multi-head attention. AAH-v3 keeps
-the standard Transformer block interface while using a separate control path to
-assign different local causal attention windows to different heads or head
-groups.
+<p align="center">
+  <img src="figures/aah_v3_overview.png" alt="AAH-v3 overview" width="900">
+</p>
 
-The repository is currently intended as a private research artifact until the
-paper is posted publicly. It does not include large model checkpoints, raw W&B
-run directories, or local virtual environments.
+<p align="center">
+  <a href="#overview">Overview</a> |
+  <a href="#results">Results</a> |
+  <a href="#setup">Setup</a> |
+  <a href="#citation">Citation</a>
+</p>
+
+This is the official repository for **Asymmetric Attention Heads (AAH-v3)**,
+an execution-aware extension of multi-head attention. AAH-v3 keeps the standard
+Transformer block interface while using a separate control path to assign
+different local causal attention windows to different heads or head groups.
+
+This release includes implementation code, compact result summaries, and
+paper-facing diagnostics. It does not include large model checkpoints, raw W&B
+run directories, local virtual environments, or server credentials.
+
+## Overview
+
+Standard multi-head attention applies the same full causal attention span to
+every head. AAH-v3 preserves the usual Q/K/V projections and flat output
+interface, but adds a controller that builds head/group features, applies
+hierarchy-constrained window decisions, buckets heads by selected local window,
+and executes grouped causal local attention.
 
 ## What Is Included
 
@@ -73,6 +91,31 @@ python scripts/run_qwen3_aah_paper.py --benchmark-profile fast_paper
 Exact flags may differ by config and checkpoint layout; inspect the target
 script's `--help` output before launching expensive runs.
 
+## Results
+
+### 4096-token controlled AAH-v3 suite
+
+The custom 1B/4096 suite is the main mechanism and efficiency evidence. ACR is
+an attention-compute proxy: lower values mean fewer effective attention
+positions are evaluated by the executed attention policy.
+
+<p align="center">
+  <img src="figures/aah_v3_compute_quality.png" alt="AAH-v3 compute-quality tradeoff" width="850">
+</p>
+
+<p align="center">
+  <img src="figures/aah_v3_window_distribution.png" alt="AAH-v3 final window distribution" width="850">
+</p>
+
+### Qwen3-4B compatibility snapshot
+
+The Qwen3-4B table is a capped-subset compatibility check for downstream
+behavior, not an official full benchmark report.
+
+<p align="center">
+  <img src="figures/qwen3_benchmark_snapshot.png" alt="Qwen3-4B capped benchmark snapshot" width="900">
+</p>
+
 ## Paper Result Files
 
 Key compact result files are:
@@ -83,33 +126,25 @@ Key compact result files are:
 - `paper_results/qwen3_4b_aah/benchmarks/benchmark_paper_table.md`
 - `paper_results/qwen3_4b_aah/benchmarks/benchmark_paper_table.tex`
 
-The Qwen3 benchmark table is a capped-subset compatibility check, not an
-official full benchmark report. The custom 1B/4096 suite is the main
-mechanism/efficiency evidence for ACR and hierarchy diagnostics.
+The custom 1B/4096 suite is the main mechanism/efficiency evidence for ACR and
+hierarchy diagnostics. The Qwen3 benchmark table is a capped-subset
+compatibility check, not an official full benchmark report.
 
 ## License
 
 This repository is released under the Apache License 2.0. See `LICENSE`.
 
 Machine-readable citation metadata is provided in `CITATION.cff`. Update it
-with the final arXiv identifier before the public release.
+with the final arXiv identifier when the arXiv record is stable.
 
-## Repository Release Checklist
+## Artifact Policy
 
-Before making the repository public:
-
-1. Add the final arXiv citation and link.
-2. Confirm the paper's unresolved provenance fields are either completed or
-   clearly marked as limitations.
-3. Keep checkpoints out of Git; publish large artifacts through an artifact
-   store with SHA-256 hashes.
-4. Verify no private tokens, server passwords, raw W&B credentials, or local
-   machine paths are committed.
+Keep checkpoints out of Git. If publishing large artifacts later, use an
+external artifact store and include SHA-256 hashes.
 
 ## Citation
 
-The arXiv record is not public yet. Use this placeholder until the final record
-exists:
+Use this placeholder until the final arXiv identifier is added:
 
 ```bibtex
 @misc{zhao2026aahv3,
