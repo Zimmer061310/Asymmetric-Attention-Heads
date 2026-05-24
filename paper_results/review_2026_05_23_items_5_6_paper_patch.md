@@ -1,7 +1,9 @@
 # Paper Patch For Review Items 5 And 6
 
 The editable paper source is not present in this repository. Apply the following
-text changes to the Prism/LaTeX source for draft 37.
+text changes to the Prism/LaTeX source. Superseded by
+`paper_results/review_2026_05_23_190211_final_paper_patch.md`, which covers the
+later draft-38 review.
 
 ## Item 5: Q/K/V Magnitude Feature
 

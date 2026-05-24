@@ -5,7 +5,9 @@ table is not independently reproducible without a transfer/load map, subset
 definition, scoring details, and artifact hashes.
 
 The current table should be described as an internal capped-subset
-compatibility smoke test, not an official full benchmark report.
+compatibility smoke test, not an official full benchmark report. Exact
+percentages should not be cited as benchmark results or used for external
+model comparisons until the remaining manifest gaps are resolved.
 
 ## Base Model
 
@@ -101,4 +103,4 @@ alone until these items are published or regenerated:
 - code-task execution environment details.
 
 Until those are available, cite the table only as an internal capped-subset
-compatibility check.
+compatibility check. Do not cite the exact percentages as benchmark results.
