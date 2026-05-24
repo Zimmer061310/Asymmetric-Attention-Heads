@@ -1,11 +1,12 @@
 # Asymmetric Attention Heads
 
 <p align="center">
-  <img src="figures/aah_v3_overview.png" alt="AAH-v3 overview" width="900">
+  <img src="figures/paper_fig1_aah_overview.png" alt="AAH-v3 paper Figure 1 overview" width="900">
 </p>
 
 <p align="center">
   <a href="#overview">Overview</a> |
+  <a href="#paper-figures">Paper Figures</a> |
   <a href="#results">Results</a> |
   <a href="#setup">Setup</a> |
   <a href="#citation">Citation</a>
@@ -91,6 +92,34 @@ python scripts/run_qwen3_aah_paper.py --benchmark-profile fast_paper
 Exact flags may differ by config and checkpoint layout; inspect the target
 script's `--help` output before launching expensive runs.
 
+## Paper Figures
+
+The following figures are the paper figures used in the final manuscript.
+
+### Figure 1: Standard MHA versus AAH-v3
+
+<p align="center">
+  <img src="figures/paper_fig1_aah_overview.png" alt="Standard MHA versus AAH-v3" width="900">
+</p>
+
+### Figure 2: Independent versus joint sibling scoring
+
+<p align="center">
+  <img src="figures/paper_fig2_joint_scorer.png" alt="Independent sibling scoring versus joint sibling scoring" width="900">
+</p>
+
+### Figure 3: Training dynamics
+
+<p align="center">
+  <img src="figures/paper_fig3_training_dynamics.png" alt="Training dynamics for the 1B 4096-token seed-0 suite" width="900">
+</p>
+
+### Figure 4: Aggregate selected-window bucket heatmap
+
+<p align="center">
+  <img src="figures/paper_fig4_window_bucket_heatmap.png" alt="Aggregate selected-window bucket heatmap" width="900">
+</p>
+
 ## Results
 
 ### 4096-token controlled AAH-v3 suite
@@ -99,22 +128,10 @@ The custom 1B/4096 suite is the main mechanism and efficiency evidence. ACR is
 an attention-compute proxy: lower values mean fewer effective attention
 positions are evaluated by the executed attention policy.
 
-<p align="center">
-  <img src="figures/aah_v3_compute_quality.png" alt="AAH-v3 compute-quality tradeoff" width="850">
-</p>
-
-<p align="center">
-  <img src="figures/aah_v3_window_distribution.png" alt="AAH-v3 final window distribution" width="850">
-</p>
-
 ### Qwen3-4B compatibility snapshot
 
 The Qwen3-4B table is a capped-subset compatibility check for downstream
 behavior, not an official full benchmark report.
-
-<p align="center">
-  <img src="figures/qwen3_benchmark_snapshot.png" alt="Qwen3-4B capped benchmark snapshot" width="900">
-</p>
 
 ## Paper Result Files
 
