@@ -6,10 +6,16 @@
 
 <p align="center">
   <a href="#overview">Overview</a> |
-  <a href="#paper-figures">Paper Figures</a> |
+  <a href="#aah-v3-control-path">Method</a> |
   <a href="#results">Results</a> |
   <a href="#setup">Setup</a> |
   <a href="#citation">Citation</a>
+</p>
+
+<p align="center">
+  Standard MHA versus AAH-v3. AAH-v3 preserves the Q/K/V projection and flat
+  Transformer output interface, while adding a control branch that assigns
+  per-head local attention windows before grouped causal execution.
 </p>
 
 This is the official repository for **Asymmetric Attention Heads (AAH-v3)**,
@@ -28,6 +34,48 @@ every head. AAH-v3 preserves the usual Q/K/V projections and flat output
 interface, but adds a controller that builds head/group features, applies
 hierarchy-constrained window decisions, buckets heads by selected local window,
 and executes grouped causal local attention.
+
+## AAH-v3 Control Path
+
+The control branch uses smoothed head/group features to choose local attention
+windows. AAH-v3's final controller change is wide joint sibling scoring:
+paired sibling groups are scored together, so the scorer can directly compare
+their features and assign different window budgets.
+
+<p align="center">
+  <img src="figures/paper_fig2_joint_scorer.png" alt="Independent sibling scoring versus joint sibling scoring" width="900">
+</p>
+
+For paired siblings, the joint scorer replaces the corresponding independent
+logits before the raw argmax window decision. Parent constraints then propagate
+window choices down the hierarchy before decisions are mapped back to heads.
+
+## Results
+
+### 4096-token controlled AAH-v3 suite
+
+The custom 1B/4096 suite is the main mechanism and efficiency evidence. ACR is
+an attention-compute proxy: lower values mean fewer effective attention
+positions are evaluated by the executed attention policy.
+
+<p align="center">
+  <img src="figures/paper_fig3_training_dynamics.png" alt="Training dynamics for the 1B 4096-token seed-0 suite" width="900">
+</p>
+
+The training curves show validation loss, attention compute ratio, and hierarchy
+levels used over the logged training trajectory.
+
+<p align="center">
+  <img src="figures/paper_fig4_window_bucket_heatmap.png" alt="Aggregate selected-window bucket heatmap" width="900">
+</p>
+
+The final selected-window heatmap explains how the compute proxies arise from
+the distribution over candidate windows `[512, 1024, 2048, 4096]`.
+
+### Qwen3-4B compatibility snapshot
+
+The Qwen3-4B table is a capped-subset compatibility check for downstream
+behavior, not an official full benchmark report.
 
 ## What Is Included
 
@@ -91,47 +139,6 @@ python scripts/run_qwen3_aah_paper.py --benchmark-profile fast_paper
 
 Exact flags may differ by config and checkpoint layout; inspect the target
 script's `--help` output before launching expensive runs.
-
-## Paper Figures
-
-The following figures are the paper figures used in the final manuscript.
-
-### Figure 1: Standard MHA versus AAH-v3
-
-<p align="center">
-  <img src="figures/paper_fig1_aah_overview.png" alt="Standard MHA versus AAH-v3" width="900">
-</p>
-
-### Figure 2: Independent versus joint sibling scoring
-
-<p align="center">
-  <img src="figures/paper_fig2_joint_scorer.png" alt="Independent sibling scoring versus joint sibling scoring" width="900">
-</p>
-
-### Figure 3: Training dynamics
-
-<p align="center">
-  <img src="figures/paper_fig3_training_dynamics.png" alt="Training dynamics for the 1B 4096-token seed-0 suite" width="900">
-</p>
-
-### Figure 4: Aggregate selected-window bucket heatmap
-
-<p align="center">
-  <img src="figures/paper_fig4_window_bucket_heatmap.png" alt="Aggregate selected-window bucket heatmap" width="900">
-</p>
-
-## Results
-
-### 4096-token controlled AAH-v3 suite
-
-The custom 1B/4096 suite is the main mechanism and efficiency evidence. ACR is
-an attention-compute proxy: lower values mean fewer effective attention
-positions are evaluated by the executed attention policy.
-
-### Qwen3-4B compatibility snapshot
-
-The Qwen3-4B table is a capped-subset compatibility check for downstream
-behavior, not an official full benchmark report.
 
 ## Paper Result Files
 
