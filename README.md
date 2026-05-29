@@ -6,9 +6,86 @@ the standard Transformer block interface while using a separate control path to
 assign different local causal attention windows to different heads or head
 groups.
 
-The repository is currently intended as a private research artifact until the
-paper is posted publicly. It does not include large model checkpoints, raw W&B
-run directories, or local virtual environments.
+<p align="center">
+  <a href="#overview">Overview</a> |
+  <a href="#aah-v3-control-path">Method</a> |
+  <a href="#results">Results</a> |
+  <a href="#setup">Setup</a> |
+  <a href="#citation">Citation</a>
+</p>
+
+<p align="center">
+  Standard MHA versus AAH-v3. AAH-v3 preserves the Q/K/V projection and flat
+  Transformer output interface, while adding a control branch that assigns
+  per-head local attention windows before grouped causal execution.
+</p>
+
+This is the official repository for **Asymmetric Attention Heads (AAH-v3)**,
+an execution-aware extension of multi-head attention. AAH-v3 keeps the standard
+Transformer block interface while using a separate control path to assign
+different local causal attention windows to different heads or head groups.
+
+This release includes implementation code, compact result summaries, and
+paper-facing diagnostics. It does not include large model checkpoints, raw W&B
+run directories, local virtual environments, or server credentials.
+
+## Overview
+
+Standard multi-head attention applies the same full causal attention span to
+every head. AAH-v3 preserves the usual Q/K/V projections and flat output
+interface, but adds a controller that builds head/group features, applies
+hierarchy-constrained window decisions, buckets heads by selected local window,
+and executes grouped causal local attention.
+
+The AAH control policy is separated from the attention kernel. The reference
+backend, `dense_masked`, is kept for correctness checks and attention-map
+diagnostics. Hardware-oriented 8192-token configs can instead use
+`aah_v3_attention_backend: flash_attn` or
+`aah_v3_attention_backend: flex_attention`, where AAH still chooses per-head
+windows and the backend realizes those choices with sliding-window execution.
+The 8192 backend suite uses candidate windows `[1024, 2048, 4096, 8192]`.
+
+## AAH-v3 Control Path
+
+The control branch uses smoothed head/group features to choose local attention
+windows. AAH-v3's final controller change is wide joint sibling scoring:
+paired sibling groups are scored together, so the scorer can directly compare
+their features and assign different window budgets.
+
+<p align="center">
+  <img src="figures/paper_fig2_joint_scorer.png" alt="Independent sibling scoring versus joint sibling scoring" width="900">
+</p>
+
+For paired siblings, the joint scorer replaces the corresponding independent
+logits before the raw argmax window decision. Parent constraints then propagate
+window choices down the hierarchy before decisions are mapped back to heads.
+
+## Results
+
+### 4096-token controlled AAH-v3 suite
+
+The custom 1B/4096 suite is the main mechanism and efficiency evidence. ACR is
+an attention-compute proxy: lower values mean fewer effective attention
+positions are evaluated by the executed attention policy.
+
+<p align="center">
+  <img src="figures/paper_fig3_training_dynamics.png" alt="Training dynamics for the 1B 4096-token seed-0 suite" width="900">
+</p>
+
+The training curves show validation loss, attention compute ratio, and hierarchy
+levels used over the logged training trajectory.
+
+<p align="center">
+  <img src="figures/paper_fig4_window_bucket_heatmap.png" alt="Aggregate selected-window bucket heatmap" width="900">
+</p>
+
+The final selected-window heatmap explains how the compute proxies arise from
+the distribution over candidate windows `[512, 1024, 2048, 4096]`.
+
+### Qwen3-4B compatibility snapshot
+
+The Qwen3-4B table is a capped-subset compatibility check for downstream
+behavior, not an official full benchmark report.
 
 ## What Is Included
 
@@ -20,6 +97,8 @@ run directories, or local virtual environments.
   Qwen3-4B compatibility utilities used for the capped downstream checks.
 - `configs/` contains experiment configuration files, including paper-facing
   AAH-v3 regimes and earlier diagnostic variants.
+- `configs/paper_8192_backends/` contains FlashAttention and PyTorch
+  FlexAttention 8192-token comparison configs.
 - `paper_results/` contains compact paper-facing result summaries, tables, and
   diagnostic CSVs that are small enough to version.
 
@@ -45,6 +124,11 @@ Use Python 3.10+ with PyTorch. A minimal local setup is:
 ```bash
 python -m pip install -r requirements.txt
 ```
+
+The real local-window backends are optional. Install FlashAttention or use a
+PyTorch build that exposes `torch.nn.attention.flex_attention` before running
+the 8192-token backend configs; otherwise AAH falls back to `dense_masked` and
+records the fallback reason.
 
 For Featurize-style remote runs, keep code and important model artifacts under
 `/home/featurize/work`, and use `/home/featurize/data` only for fast scratch
