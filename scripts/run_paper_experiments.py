@@ -162,6 +162,9 @@ def apply_regime_overrides(cfg, run_id):
                 "aah_v3_attention_backend": backend,
                 "aah_v3_W_min_gpu": 1024,
                 "aah_v3_diagnostic_detail": "light",
+                # FlexAttention does not support the current attention-dropout
+                # path, and dense fallback would invalidate real-backend runs.
+                "dropout": 0.0,
             }
         )
         if policy == "full":

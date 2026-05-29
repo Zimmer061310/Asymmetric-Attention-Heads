@@ -17,8 +17,8 @@ class TokenBlockDataset(Dataset):
         start = idx * self.seq_len
         end = start + self.seq_len + 1
         chunk = self.tokens[start:end]
-        x = torch.tensor(chunk[:-1], dtype=torch.long)
-        y = torch.tensor(chunk[1:], dtype=torch.long)
+        x = chunk[:-1].detach().clone().to(dtype=torch.long)
+        y = chunk[1:].detach().clone().to(dtype=torch.long)
         return x, y
 
 
