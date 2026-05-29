@@ -35,14 +35,6 @@ interface, but adds a controller that builds head/group features, applies
 hierarchy-constrained window decisions, buckets heads by selected local window,
 and executes grouped causal local attention.
 
-The AAH control policy is separated from the attention kernel. The reference
-backend, `dense_masked`, is kept for correctness checks and attention-map
-diagnostics. Hardware-oriented 8192-token configs can instead use
-`aah_v3_attention_backend: flash_attn` or
-`aah_v3_attention_backend: flex_attention`, where AAH still chooses per-head
-windows and the backend realizes those choices with sliding-window execution.
-The 8192 backend suite uses candidate windows `[1024, 2048, 4096, 8192]`.
-
 ## AAH-v3 Control Path
 
 The control branch uses smoothed head/group features to choose local attention
@@ -95,8 +87,6 @@ behavior, not an official full benchmark report.
   Qwen3-4B compatibility utilities used for the capped downstream checks.
 - `configs/` contains experiment configuration files, including paper-facing
   AAH-v3 regimes and earlier diagnostic variants.
-- `configs/paper_8192_backends/` contains FlashAttention and PyTorch
-  FlexAttention 8192-token comparison configs.
 - `paper_results/` contains compact paper-facing result summaries, tables, and
   diagnostic CSVs that are small enough to version.
 
@@ -122,11 +112,6 @@ Use Python 3.10+ with PyTorch. A minimal local setup is:
 ```bash
 python -m pip install -r requirements.txt
 ```
-
-The real local-window backends are optional. Install FlashAttention or use a
-PyTorch build that exposes `torch.nn.attention.flex_attention` before running
-the 8192-token backend configs; otherwise AAH falls back to `dense_masked` and
-records the fallback reason.
 
 For Featurize-style remote runs, keep code and important model artifacts under
 `/home/featurize/work`, and use `/home/featurize/data` only for fast scratch

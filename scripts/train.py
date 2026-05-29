@@ -319,8 +319,6 @@ def main():
         aah_v3_hierarchy_ablation_mode=model_cfg.get("aah_v3_hierarchy_ablation_mode", "adaptive"),
         aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", exp.get("seed", 1337)),
         aah_v3_parent_constraint=model_cfg.get("aah_v3_parent_constraint", True),
-        aah_v3_attention_backend=model_cfg.get("aah_v3_attention_backend", "dense_masked"),
-        aah_v3_flex_block_size=model_cfg.get("aah_v3_flex_block_size", 128),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -422,17 +420,6 @@ def main():
         "attn_elems",
         "attn_ratio",
         "attn_reduction",
-        "effective_attn_elements",
-        "effective_ACR",
-        "dense_kernel_actual_elements_est",
-        "backend_realized_elements_est",
-        "backend_realized_ACR_est",
-        "backend_name",
-        "requested_backend",
-        "backend_bucket_counts",
-        "backend_kernel_calls",
-        "backend_time_ms",
-        "backend_fallback_reasons",
         "flops_attn_est",
         "flops_total_est",
         "flops_ratio",
@@ -761,17 +748,6 @@ def main():
                 resolution_collapse_maxs = []
                 resolution_deltas = []
                 branch_usage_freqs = []
-                effective_attn_elements_vals = []
-                effective_ACR_vals = []
-                dense_kernel_actual_elements_vals = []
-                backend_realized_elements_vals = []
-                backend_realized_ACR_vals = []
-                backend_names = []
-                requested_backends = []
-                backend_bucket_counts_vals = []
-                backend_kernel_calls_vals = []
-                backend_time_vals = []
-                backend_fallback_reasons_vals = []
                 hierarchy_levels_useds = []
                 group_counts_per_levels = []
                 controller_logits_std_per_levels = []
@@ -931,28 +907,6 @@ def main():
                                 resolution_deltas.append(attn.last_stats.get("resolution_delta"))
                             if "branch_usage_freq" in attn.last_stats:
                                 branch_usage_freqs.append(attn.last_stats.get("branch_usage_freq"))
-                            if "effective_attn_elements" in attn.last_stats:
-                                effective_attn_elements_vals.append(attn.last_stats.get("effective_attn_elements"))
-                            if "effective_ACR" in attn.last_stats:
-                                effective_ACR_vals.append(attn.last_stats.get("effective_ACR"))
-                            if "dense_kernel_actual_elements_est" in attn.last_stats:
-                                dense_kernel_actual_elements_vals.append(attn.last_stats.get("dense_kernel_actual_elements_est"))
-                            if "backend_realized_elements_est" in attn.last_stats:
-                                backend_realized_elements_vals.append(attn.last_stats.get("backend_realized_elements_est"))
-                            if "backend_realized_ACR_est" in attn.last_stats:
-                                backend_realized_ACR_vals.append(attn.last_stats.get("backend_realized_ACR_est"))
-                            if "backend_name" in attn.last_stats:
-                                backend_names.append(attn.last_stats.get("backend_name"))
-                            if "requested_backend" in attn.last_stats:
-                                requested_backends.append(attn.last_stats.get("requested_backend"))
-                            if "backend_bucket_counts" in attn.last_stats:
-                                backend_bucket_counts_vals.append(attn.last_stats.get("backend_bucket_counts"))
-                            if "backend_kernel_calls" in attn.last_stats:
-                                backend_kernel_calls_vals.append(attn.last_stats.get("backend_kernel_calls"))
-                            if "backend_time_ms" in attn.last_stats:
-                                backend_time_vals.append(attn.last_stats.get("backend_time_ms"))
-                            if "backend_fallback_reasons" in attn.last_stats:
-                                backend_fallback_reasons_vals.append(attn.last_stats.get("backend_fallback_reasons"))
                             if "hierarchy_levels_used" in attn.last_stats:
                                 hierarchy_levels_useds.append(attn.last_stats.get("hierarchy_levels_used"))
                             if "group_counts_per_level" in attn.last_stats:
@@ -1281,52 +1235,6 @@ def main():
                     denom = float(len(branch_usage_freqs))
                     for k in list(branch_usage_agg.keys()):
                         branch_usage_agg[k] = branch_usage_agg[k] / denom
-                effective_attn_elements = sum(float(v) for v in effective_attn_elements_vals) if effective_attn_elements_vals else None
-                effective_ACR = (
-                    effective_attn_elements / baseline_elements
-                    if effective_attn_elements is not None and baseline_elements > 0
-                    else None
-                )
-                dense_kernel_actual_elements_est = (
-                    sum(float(v) for v in dense_kernel_actual_elements_vals)
-                    if dense_kernel_actual_elements_vals
-                    else None
-                )
-                backend_realized_elements_est = (
-                    sum(float(v) for v in backend_realized_elements_vals)
-                    if backend_realized_elements_vals
-                    else None
-                )
-                backend_realized_ACR_est = (
-                    backend_realized_elements_est / dense_kernel_actual_elements_est
-                    if backend_realized_elements_est is not None and dense_kernel_actual_elements_est and dense_kernel_actual_elements_est > 0
-                    else None
-                )
-                backend_name = ""
-                if backend_names:
-                    unique_backend_names = sorted(set(str(v) for v in backend_names))
-                    backend_name = unique_backend_names[0] if len(unique_backend_names) == 1 else "mixed"
-                requested_backend = ""
-                if requested_backends:
-                    unique_requested_backends = sorted(set(str(v) for v in requested_backends))
-                    requested_backend = unique_requested_backends[0] if len(unique_requested_backends) == 1 else "mixed"
-                backend_bucket_counts = {}
-                for counts in backend_bucket_counts_vals:
-                    if not isinstance(counts, dict):
-                        continue
-                    for k, v in counts.items():
-                        ks = str(k)
-                        backend_bucket_counts[ks] = backend_bucket_counts.get(ks, 0) + int(v)
-                backend_kernel_calls = sum(int(v) for v in backend_kernel_calls_vals) if backend_kernel_calls_vals else None
-                backend_time_ms = sum(float(v) for v in backend_time_vals) / len(backend_time_vals) if backend_time_vals else None
-                backend_fallback_reasons = sorted(
-                    {
-                        str(reason)
-                        for reasons in backend_fallback_reasons_vals
-                        if isinstance(reasons, list)
-                        for reason in reasons
-                    }
-                )
                 path_mode_freq = {}
                 if path_modes:
                     for mode in path_modes:
@@ -1403,28 +1311,6 @@ def main():
                         payload["perf/attn_elems"] = attn_elems
                         payload["perf/attn_ratio"] = attn_ratio
                         payload["aah/attn_ratio"] = attn_ratio
-                    if effective_attn_elements is not None:
-                        payload["aah/effective_attn_elements"] = effective_attn_elements
-                    if effective_ACR is not None:
-                        payload["aah/effective_ACR"] = effective_ACR
-                    if dense_kernel_actual_elements_est is not None:
-                        payload["aah/dense_kernel_actual_elements_est"] = dense_kernel_actual_elements_est
-                    if backend_realized_elements_est is not None:
-                        payload["aah/backend_realized_elements_est"] = backend_realized_elements_est
-                    if backend_realized_ACR_est is not None:
-                        payload["aah/backend_realized_ACR_est"] = backend_realized_ACR_est
-                    if backend_name:
-                        payload["aah/backend_name"] = backend_name
-                    if requested_backend:
-                        payload["aah/requested_backend"] = requested_backend
-                    if backend_bucket_counts:
-                        payload["aah/backend_bucket_counts"] = backend_bucket_counts
-                    if backend_kernel_calls is not None:
-                        payload["aah/backend_kernel_calls"] = backend_kernel_calls
-                    if backend_time_ms is not None:
-                        payload["aah/backend_time_ms"] = backend_time_ms
-                    if backend_fallback_reasons:
-                        payload["aah/backend_fallback_reasons"] = backend_fallback_reasons
                     if attn_reduction is not None:
                         payload["perf/attn_reduction"] = attn_reduction
                     if flops_attn_est is not None:
@@ -1666,17 +1552,6 @@ def main():
                         f"{attn_elems:.2f}" if attn_elems is not None else "",
                         f"{attn_ratio:.6f}" if attn_ratio is not None else "",
                         f"{attn_reduction:.6f}" if attn_reduction is not None else "",
-                        f"{effective_attn_elements:.2f}" if effective_attn_elements is not None else "",
-                        f"{effective_ACR:.6f}" if effective_ACR is not None else "",
-                        f"{dense_kernel_actual_elements_est:.2f}" if dense_kernel_actual_elements_est is not None else "",
-                        f"{backend_realized_elements_est:.2f}" if backend_realized_elements_est is not None else "",
-                        f"{backend_realized_ACR_est:.6f}" if backend_realized_ACR_est is not None else "",
-                        backend_name,
-                        requested_backend,
-                        str(backend_bucket_counts) if backend_bucket_counts else "",
-                        str(backend_kernel_calls) if backend_kernel_calls is not None else "",
-                        fmt(backend_time_ms),
-                        str(backend_fallback_reasons) if backend_fallback_reasons else "",
                         f"{flops_attn_est:.2f}" if flops_attn_est is not None else "",
                         f"{flops_total_est:.2f}" if flops_total_est is not None else "",
                         f"{flops_ratio:.6f}" if flops_ratio is not None else "",
