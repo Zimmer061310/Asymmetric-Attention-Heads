@@ -31,6 +31,23 @@ APPENDIX_4096 = [
     "appendix_4096_no_feature_ema",
 ]
 
+BACKEND_8192 = [
+    "backend_8192_full_flash",
+    "backend_8192_fixed_1024_flash",
+    "backend_8192_fixed_2048_flash",
+    "backend_8192_fixed_4096_flash",
+    "backend_8192_full_adaptive_flash",
+    "backend_8192_shallow_freeze_flash",
+    "backend_8192_deep_practical_reuse_flash",
+    "backend_8192_full_flex",
+    "backend_8192_fixed_1024_flex",
+    "backend_8192_fixed_2048_flex",
+    "backend_8192_fixed_4096_flex",
+    "backend_8192_full_adaptive_flex",
+    "backend_8192_shallow_freeze_flex",
+    "backend_8192_deep_practical_reuse_flex",
+]
+
 
 def deep_update(dst, src):
     for key, value in src.items():
@@ -42,7 +59,10 @@ def deep_update(dst, src):
 
 
 def base_config(run_id, seed, context_length, aah_enabled=True):
-    windows = [512, 1024, 2048, context_length]
+    if int(context_length) >= 8192:
+        windows = [1024, 2048, 4096, context_length]
+    else:
+        windows = [512, 1024, 2048, context_length]
     batch_size = 1
     return {
         "experiment": {
@@ -125,6 +145,76 @@ def base_config(run_id, seed, context_length, aah_enabled=True):
 
 def apply_regime_overrides(cfg, run_id):
     model = cfg["model"]
+    if run_id.startswith("backend_8192_"):
+        stem = run_id[len("backend_8192_"):]
+        if stem.endswith("_flash"):
+            backend = "flash_attn"
+            policy = stem[: -len("_flash")]
+        elif stem.endswith("_flex"):
+            backend = "flex_attention"
+            policy = stem[: -len("_flex")]
+        else:
+            raise ValueError(f"Unknown 8192 backend run_id: {run_id}")
+        model.update(
+            {
+                "aah_v3_enabled": True,
+                "aah_v3_windows": [1024, 2048, 4096, 8192],
+                "aah_v3_attention_backend": backend,
+                "aah_v3_W_min_gpu": 1024,
+                "aah_v3_diagnostic_detail": "light",
+            }
+        )
+        if policy == "full":
+            model.update(
+                {
+                    "aah_v3_grouping_enabled": False,
+                    "aah_v3_control_enabled": False,
+                    "aah_v3_build_hierarchy": False,
+                    "aah_v3_apply_window_control": False,
+                    "aah_v3_controller_pairwise_mode": "none",
+                }
+            )
+        elif policy.startswith("fixed_"):
+            window_size = int(policy.rsplit("_", 1)[-1])
+            model.update(
+                {
+                    "aah_v3_grouping_enabled": False,
+                    "aah_v3_control_enabled": True,
+                    "aah_v3_build_hierarchy": False,
+                    "aah_v3_apply_window_control": True,
+                    "aah_v3_controller_choice_mode": f"fixed_window_{window_size}",
+                    "aah_v3_controller_pairwise_mode": "none",
+                    "aah_v3_reuse_group_hierarchy": False,
+                    "aah_v3_hierarchy_ablation_mode": "adaptive",
+                }
+            )
+        elif policy == "full_adaptive":
+            model.update(
+                {
+                    "aah_v3_max_depth": 4,
+                    "aah_v3_reuse_group_hierarchy": False,
+                    "aah_v3_hierarchy_ablation_mode": "adaptive",
+                }
+            )
+        elif policy == "shallow_freeze":
+            model.update(
+                {
+                    "aah_v3_max_depth": 1,
+                    "aah_v3_reuse_group_hierarchy": False,
+                    "aah_v3_hierarchy_ablation_mode": "freeze_learned_topology",
+                }
+            )
+        elif policy == "deep_practical_reuse":
+            model.update(
+                {
+                    "aah_v3_max_depth": 4,
+                    "aah_v3_reuse_group_hierarchy": True,
+                    "aah_v3_hierarchy_ablation_mode": "adaptive",
+                }
+            )
+        else:
+            raise ValueError(f"Unknown 8192 backend policy: {policy}")
+        return cfg
     if run_id.endswith("pure_baseline"):
         model.update(
             {
@@ -223,12 +313,16 @@ def suite_run_ids(suite):
         return MAIN_4096
     if suite == "appendix":
         return APPENDIX_4096
+    if suite == "backend_8192":
+        return BACKEND_8192
     if suite == "all":
         return MAIN_4096 + APPENDIX_4096
     raise ValueError(f"Unknown suite: {suite}")
 
 
 def context_for_run(run_id):
+    if run_id.startswith("backend_8192_"):
+        return 8192
     return 4096
 
 
@@ -280,7 +374,7 @@ def run_command(cmd, log_path, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate and run the AAH-v3 paper experiment suite.")
-    parser.add_argument("--suite", choices=["mandatory", "appendix", "all"], default="mandatory")
+    parser.add_argument("--suite", choices=["mandatory", "appendix", "backend_8192", "all"], default="mandatory")
     parser.add_argument("--seeds", nargs="+", type=int, default=DEFAULT_SEEDS)
     parser.add_argument("--config-dir", default="configs/paper_required")
     parser.add_argument("--log-dir", default="logs/paper_required")
