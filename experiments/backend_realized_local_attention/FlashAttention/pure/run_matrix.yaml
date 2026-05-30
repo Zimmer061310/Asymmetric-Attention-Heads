@@ -1,0 +1,21 @@
+runs:
+  - id: pure_flash_full_attention
+    backend: flash_attention
+    aah_enabled: false
+    attention_pattern: full_causal
+    context_length: 8192
+    candidate_windows: null
+    role: baseline_denominator
+    notes: "Pure FlashAttention full causal baseline with no AAH modules."
+
+metrics:
+  - val_loss
+  - val_ppl
+  - measured_attention_flops
+  - measured_attention_flops_ratio
+  - measured_total_flops
+  - measured_total_flops_ratio
+  - tokens_per_second
+  - peak_gpu_memory
+  - backend_time_ms
+  - backend_fallback_rate

@@ -1,0 +1,61 @@
+runs:
+  - id: flash_grouping_off
+    backend: flash_attention
+    aah_enabled: true
+    regime: grouping_off
+    grouping: off
+    hierarchy: none
+    joint_scorer: off
+    context_length: 8192
+    candidate_windows: [1024, 2048, 4096, 8192]
+
+  - id: flash_full_adaptive
+    backend: flash_attention
+    aah_enabled: true
+    regime: full_adaptive
+    grouping: adaptive_learned
+    hierarchy: [2, 2, 2, 2]
+    hierarchy_mode: adaptive
+    joint_scorer: wide_joint
+    context_length: 8192
+    candidate_windows: [1024, 2048, 4096, 8192]
+
+  - id: flash_shallow_freeze
+    backend: flash_attention
+    aah_enabled: true
+    regime: shallow_freeze
+    grouping: learned_frozen
+    hierarchy: [2]
+    hierarchy_mode: freeze_learned_topology
+    joint_scorer: wide_joint
+    context_length: 8192
+    candidate_windows: [1024, 2048, 4096, 8192]
+
+  - id: flash_deep_practical_reuse
+    backend: flash_attention
+    aah_enabled: true
+    regime: deep_practical_reuse
+    grouping: cached_level0
+    hierarchy: [2, 2, 2, 2]
+    hierarchy_mode: adaptive
+    reuse_group_hierarchy: true
+    joint_scorer: wide_joint
+    context_length: 8192
+    candidate_windows: [1024, 2048, 4096, 8192]
+
+metrics:
+  - val_loss
+  - val_ppl
+  - ACR
+  - measured_attention_flops
+  - measured_attention_flops_ratio
+  - measured_total_flops
+  - measured_total_flops_ratio
+  - tokens_per_second
+  - peak_gpu_memory
+  - backend_time_ms
+  - backend_fallback_rate
+  - window_bucket_fraction_1024
+  - window_bucket_fraction_2048
+  - window_bucket_fraction_4096
+  - window_bucket_fraction_8192
