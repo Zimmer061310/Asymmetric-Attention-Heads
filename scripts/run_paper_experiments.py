@@ -333,7 +333,19 @@ def config_path_for(config_dir, run_id, seed):
     return os.path.join(config_dir, f"{run_id}_seed{seed}.yaml")
 
 
-def generate_configs(config_dir, suite, seeds):
+def generate_configs(
+    config_dir,
+    suite,
+    seeds,
+    offline_token_file="",
+    out_dir="",
+    train_max_steps=None,
+    train_eval_interval=None,
+    train_eval_batches=None,
+    train_log_interval=None,
+    checkpoint_steps=None,
+    disable_checkpoints=False,
+):
     os.makedirs(config_dir, exist_ok=True)
     paths = []
     for run_id in suite_run_ids(suite):
@@ -341,6 +353,26 @@ def generate_configs(config_dir, suite, seeds):
             context_length = context_for_run(run_id)
             cfg = base_config(run_id, seed, context_length, aah_enabled=not run_id.endswith("pure_baseline"))
             cfg = apply_regime_overrides(cfg, run_id)
+            if offline_token_file:
+                cfg["data"]["dataset"] = f"tokenized:{offline_token_file}"
+                cfg["data"]["tokenizer"] = os.path.basename(offline_token_file)
+                cfg["data"]["num_workers"] = 0
+            if out_dir:
+                cfg["experiment"]["out_dir"] = out_dir
+            if train_max_steps is not None:
+                cfg["train"]["max_steps"] = int(train_max_steps)
+                cfg["train"]["checkpoint_steps"] = [int(train_max_steps)]
+            if train_eval_interval is not None:
+                cfg["train"]["eval_interval"] = int(train_eval_interval)
+            if train_eval_batches is not None:
+                cfg["train"]["eval_batches"] = int(train_eval_batches)
+            if train_log_interval is not None:
+                cfg["train"]["log_interval"] = int(train_log_interval)
+            if checkpoint_steps is not None:
+                cfg["train"]["checkpoint_steps"] = [int(s) for s in checkpoint_steps]
+            if disable_checkpoints:
+                cfg["train"]["save_checkpoints"] = False
+                cfg["train"]["checkpoint_steps"] = []
             path = config_path_for(config_dir, run_id, seed)
             with open(path, "w") as f:
                 yaml.safe_dump(cfg, f, sort_keys=False)
@@ -384,6 +416,18 @@ def main():
     parser.add_argument("--summary-dir", default="experiments/paper_summaries")
     parser.add_argument("--diagnostics-dir", default="experiments/paper_diagnostics")
     parser.add_argument("--eval-batches", type=int, default=50)
+    parser.add_argument(
+        "--offline-token-file",
+        default="",
+        help="Optional tokenized dataset .pt path. Generated configs use data.dataset=tokenized:<path>.",
+    )
+    parser.add_argument("--out-dir", default="", help="Override experiment.out_dir in generated configs.")
+    parser.add_argument("--train-max-steps", type=int, default=None)
+    parser.add_argument("--train-eval-interval", type=int, default=None)
+    parser.add_argument("--train-eval-batches", type=int, default=None)
+    parser.add_argument("--train-log-interval", type=int, default=None)
+    parser.add_argument("--checkpoint-steps", nargs="*", type=int, default=None)
+    parser.add_argument("--disable-checkpoints", action="store_true")
     parser.add_argument("--only", default=None, help="Regex filter over generated config paths.")
     parser.add_argument("--write-configs", action="store_true", help="Generate configs and exit unless --run is also set.")
     parser.add_argument("--run", choices=["none", "train", "infer", "all"], default="none")
@@ -393,7 +437,19 @@ def main():
     args = parser.parse_args()
 
     config_dir = os.path.abspath(os.path.join(PROJECT_ROOT, args.config_dir))
-    paths = generate_configs(config_dir, args.suite, args.seeds)
+    paths = generate_configs(
+        config_dir,
+        args.suite,
+        args.seeds,
+        offline_token_file=args.offline_token_file,
+        out_dir=args.out_dir,
+        train_max_steps=args.train_max_steps,
+        train_eval_interval=args.train_eval_interval,
+        train_eval_batches=args.train_eval_batches,
+        train_log_interval=args.train_log_interval,
+        checkpoint_steps=args.checkpoint_steps,
+        disable_checkpoints=args.disable_checkpoints,
+    )
     paths = [p for p in paths if should_include(p, args.only)]
     print(f"generated_configs={len(paths)} dir={config_dir}")
 
