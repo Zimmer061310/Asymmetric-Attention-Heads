@@ -7,6 +7,39 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.profiler import record_function
 
+_FLASH_ATTN_FUNC = None
+_FLASH_ATTN_IMPORT_ERROR = None
+_FLEX_ATTENTION = None
+_FLEX_CREATE_BLOCK_MASK = None
+_FLEX_IMPORT_ERROR = None
+
+
+def _load_flash_attn_func():
+    global _FLASH_ATTN_FUNC, _FLASH_ATTN_IMPORT_ERROR
+    if _FLASH_ATTN_FUNC is not None or _FLASH_ATTN_IMPORT_ERROR is not None:
+        return _FLASH_ATTN_FUNC, _FLASH_ATTN_IMPORT_ERROR
+    try:
+        from flash_attn import flash_attn_func
+
+        _FLASH_ATTN_FUNC = flash_attn_func
+    except Exception as exc:  # pragma: no cover - depends on optional CUDA package
+        _FLASH_ATTN_IMPORT_ERROR = exc
+    return _FLASH_ATTN_FUNC, _FLASH_ATTN_IMPORT_ERROR
+
+
+def _load_flex_attention():
+    global _FLEX_ATTENTION, _FLEX_CREATE_BLOCK_MASK, _FLEX_IMPORT_ERROR
+    if _FLEX_ATTENTION is not None or _FLEX_IMPORT_ERROR is not None:
+        return _FLEX_ATTENTION, _FLEX_CREATE_BLOCK_MASK, _FLEX_IMPORT_ERROR
+    try:
+        from torch.nn.attention.flex_attention import create_block_mask, flex_attention
+
+        _FLEX_ATTENTION = flex_attention
+        _FLEX_CREATE_BLOCK_MASK = create_block_mask
+    except Exception as exc:  # pragma: no cover - depends on PyTorch build
+        _FLEX_IMPORT_ERROR = exc
+    return _FLEX_ATTENTION, _FLEX_CREATE_BLOCK_MASK, _FLEX_IMPORT_ERROR
+
 
 @dataclass
 class GPTConfig:
@@ -69,6 +102,8 @@ class GPTConfig:
     aah_v3_hierarchy_ablation_mode: str = "adaptive"
     aah_v3_fixed_hierarchy_seed: int = 1337
     aah_v3_parent_constraint: bool = True
+    aah_v3_attention_backend: str = "dense_masked"
+    aah_v3_flex_block_size: int = 128
 
 
 class CausalSelfAttention(nn.Module):
@@ -526,6 +561,11 @@ class AAHV3Attention(nn.Module):
             raise ValueError(f"Unsupported aah_v3_hierarchy_ablation_mode: {self.hierarchy_ablation_mode}")
         self.fixed_hierarchy_seed = int(getattr(config, "aah_v3_fixed_hierarchy_seed", 1337))
         self.parent_constraint = bool(getattr(config, "aah_v3_parent_constraint", True))
+        self.attention_backend = str(getattr(config, "aah_v3_attention_backend", "dense_masked"))
+        valid_attention_backends = {"dense_masked", "flash_attn", "flex_attention"}
+        if self.attention_backend not in valid_attention_backends:
+            raise ValueError(f"Unsupported aah_v3_attention_backend: {self.attention_backend}")
+        self.flex_block_size = max(16, int(getattr(config, "aah_v3_flex_block_size", 128)))
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -561,6 +601,7 @@ class AAHV3Attention(nn.Module):
             torch.tril(torch.ones(config.seq_len, config.seq_len)).view(1, 1, config.seq_len, config.seq_len),
         )
         self.mask_cache = OrderedDict()
+        self.flex_mask_cache = OrderedDict()
 
         controller_hidden_dim = max(4, int(config.aah_v3_control_dim))
         ref_controller_hidden_dim = max(4, int(getattr(config, "aah_v3_controller_rng_reference_dim", 16)))
@@ -1232,6 +1273,14 @@ class AAHV3Attention(nn.Module):
             hi = 2 if len(self.windows) > 2 else len(self.windows) - 1
             vals = torch.arange(n, device=device, dtype=torch.long) % 2
             return torch.where(vals == 0, torch.full_like(vals, lo), torch.full_like(vals, hi))
+        if self.controller_choice_mode.startswith("fixed_window_idx_"):
+            idx = int(self.controller_choice_mode.rsplit("_", 1)[-1])
+            idx = max(0, min(idx, len(self.windows) - 1))
+            return torch.full((n,), idx, device=device, dtype=torch.long)
+        if self.controller_choice_mode.startswith("fixed_window_"):
+            size = int(self.controller_choice_mode.rsplit("_", 1)[-1])
+            idx = min(range(len(self.windows)), key=lambda i: abs(int(self.windows[i]) - size))
+            return torch.full((n,), idx, device=device, dtype=torch.long)
         return None
 
     def _sibling_delta_features(self, feats, parent_map=None):
@@ -1627,6 +1676,148 @@ class AAHV3Attention(nn.Module):
                 self.mask_cache.popitem(last=False)
         return mask, build_ms
 
+    def _backend_fallback(self, reason):
+        return {
+            "backend": "dense_masked",
+            "requested_backend": self.attention_backend,
+            "fallback_reason": str(reason),
+        }
+
+    def _flash_attention_bucket(self, q, k, v, window):
+        if q.device.type != "cuda":
+            return None, self._backend_fallback("flash_attn_requires_cuda")
+        if q.dtype not in (torch.float16, torch.bfloat16):
+            return None, self._backend_fallback(f"flash_attn_unsupported_dtype_{q.dtype}")
+        flash_attn_func, import_error = _load_flash_attn_func()
+        if flash_attn_func is None:
+            return None, self._backend_fallback(f"flash_attn_unavailable: {import_error}")
+        B, H, T, D = q.shape
+        W = max(1, min(int(window), T))
+        q_flash = q.transpose(1, 2).contiguous()
+        k_flash = k.transpose(1, 2).contiguous()
+        v_flash = v.transpose(1, 2).contiguous()
+        window_size = (-1, -1) if W >= T else (W - 1, 0)
+        try:
+            y = flash_attn_func(
+                q_flash,
+                k_flash,
+                v_flash,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
+                softmax_scale=self.scale,
+                causal=True,
+                window_size=window_size,
+            )
+        except Exception as exc:  # pragma: no cover - backend/runtime specific
+            return None, self._backend_fallback(f"flash_attn_failed: {exc}")
+        return y.transpose(1, 2).contiguous(), {
+            "backend": "flash_attn",
+            "requested_backend": self.attention_backend,
+            "fallback_reason": "",
+        }
+
+    def _get_flex_block_mask(self, T, W, device):
+        if not isinstance(self.flex_mask_cache, OrderedDict):
+            self.flex_mask_cache = OrderedDict(self.flex_mask_cache)
+        key = (int(T), int(W), device.type, device.index, int(self.flex_block_size))
+        cached = self.flex_mask_cache.get(key)
+        if cached is not None:
+            self.flex_mask_cache.move_to_end(key)
+            return cached
+        _, create_block_mask, import_error = _load_flex_attention()
+        if create_block_mask is None:
+            raise RuntimeError(f"flex_attention_unavailable: {import_error}")
+        W_int = int(W)
+
+        def local_causal_mask(_b, _h, q_idx, kv_idx):
+            return (kv_idx <= q_idx) & (kv_idx >= (q_idx - (W_int - 1)))
+
+        try:
+            mask = create_block_mask(
+                local_causal_mask,
+                B=None,
+                H=None,
+                Q_LEN=int(T),
+                KV_LEN=int(T),
+                device=device,
+                BLOCK_SIZE=int(self.flex_block_size),
+                _compile=True,
+            )
+        except TypeError:
+            mask = create_block_mask(
+                local_causal_mask,
+                B=None,
+                H=None,
+                Q_LEN=int(T),
+                KV_LEN=int(T),
+                device=device,
+                BLOCK_SIZE=int(self.flex_block_size),
+            )
+        if self.mask_cache_size > 0:
+            self.flex_mask_cache[key] = mask
+            self.flex_mask_cache.move_to_end(key)
+            while len(self.flex_mask_cache) > self.mask_cache_size:
+                self.flex_mask_cache.popitem(last=False)
+        return mask
+
+    def _flex_attention_bucket(self, q, k, v, window):
+        if self.training and self.attn_drop.p > 0.0:
+            return None, self._backend_fallback("flex_attention_no_dropout_fallback")
+        flex_attention, _, import_error = _load_flex_attention()
+        if flex_attention is None:
+            return None, self._backend_fallback(f"flex_attention_unavailable: {import_error}")
+        B, H, T, D = q.shape
+        W = max(1, min(int(window), T))
+        try:
+            block_mask = self._get_flex_block_mask(T, W, q.device)
+            y = flex_attention(q.contiguous(), k.contiguous(), v.contiguous(), block_mask=block_mask, scale=self.scale)
+        except Exception as exc:  # pragma: no cover - backend/runtime specific
+            return None, self._backend_fallback(f"flex_attention_failed: {exc}")
+        return y, {
+            "backend": "flex_attention",
+            "requested_backend": self.attention_backend,
+            "fallback_reason": "",
+        }
+
+    def _execute_attention_bucket(self, q, k, v, window, return_attn: bool = False):
+        requested_backend = self.attention_backend
+        if return_attn:
+            requested_backend = "dense_masked"
+
+        if requested_backend == "flash_attn":
+            with record_function("attn_flash_backend"):
+                y, info = self._flash_attention_bucket(q, k, v, window)
+            if y is not None:
+                return y, None, 0.0, info
+        elif requested_backend == "flex_attention":
+            with record_function("attn_flex_backend"):
+                y, info = self._flex_attention_bucket(q, k, v, window)
+            if y is not None:
+                return y, None, 0.0, info
+        else:
+            info = {
+                "backend": "dense_masked",
+                "requested_backend": self.attention_backend,
+                "fallback_reason": "",
+            }
+
+        B, H, T, D = q.shape
+        qf = q.reshape(B * H, T, D)
+        kf = k.reshape(B * H, T, D)
+        vf = v.reshape(B * H, T, D)
+        with record_function("attn_dense_masked_backend"):
+            y_f, att_f, mask_ms = self._local_attention(qf, kf, vf, window)
+        y_h = y_f.view(B, H, T, D)
+        att_h = att_f.view(B, H, att_f.size(1), att_f.size(2))
+        if requested_backend != "dense_masked" and "fallback_reason" not in info:
+            info = self._backend_fallback("unknown_backend_fallback")
+        if return_attn and not info.get("fallback_reason"):
+            info = {
+                "backend": "dense_masked",
+                "requested_backend": self.attention_backend,
+                "fallback_reason": "return_attn_requires_dense_weights",
+            }
+        return y_h, att_h, mask_ms, info
+
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()
         t_start = time.perf_counter()
@@ -1664,17 +1855,12 @@ class AAHV3Attention(nn.Module):
         if not self.apply_window_control and not self.build_hierarchy:
             path_mode = "full_attention_fastpath"
             t_attn0 = time.perf_counter()
-            att = (q @ k.transpose(-2, -1)) * self.scale
-            mask = self.full_mask[:, :, :T, :T]
-            att = att.masked_fill(mask == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_drop(att)
-            y = att @ v
+            y_h, att, mask_time_ms, backend_info = self._execute_attention_bucket(q, k, v, T, return_attn=return_attn)
+            y = y_h
             y = y.transpose(1, 2).contiguous().view(B, T, C)
             y = self.resid_drop(self.proj(y))
             attn_time_ms = (time.perf_counter() - t_attn0) * 1000.0
             total_time_ms = (time.perf_counter() - t_start) * 1000.0
-            mask_time_ms = 0.0
             control_time_ms = 0.0
             lk_tensor = torch.full((self.n_head,), float(T), device=x.device)
             w_tensor = lk_tensor.clone()
@@ -1683,11 +1869,25 @@ class AAHV3Attention(nn.Module):
             w_mean = float(w_tensor.mean().item())
             w_min = float(w_tensor.min().item())
             w_max = float(w_tensor.max().item())
+            full_elements = float(self.n_head * T * T)
+            backend_used = str(backend_info.get("backend", "dense_masked"))
             self.last_stats = {
                 "lq": T,
                 "lk": [T for _ in range(self.n_head)],
-                "total_elements": float(self.n_head * T * T),
-                "baseline_elements": float(self.n_head * T * T),
+                "total_elements": full_elements,
+                "baseline_elements": full_elements,
+                "effective_attn_elements": full_elements,
+                "effective_ACR": 1.0,
+                "dense_kernel_actual_elements_est": full_elements,
+                "backend_realized_elements_est": full_elements,
+                "backend_realized_ACR_est": 1.0,
+                "backend_name": backend_used,
+                "requested_backend": self.attention_backend,
+                "backend_bucket_counts": {backend_used: 1},
+                "backend_kernel_calls": 1,
+                "backend_time_ms": attn_time_ms,
+                "backend_fallback_reasons": [backend_info["fallback_reason"]] if backend_info.get("fallback_reason") else [],
+                "attention_stats_available": att is not None,
                 "head_norms": [],
                 "head_entropy": [],
                 "head_usage": [],
@@ -1903,6 +2103,9 @@ class AAHV3Attention(nn.Module):
                     window_select_time_ms += (time.perf_counter() - t_window_select) * 1000.0
                     controller_logits_std_per_level = [float(logits.std(unbiased=False).item())]
                     win_idx = logits.argmax(dim=-1)
+                    oracle_idx = self._oracle_window_indices(win_idx.numel(), x.device)
+                    if oracle_idx is not None:
+                        win_idx = oracle_idx
                     win_idx_pre_clamp = win_idx.detach().clone()
                     win_idx_post_clamp = win_idx.detach().clone()
                     win_idx_before_execution_mapping = win_idx.detach().clone()
@@ -2020,6 +2223,12 @@ class AAHV3Attention(nn.Module):
         lk_tensor = torch.clamp(w, min=1.0, max=float(T))
         total_elements = float((lq * lk_tensor).sum().item())
         baseline_elements = float(self.n_head * lq * lq)
+        dense_kernel_actual_elements_est = baseline_elements
+        backend_realized_elements_est = 0.0
+        backend_kernel_calls = 0
+        backend_bucket_counts = {}
+        backend_fallback_reasons = []
+        backend_name = self.attention_backend
 
         outputs = torch.zeros(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype)
         head_norms = [0.0 for _ in range(self.n_head)]
@@ -2039,28 +2248,40 @@ class AAHV3Attention(nn.Module):
             k_sel = k[:, heads]
             v_sel = v[:, heads]
             Bc, Hc, Tc, Dc = q_sel.shape
-            qf = q_sel.reshape(Bc * Hc, Tc, Dc)
-            kf = k_sel.reshape(Bc * Hc, Tc, Dc)
-            vf = v_sel.reshape(Bc * Hc, Tc, Dc)
-            y_f, att_f, mask_ms = self._local_attention(qf, kf, vf, window)
+            y_h, att_h, mask_ms, backend_info = self._execute_attention_bucket(q_sel, k_sel, v_sel, window, return_attn=return_attn)
             mask_time_ms += mask_ms
-            y_h = y_f.view(Bc, Hc, Tc, Dc)
+            backend_used = str(backend_info.get("backend", "dense_masked"))
+            backend_name = backend_used if backend_name == self.attention_backend else backend_name
+            backend_bucket_counts[backend_used] = backend_bucket_counts.get(backend_used, 0) + 1
+            if backend_info.get("fallback_reason"):
+                backend_fallback_reasons.append(str(backend_info["fallback_reason"]))
+            backend_kernel_calls += 1
+            bucket_effective = float(Bc * Hc * Tc * max(1, min(int(window), Tc)))
+            bucket_dense_actual = float(Bc * Hc * Tc * Tc)
+            if backend_used == "dense_masked":
+                backend_realized_elements_est += bucket_dense_actual
+            else:
+                backend_realized_elements_est += bucket_effective
             outputs[:, heads] = y_h
             norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
             for i, h in enumerate(heads):
                 head_norms[h] = float(norms[i].item())
-            att_h = att_f.view(Bc, Hc, att_f.size(1), att_f.size(2))
-            att_h_f = att_h.float()
-            ent = -(att_h_f * (att_h_f + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
-            ent = ent / max(1.0, math.log(att_h.size(-1)))
-            usage = att_h_f[..., -1].mean(dim=(0, 2))
-            for i, h in enumerate(heads):
-                head_entropy[h] = float(ent[i].item())
-                head_usage[h] = float(usage[i].item())
-            if return_attn:
+            if att_h is not None:
+                att_h_f = att_h.float()
+                ent = -(att_h_f * (att_h_f + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
+                ent = ent / max(1.0, math.log(att_h.size(-1)))
+                usage = att_h_f[..., -1].mean(dim=(0, 2))
                 for i, h in enumerate(heads):
-                    attn_maps[h] = att_h[:, i:i+1]
+                    head_entropy[h] = float(ent[i].item())
+                    head_usage[h] = float(usage[i].item())
+                if return_attn:
+                    for i, h in enumerate(heads):
+                        attn_maps[h] = att_h[:, i:i+1]
         attn_time_ms = (time.perf_counter() - t_attn0) * 1000.0
+        if backend_realized_elements_est <= 0.0:
+            backend_realized_elements_est = dense_kernel_actual_elements_est
+        effective_ACR = total_elements / baseline_elements if baseline_elements > 0 else 1.0
+        backend_realized_ACR_est = backend_realized_elements_est / dense_kernel_actual_elements_est if dense_kernel_actual_elements_est > 0 else 1.0
 
         y = outputs
         y = y.transpose(1, 2).contiguous().view(B, T, C)
@@ -2126,11 +2347,27 @@ class AAHV3Attention(nn.Module):
         hierarchy_growth_stopped_per_level = [bool(d.get("hierarchy_growth_stopped", False)) for d in cluster_debug]
         hierarchy_stop_reason_per_level = [str(d.get("hierarchy_stop_reason", "")) for d in cluster_debug]
         diagnostics_pack_time_ms += (time.perf_counter() - t_diag_pack) * 1000.0
+        backend_name = next(iter(backend_bucket_counts.keys()), self.attention_backend)
+        if len(backend_bucket_counts) > 1:
+            backend_name = "mixed"
+        attention_stats_available = all(k == "dense_masked" for k in backend_bucket_counts.keys())
         self.last_stats = {
             "lq": lq,
             "lk": lk_list,
             "total_elements": total_elements,
             "baseline_elements": baseline_elements,
+            "effective_attn_elements": total_elements,
+            "effective_ACR": effective_ACR,
+            "dense_kernel_actual_elements_est": dense_kernel_actual_elements_est,
+            "backend_realized_elements_est": backend_realized_elements_est,
+            "backend_realized_ACR_est": backend_realized_ACR_est,
+            "backend_name": backend_name,
+            "requested_backend": self.attention_backend,
+            "backend_bucket_counts": backend_bucket_counts,
+            "backend_kernel_calls": backend_kernel_calls,
+            "backend_time_ms": attn_time_ms,
+            "backend_fallback_reasons": sorted(set(backend_fallback_reasons)),
+            "attention_stats_available": attention_stats_available,
             "head_norms": head_norms,
             "head_entropy": head_entropy,
             "head_usage": head_usage,

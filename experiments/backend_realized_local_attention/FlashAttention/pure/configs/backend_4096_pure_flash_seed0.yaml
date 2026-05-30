@@ -1,0 +1,46 @@
+experiment:
+  name: backend-4096-pure-flash-seed0
+  seed: 0
+  variant: backend_4096_pure_flash
+  out_dir: experiments/backend_realized_local_attention/FlashAttention/pure/results
+data:
+  dataset: wikitext-2-raw-v1
+  tokenizer: gpt2
+  seq_len: 4096
+  num_workers: 2
+model:
+  n_layer: 16
+  n_head: 12
+  n_embd: 1536
+  n_ff: 6144
+  dropout: 0.0
+  attention_backend: flash_attn
+  flex_block_size: 128
+train:
+  batch_size: 1
+  grad_accum: 1
+  max_steps: 10000
+  lr: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 200
+  eval_batches: 20
+  eval_log_progress: false
+  log_interval: 50
+  device: cuda
+  precision: bf16
+  use_wandb: true
+  log_csv: true
+  save_checkpoints: true
+  checkpoint_steps:
+  - 1000
+  - 5000
+  - 10000
+profiling:
+  measured_flops_ratio: true
+  baseline_role: denominator
+  profile_regions:
+  - total
+  - attention
+  notes: Use this pure full-attention backend run as denominator for measured FLOPs/FLOPs
+    ratios.

@@ -14,6 +14,7 @@ import traceback
 from datetime import datetime, timezone
 from collections import deque
 from contextlib import nullcontext
+import importlib
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -28,7 +29,14 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.data import build_dataloaders
-from src.models.transformer import GPT, GPTConfig
+
+TRANSFORMER_MODULE = os.environ.get(
+    "AAH_BACKEND_TRANSFORMER_MODULE",
+    "experiments.backend_realized_local_attention._common.aah_backend_transformer",
+)
+_transformer_mod = importlib.import_module(TRANSFORMER_MODULE)
+GPT = _transformer_mod.GPT
+GPTConfig = _transformer_mod.GPTConfig
 
 
 def load_config(path):
@@ -319,6 +327,8 @@ def main():
         aah_v3_hierarchy_ablation_mode=model_cfg.get("aah_v3_hierarchy_ablation_mode", "adaptive"),
         aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", exp.get("seed", 1337)),
         aah_v3_parent_constraint=model_cfg.get("aah_v3_parent_constraint", True),
+        aah_v3_attention_backend=model_cfg.get("aah_v3_attention_backend", model_cfg.get("attention_backend", "dense_masked")),
+        aah_v3_flex_block_size=model_cfg.get("aah_v3_flex_block_size", model_cfg.get("flex_block_size", 128)),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -420,10 +430,21 @@ def main():
         "attn_elems",
         "attn_ratio",
         "attn_reduction",
-        "flops_attn_est",
-        "flops_total_est",
-        "flops_ratio",
-        "flops_reduction_pct",
+        "effective_attn_elements",
+        "effective_ACR",
+        "dense_kernel_actual_elements_est",
+        "backend_realized_elements_est",
+        "backend_realized_ACR_est",
+        "backend_name",
+        "requested_backend",
+        "backend_bucket_counts",
+        "backend_kernel_calls",
+        "backend_time_ms",
+        "backend_fallback_reasons",
+        "analytic_flops_attn_est",
+        "analytic_flops_total_est",
+        "analytic_flops_ratio",
+        "analytic_flops_reduction_pct",
         "attn_lq",
         "attn_lk_per_layer",
         "head_entropy",
@@ -446,7 +467,7 @@ def main():
         "resolution_delta",
         "branch_usage_freq",
         "attn_ratio_std_ema",
-        "flops_ratio_std_ema",
+        "analytic_flops_ratio_std_ema",
         "lk_mean",
         "lk_p90",
         "w_mean",
@@ -592,7 +613,7 @@ def main():
     prev_head_groups = None
     lifespan_ema = None
     ratio_window = deque(maxlen=20)
-    flops_ratio_window = deque(maxlen=20)
+    analytic_flops_ratio_window = deque(maxlen=20)
     model.train()
     t0 = time.time()
     train_iter = iter(train_loader)
@@ -614,6 +635,12 @@ def main():
                     print(f"autocast gpu dtype: unavailable ({exc})")
             aah_v2_enabled = model_cfg.get("aah_v2_enabled", False)
             aah_v3_enabled = model_cfg.get("aah_v3_enabled", False)
+            attention_stats_enabled = (
+                aah_v2_enabled
+                or aah_v3_enabled
+                or model_cfg.get("aah_v3_attention_backend") in {"flex_attention", "flash_attn"}
+                or model_cfg.get("attention_backend") in {"flex_attention", "flash_attn"}
+            )
             warmup_steps = model_cfg.get("aah_v2_warmup_steps", 0)
             activation_steps = model_cfg.get("aah_v2_activation_steps", 0)
             compute_lambda = model_cfg.get("aah_v2_compute_lambda", 0.0)
@@ -726,10 +753,10 @@ def main():
                 attn_elems = None
                 attn_ratio = None
                 attn_reduction = None
-                flops_attn_est = None
-                flops_total_est = None
-                flops_ratio = None
-                flops_reduction_pct = None
+                analytic_flops_attn_est = None
+                analytic_flops_total_est = None
+                analytic_flops_ratio = None
+                analytic_flops_reduction_pct = None
                 lq = None
                 lk_layers = []
                 head_entropy = []
@@ -748,6 +775,17 @@ def main():
                 resolution_collapse_maxs = []
                 resolution_deltas = []
                 branch_usage_freqs = []
+                effective_attn_elements_vals = []
+                effective_ACR_vals = []
+                dense_kernel_actual_elements_vals = []
+                backend_realized_elements_vals = []
+                backend_realized_ACR_vals = []
+                backend_names = []
+                requested_backends = []
+                backend_bucket_counts_vals = []
+                backend_kernel_calls_vals = []
+                backend_time_vals = []
+                backend_fallback_reasons_vals = []
                 hierarchy_levels_useds = []
                 group_counts_per_levels = []
                 controller_logits_std_per_levels = []
@@ -865,7 +903,7 @@ def main():
                 attn_times = []
                 mask_times = []
                 overhead_times = []
-                if model_cfg.get("aah_v2_enabled", False) or model_cfg.get("aah_v3_enabled", False):
+                if attention_stats_enabled:
                     total_elements = 0.0
                     baseline_elements = 0.0
                     for block in model.blocks:
@@ -907,6 +945,28 @@ def main():
                                 resolution_deltas.append(attn.last_stats.get("resolution_delta"))
                             if "branch_usage_freq" in attn.last_stats:
                                 branch_usage_freqs.append(attn.last_stats.get("branch_usage_freq"))
+                            if "effective_attn_elements" in attn.last_stats:
+                                effective_attn_elements_vals.append(attn.last_stats.get("effective_attn_elements"))
+                            if "effective_ACR" in attn.last_stats:
+                                effective_ACR_vals.append(attn.last_stats.get("effective_ACR"))
+                            if "dense_kernel_actual_elements_est" in attn.last_stats:
+                                dense_kernel_actual_elements_vals.append(attn.last_stats.get("dense_kernel_actual_elements_est"))
+                            if "backend_realized_elements_est" in attn.last_stats:
+                                backend_realized_elements_vals.append(attn.last_stats.get("backend_realized_elements_est"))
+                            if "backend_realized_ACR_est" in attn.last_stats:
+                                backend_realized_ACR_vals.append(attn.last_stats.get("backend_realized_ACR_est"))
+                            if "backend_name" in attn.last_stats:
+                                backend_names.append(attn.last_stats.get("backend_name"))
+                            if "requested_backend" in attn.last_stats:
+                                requested_backends.append(attn.last_stats.get("requested_backend"))
+                            if "backend_bucket_counts" in attn.last_stats:
+                                backend_bucket_counts_vals.append(attn.last_stats.get("backend_bucket_counts"))
+                            if "backend_kernel_calls" in attn.last_stats:
+                                backend_kernel_calls_vals.append(attn.last_stats.get("backend_kernel_calls"))
+                            if "backend_time_ms" in attn.last_stats:
+                                backend_time_vals.append(attn.last_stats.get("backend_time_ms"))
+                            if "backend_fallback_reasons" in attn.last_stats:
+                                backend_fallback_reasons_vals.append(attn.last_stats.get("backend_fallback_reasons"))
                             if "hierarchy_levels_used" in attn.last_stats:
                                 hierarchy_levels_useds.append(attn.last_stats.get("hierarchy_levels_used"))
                             if "group_counts_per_level" in attn.last_stats:
@@ -1147,7 +1207,7 @@ def main():
                         attn_reduction = 1.0 - attn_ratio
                 b_cur = int(x.size(0))
                 t_cur = int(x.size(1))
-                flops_attn_est, flops_total_est, flops_ratio, flops_reduction_pct = estimate_flops(
+                analytic_flops_attn_est, analytic_flops_total_est, analytic_flops_ratio, analytic_flops_reduction_pct = estimate_flops(
                     model_cfg,
                     b_cur,
                     t_cur,
@@ -1235,6 +1295,52 @@ def main():
                     denom = float(len(branch_usage_freqs))
                     for k in list(branch_usage_agg.keys()):
                         branch_usage_agg[k] = branch_usage_agg[k] / denom
+                effective_attn_elements = sum(float(v) for v in effective_attn_elements_vals) if effective_attn_elements_vals else None
+                effective_ACR = (
+                    effective_attn_elements / baseline_elements
+                    if effective_attn_elements is not None and baseline_elements > 0
+                    else None
+                )
+                dense_kernel_actual_elements_est = (
+                    sum(float(v) for v in dense_kernel_actual_elements_vals)
+                    if dense_kernel_actual_elements_vals
+                    else None
+                )
+                backend_realized_elements_est = (
+                    sum(float(v) for v in backend_realized_elements_vals)
+                    if backend_realized_elements_vals
+                    else None
+                )
+                backend_realized_ACR_est = (
+                    backend_realized_elements_est / dense_kernel_actual_elements_est
+                    if backend_realized_elements_est is not None and dense_kernel_actual_elements_est and dense_kernel_actual_elements_est > 0
+                    else None
+                )
+                backend_name = ""
+                if backend_names:
+                    unique_backend_names = sorted(set(str(v) for v in backend_names))
+                    backend_name = unique_backend_names[0] if len(unique_backend_names) == 1 else "mixed"
+                requested_backend = ""
+                if requested_backends:
+                    unique_requested_backends = sorted(set(str(v) for v in requested_backends))
+                    requested_backend = unique_requested_backends[0] if len(unique_requested_backends) == 1 else "mixed"
+                backend_bucket_counts = {}
+                for counts in backend_bucket_counts_vals:
+                    if not isinstance(counts, dict):
+                        continue
+                    for k, v in counts.items():
+                        ks = str(k)
+                        backend_bucket_counts[ks] = backend_bucket_counts.get(ks, 0) + int(v)
+                backend_kernel_calls = sum(int(v) for v in backend_kernel_calls_vals) if backend_kernel_calls_vals else None
+                backend_time_ms = sum(float(v) for v in backend_time_vals) / len(backend_time_vals) if backend_time_vals else None
+                backend_fallback_reasons = sorted(
+                    {
+                        str(reason)
+                        for reasons in backend_fallback_reasons_vals
+                        if isinstance(reasons, list)
+                        for reason in reasons
+                    }
+                )
                 path_mode_freq = {}
                 if path_modes:
                     for mode in path_modes:
@@ -1283,10 +1389,10 @@ def main():
                         lifespan_ema = 0.9 * lifespan_ema + 0.1 * (1.0 - avg_reassign)
                 if attn_ratio is not None:
                     ratio_window.append(float(attn_ratio))
-                if flops_ratio is not None:
-                    flops_ratio_window.append(float(flops_ratio))
+                if analytic_flops_ratio is not None:
+                    analytic_flops_ratio_window.append(float(analytic_flops_ratio))
                 attn_ratio_std_ema = float(torch.tensor(list(ratio_window)).std(unbiased=False).item()) if len(ratio_window) >= 2 else 0.0
-                flops_ratio_std_ema = float(torch.tensor(list(flops_ratio_window)).std(unbiased=False).item()) if len(flops_ratio_window) >= 2 else 0.0
+                analytic_flops_ratio_std_ema = float(torch.tensor(list(analytic_flops_ratio_window)).std(unbiased=False).item()) if len(analytic_flops_ratio_window) >= 2 else 0.0
                 msg = f"step {step} | loss {loss.item():.4f} | tok/s {tok_per_sec:.1f}"
                 if attn_ratio is not None:
                     msg += f" | attn_elems {attn_elems:.0f} | attn_ratio {attn_ratio:.3f}"
@@ -1311,19 +1417,41 @@ def main():
                         payload["perf/attn_elems"] = attn_elems
                         payload["perf/attn_ratio"] = attn_ratio
                         payload["aah/attn_ratio"] = attn_ratio
+                    if effective_attn_elements is not None:
+                        payload["aah/effective_attn_elements"] = effective_attn_elements
+                    if effective_ACR is not None:
+                        payload["aah/effective_ACR"] = effective_ACR
+                    if dense_kernel_actual_elements_est is not None:
+                        payload["aah/dense_kernel_actual_elements_est"] = dense_kernel_actual_elements_est
+                    if backend_realized_elements_est is not None:
+                        payload["aah/backend_realized_elements_est"] = backend_realized_elements_est
+                    if backend_realized_ACR_est is not None:
+                        payload["aah/backend_realized_ACR_est"] = backend_realized_ACR_est
+                    if backend_name:
+                        payload["aah/backend_name"] = backend_name
+                    if requested_backend:
+                        payload["aah/requested_backend"] = requested_backend
+                    if backend_bucket_counts:
+                        payload["aah/backend_bucket_counts"] = backend_bucket_counts
+                    if backend_kernel_calls is not None:
+                        payload["aah/backend_kernel_calls"] = backend_kernel_calls
+                    if backend_time_ms is not None:
+                        payload["aah/backend_time_ms"] = backend_time_ms
+                    if backend_fallback_reasons:
+                        payload["aah/backend_fallback_reasons"] = backend_fallback_reasons
                     if attn_reduction is not None:
                         payload["perf/attn_reduction"] = attn_reduction
-                    if flops_attn_est is not None:
-                        payload["aah/flops_attn_est"] = flops_attn_est
-                    if flops_total_est is not None:
-                        payload["aah/flops_total_est"] = flops_total_est
-                    if flops_ratio is not None:
-                        payload["aah/flops_ratio"] = flops_ratio
-                        payload["aah/flops_ratio_std_ema"] = flops_ratio_std_ema
+                    if analytic_flops_attn_est is not None:
+                        payload["aah/analytic_flops_attn_est"] = analytic_flops_attn_est
+                    if analytic_flops_total_est is not None:
+                        payload["aah/analytic_flops_total_est"] = analytic_flops_total_est
+                    if analytic_flops_ratio is not None:
+                        payload["aah/analytic_flops_ratio"] = analytic_flops_ratio
+                        payload["aah/analytic_flops_ratio_std_ema"] = analytic_flops_ratio_std_ema
                     if attn_ratio is not None:
                         payload["aah/attn_ratio_std_ema"] = attn_ratio_std_ema
-                    if flops_reduction_pct is not None:
-                        payload["aah/flops_reduction_%"] = flops_reduction_pct
+                    if analytic_flops_reduction_pct is not None:
+                        payload["aah/analytic_flops_reduction_%"] = analytic_flops_reduction_pct
                     if group_change_rate is not None:
                         payload["aah/group_change_rate"] = group_change_rate
                     if avg_window is not None:
@@ -1552,10 +1680,21 @@ def main():
                         f"{attn_elems:.2f}" if attn_elems is not None else "",
                         f"{attn_ratio:.6f}" if attn_ratio is not None else "",
                         f"{attn_reduction:.6f}" if attn_reduction is not None else "",
-                        f"{flops_attn_est:.2f}" if flops_attn_est is not None else "",
-                        f"{flops_total_est:.2f}" if flops_total_est is not None else "",
-                        f"{flops_ratio:.6f}" if flops_ratio is not None else "",
-                        f"{flops_reduction_pct:.4f}" if flops_reduction_pct is not None else "",
+                        f"{effective_attn_elements:.2f}" if effective_attn_elements is not None else "",
+                        f"{effective_ACR:.6f}" if effective_ACR is not None else "",
+                        f"{dense_kernel_actual_elements_est:.2f}" if dense_kernel_actual_elements_est is not None else "",
+                        f"{backend_realized_elements_est:.2f}" if backend_realized_elements_est is not None else "",
+                        f"{backend_realized_ACR_est:.6f}" if backend_realized_ACR_est is not None else "",
+                        backend_name,
+                        requested_backend,
+                        str(backend_bucket_counts) if backend_bucket_counts else "",
+                        str(backend_kernel_calls) if backend_kernel_calls is not None else "",
+                        fmt(backend_time_ms),
+                        str(backend_fallback_reasons) if backend_fallback_reasons else "",
+                        f"{analytic_flops_attn_est:.2f}" if analytic_flops_attn_est is not None else "",
+                        f"{analytic_flops_total_est:.2f}" if analytic_flops_total_est is not None else "",
+                        f"{analytic_flops_ratio:.6f}" if analytic_flops_ratio is not None else "",
+                        f"{analytic_flops_reduction_pct:.4f}" if analytic_flops_reduction_pct is not None else "",
                         str(lq) if lq is not None else "",
                         lk_serialized,
                         ent_serialized,
@@ -1578,7 +1717,7 @@ def main():
                         fmt(resolution_delta),
                         str(branch_usage_agg) if branch_usage_agg else "",
                         fmt(attn_ratio_std_ema),
-                        fmt(flops_ratio_std_ema),
+                        fmt(analytic_flops_ratio_std_ema),
                         fmt(lk_mean),
                         fmt(lk_p90),
                         fmt(w_mean),

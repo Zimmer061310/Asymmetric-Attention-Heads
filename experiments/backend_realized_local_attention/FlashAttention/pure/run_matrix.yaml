@@ -3,7 +3,7 @@ runs:
     backend: flash_attention
     aah_enabled: false
     attention_pattern: full_causal
-    context_length: 8192
+    context_length: 4096
     candidate_windows: null
     role: baseline_denominator
     notes: "Pure FlashAttention full causal baseline with no AAH modules."

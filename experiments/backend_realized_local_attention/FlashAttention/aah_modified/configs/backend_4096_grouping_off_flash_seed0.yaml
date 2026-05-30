@@ -1,12 +1,12 @@
 experiment:
-  name: paper-backend_8192_full_flash-seed0
+  name: backend-4096-grouping_off-flash-seed0
   seed: 0
-  variant: backend_8192_full_flash
-  out_dir: experiments/paper
+  variant: backend_4096_grouping_off_flash
+  out_dir: experiments/backend_realized_local_attention/FlashAttention/aah_modified/results
 data:
   dataset: wikitext-2-raw-v1
   tokenizer: gpt2
-  seq_len: 8192
+  seq_len: 4096
   num_workers: 2
 model:
   n_layer: 16
@@ -16,12 +16,12 @@ model:
   dropout: 0.0
   aah_v3_enabled: true
   aah_v3_windows:
+  - 512
   - 1024
   - 2048
   - 4096
-  - 8192
   aah_v3_grouping_enabled: false
-  aah_v3_control_enabled: false
+  aah_v3_control_enabled: true
   aah_v3_control_dim: 16
   aah_v3_control_interval: 5
   aah_v3_sim_threshold: 0.72
@@ -31,7 +31,7 @@ model:
   aah_v3_churn_penalty: 0.02
   aah_v3_min_group_size: 3
   aah_v3_warmup_steps: 100
-  aah_v3_W_min_gpu: 1024
+  aah_v3_W_min_gpu: 64
   aah_v3_resolution_ema_alpha: 0.15
   aah_v3_post_warmup_ramp_steps: 0
   aah_v3_group_feature_mode: mean
@@ -51,12 +51,13 @@ model:
   aah_v3_resolution_collapse_min_frac: 0.98
   aah_v3_resolution_collapse_max_frac: 0.98
   aah_v3_build_hierarchy: false
-  aah_v3_apply_window_control: false
+  aah_v3_apply_window_control: true
   aah_v3_reuse_group_hierarchy: false
   aah_v3_hierarchy_ablation_mode: adaptive
   aah_v3_fixed_hierarchy_seed: 0
   aah_v3_parent_constraint: true
   aah_v3_attention_backend: flash_attn
+  aah_v3_flex_block_size: 128
 train:
   batch_size: 1
   grad_accum: 1
@@ -77,3 +78,11 @@ train:
   - 1000
   - 5000
   - 10000
+profiling:
+  measured_flops_ratio: true
+  baseline_config: ../pure/configs/backend_4096_pure_flash_seed0.yaml
+  profile_regions:
+  - total
+  - attention
+  notes: Measured FLOPs ratio must be profiler GPU FP ops divided by the matched pure
+    backend full-attention baseline.

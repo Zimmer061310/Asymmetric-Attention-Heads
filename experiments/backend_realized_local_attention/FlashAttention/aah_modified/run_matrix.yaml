@@ -6,8 +6,8 @@ runs:
     grouping: off
     hierarchy: none
     joint_scorer: off
-    context_length: 8192
-    candidate_windows: [1024, 2048, 4096, 8192]
+    context_length: 4096
+    candidate_windows: [512, 1024, 2048, 4096]
 
   - id: flash_full_adaptive
     backend: flash_attention
@@ -17,8 +17,8 @@ runs:
     hierarchy: [2, 2, 2, 2]
     hierarchy_mode: adaptive
     joint_scorer: wide_joint
-    context_length: 8192
-    candidate_windows: [1024, 2048, 4096, 8192]
+    context_length: 4096
+    candidate_windows: [512, 1024, 2048, 4096]
 
   - id: flash_shallow_freeze
     backend: flash_attention
@@ -28,8 +28,8 @@ runs:
     hierarchy: [2]
     hierarchy_mode: freeze_learned_topology
     joint_scorer: wide_joint
-    context_length: 8192
-    candidate_windows: [1024, 2048, 4096, 8192]
+    context_length: 4096
+    candidate_windows: [512, 1024, 2048, 4096]
 
   - id: flash_deep_practical_reuse
     backend: flash_attention
@@ -40,8 +40,8 @@ runs:
     hierarchy_mode: adaptive
     reuse_group_hierarchy: true
     joint_scorer: wide_joint
-    context_length: 8192
-    candidate_windows: [1024, 2048, 4096, 8192]
+    context_length: 4096
+    candidate_windows: [512, 1024, 2048, 4096]
 
 metrics:
   - val_loss
@@ -55,7 +55,7 @@ metrics:
   - peak_gpu_memory
   - backend_time_ms
   - backend_fallback_rate
+  - window_bucket_fraction_512
   - window_bucket_fraction_1024
   - window_bucket_fraction_2048
   - window_bucket_fraction_4096
-  - window_bucket_fraction_8192
