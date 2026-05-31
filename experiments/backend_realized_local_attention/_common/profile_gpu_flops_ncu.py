@@ -201,12 +201,17 @@ def collect_model_metadata(config_path, module_key, device_name, checkpoint=None
     batch_size = int(train.get("batch_size", 1))
     seq_len = int(cfg["data"]["seq_len"])
     idx = torch.randint(0, int(gpt_cfg.vocab_size), (batch_size, seq_len), device=device)
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
     with torch.no_grad():
         for _ in range(max(0, int(warmup))):
             with autocast_context(device, precision):
                 model(idx)
             sync(device)
     stats = collect_backend_stats(model, batch_size=batch_size, head_dim=int(gpt_cfg.n_embd) // int(gpt_cfg.n_head))
+    peak_memory_mb = None
+    if device.type == "cuda":
+        peak_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
     device_name_out = torch.cuda.get_device_name(device) if device.type == "cuda" else str(device)
     return {
         "config_path": os.path.abspath(config_path),
@@ -218,6 +223,7 @@ def collect_model_metadata(config_path, module_key, device_name, checkpoint=None
         "precision": precision,
         "batch_size": batch_size,
         "seq_len": seq_len,
+        "peak_memory_mb": peak_memory_mb,
         **stats,
     }
 
@@ -241,14 +247,21 @@ def child_forward(args):
                 model(idx)
             sync(device)
 
-        torch.cuda.nvtx.range_push(TOTAL_RANGE)
+        profiler_started = False
         try:
+            if args.cuda_profiler_api:
+                torch.cuda.cudart().cudaProfilerStart()
+                profiler_started = True
+            torch.cuda.nvtx.range_push(TOTAL_RANGE)
             for _ in range(max(1, int(args.repeats))):
                 with autocast_context(device, precision):
                     model(idx)
                 sync(device)
         finally:
             torch.cuda.nvtx.range_pop()
+            if profiler_started:
+                sync(device)
+                torch.cuda.cudart().cudaProfilerStop()
     print("ncu_child_forward_done")
 
 
@@ -262,9 +275,8 @@ def run_ncu_profile(args, metrics):
             "--csv",
             "--page",
             "raw",
-            "--nvtx",
-            "--nvtx-include",
-            TOTAL_RANGE,
+            "--profile-from-start",
+            "off",
             "--metrics",
             ",".join(metrics),
             "--log-file",
@@ -285,6 +297,7 @@ def run_ncu_profile(args, metrics):
             str(args.repeats),
             "--seed",
             str(args.seed),
+            "--cuda-profiler-api",
         ]
         if args.checkpoint:
             cmd.extend(["--checkpoint", args.checkpoint])
@@ -347,6 +360,7 @@ def main():
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--child-forward", action="store_true")
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--cuda-profiler-api", action="store_true")
     args = parser.parse_args()
 
     if args.child_forward:
