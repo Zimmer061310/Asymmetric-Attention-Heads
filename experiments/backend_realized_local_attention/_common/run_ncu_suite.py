@@ -154,6 +154,12 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument(
+        "--profile-timeout",
+        type=int,
+        default=900,
+        help="Timeout in seconds for each Nsight Compute forward profile.",
+    )
     parser.add_argument("--wandb-project", default="ENA-AAH")
     parser.add_argument("--require-wandb", action="store_true")
     parser.add_argument("--no-wandb-profile-summary", action="store_true")
@@ -225,6 +231,8 @@ def main():
             str(args.repeats),
             "--output",
             str(out),
+            "--timeout",
+            str(args.profile_timeout),
         ]
         ckpt = checkpoint_path(cfg)
         if ckpt.exists():
