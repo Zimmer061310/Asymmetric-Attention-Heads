@@ -1,6 +1,8 @@
 """Run/profile the 4096 backend suite with Nsight Compute FLOP counters."""
 
 import argparse
+import csv
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +46,104 @@ def checkpoint_path(config_path):
     return out_dir / f"{cfg['experiment']['name']}.pt"
 
 
+def metrics_csv_path(config_path):
+    import yaml
+
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+    out_dir = Path(cfg["experiment"].get("out_dir", "experiments"))
+    safe_name = cfg["experiment"]["name"].replace("_", "-")
+    variant = cfg["experiment"].get("variant", "")
+    return out_dir / f"{safe_name}_{variant}.csv"
+
+
+def latest_metrics_row(path):
+    path = Path(path)
+    if not path.exists():
+        return {}
+    with open(path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return {}
+    for row in reversed(rows):
+        if row.get("val_loss"):
+            return row
+    return rows[-1]
+
+
+def pick(row, *names):
+    for name in names:
+        value = row.get(name)
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def as_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def load_json(path):
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def append_status(run_root, payload):
+    path = Path(run_root) / "status.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def log_profile_summary_to_wandb(args, backend, method, cfg, profile_json, baseline_json):
+    if args.no_wandb_profile_summary or args.dry_run:
+        return
+    try:
+        import wandb
+    except Exception as exc:
+        if args.require_wandb:
+            raise RuntimeError(f"wandb import failed: {exc}") from exc
+        print(f"wandb profile summary skipped: {exc}", flush=True)
+        return
+
+    profile = load_json(profile_json)
+    metrics = latest_metrics_row(metrics_csv_path(cfg))
+    baseline_total = None
+    if baseline_json:
+        baseline_total = as_float(load_json(baseline_json).get("gpu_flops_total"))
+    gpu_total = as_float(profile.get("gpu_flops_total"))
+    computed_ratio = (gpu_total / baseline_total) if gpu_total is not None and baseline_total else None
+
+    payload = {
+        "backend_ncu/val_loss": as_float(pick(metrics, "val_loss")),
+        "backend_ncu/ACR": as_float(pick(metrics, "effective_ACR", "attn_ratio")),
+        "backend_ncu/EAR": as_float(pick(metrics, "backend_realized_ACR_est")),
+        "backend_ncu/tok_s": as_float(pick(metrics, "tok_s")),
+        "backend_ncu/memory_gpu_alloc_max_mb": as_float(pick(metrics, "gpu_alloc_max_mb")),
+        "backend_ncu/gpu_flops_total": gpu_total,
+        "backend_ncu/gpu_flops_total_ratio_ncu": as_float(profile.get("gpu_flops_total_ratio_ncu")),
+        "backend_ncu/computed_gpu_flops_total_ratio": computed_ratio,
+        "backend_ncu/ncu_permission_ok": 1 if profile.get("ncu_permission_ok") else 0,
+        "backend_ncu/backend": backend,
+        "backend_ncu/method": method,
+        "backend_ncu/profile_json": str(profile_json),
+    }
+    run = wandb.init(
+        project=args.wandb_project,
+        name=f"backend-4096-ncu-{backend.lower()}-{method}-seed0",
+        job_type="backend-ncu-summary",
+        config={"backend": backend, "method": method, "config": cfg},
+        reinit=True,
+    )
+    try:
+        run.log(payload)
+    finally:
+        run.finish()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-root", default="paper_results/backend_4096_realized_attention_ncu")
@@ -54,6 +154,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--wandb-project", default="ENA-AAH")
+    parser.add_argument("--require-wandb", action="store_true")
+    parser.add_argument("--no-wandb-profile-summary", action="store_true")
     parser.add_argument(
         "--skip-dense-memory-sanity",
         action="store_true",
@@ -83,8 +186,9 @@ def main():
 
     baselines = {}
     for backend, method, module, cfg in ROWS:
+        row_status = {"backend": backend, "method": method, "config": cfg, "train_rc": None, "profile_rc": None}
         if not args.profile_only:
-            run(
+            train_rc = run(
                 [
                     sys.executable,
                     "-m",
@@ -97,6 +201,12 @@ def main():
                 dry_run=args.dry_run,
                 continue_on_error=args.continue_on_error,
             )
+            row_status["train_rc"] = train_rc
+            if train_rc != 0:
+                row_status["status"] = "train_failed"
+                append_status(run_root, row_status)
+                if args.continue_on_error:
+                    continue
 
         out = profile_dir / f"{backend.lower()}_{method}_gpu_flops_profile.json"
         cmd = [
@@ -119,13 +229,25 @@ def main():
         ckpt = checkpoint_path(cfg)
         if ckpt.exists():
             cmd.extend(["--checkpoint", str(ckpt)])
-        if method != "pure" and backend in baselines:
-            cmd.extend(["--baseline-json", str(baselines[backend])])
-        run(cmd, dry_run=args.dry_run, continue_on_error=args.continue_on_error)
+        baseline_json = baselines.get(backend)
+        if method != "pure" and baseline_json:
+            cmd.extend(["--baseline-json", str(baseline_json)])
+        profile_rc = run(cmd, dry_run=args.dry_run, continue_on_error=args.continue_on_error)
+        row_status["profile_rc"] = profile_rc
+        row_status["profile_json"] = str(out)
+        if profile_rc != 0:
+            row_status["status"] = "profile_failed"
+            append_status(run_root, row_status)
+            if args.continue_on_error:
+                continue
+        if out.exists():
+            log_profile_summary_to_wandb(args, backend, method, cfg, out, baseline_json)
         if method == "pure":
             baselines[backend] = out
         if args.delete_checkpoints and ckpt.exists():
             ckpt.unlink()
+        row_status["status"] = "ok"
+        append_status(run_root, row_status)
 
     if not args.profile_only and not args.skip_dense_memory_sanity:
         print("Running final dense-masked memory sanity run.", flush=True)
@@ -146,6 +268,23 @@ def main():
         if args.delete_checkpoints and ckpt.exists():
             ckpt.unlink()
 
+    summary_csv = run_root / "backend_4096_ncu_summary.csv"
+    summary_md = run_root / "backend_4096_ncu_summary.md"
+    run(
+        [
+            sys.executable,
+            "-m",
+            "experiments.backend_realized_local_attention._common.summarize_ncu_results",
+            "--profile-dir",
+            str(profile_dir),
+            "--output-csv",
+            str(summary_csv),
+            "--output-md",
+            str(summary_md),
+        ],
+        dry_run=args.dry_run,
+        continue_on_error=args.continue_on_error,
+    )
     print(f"NCU suite finished. Profiles: {profile_dir}", flush=True)
 
 
