@@ -122,6 +122,31 @@ performance counters enabled (`RmProfilingAdminOnly=0` or equivalent platform
 support). Do not replace this with ACR, EAR, analytic window ratios, token/s, or
 Torch-profiler annotations.
 
+## DeepSpeed FLOPs fallback
+
+DeepSpeed FLOPs Profiler can be used as a software-profiler fallback when NCU
+is blocked. It profiles the forward pass and reports model FLOPs, latency, and
+parameter counts. For FlashAttention/FlexAttention custom kernels it may not
+directly observe local-window kernel math, so the backend script records both:
+
+- `deepspeed_raw_total_flops_ratio`: raw DeepSpeed profiler ratio.
+- `deepspeed_adjusted_total_flops_ratio_est`: DeepSpeed total FLOPs adjusted by
+  replacing or adding the backend-realized attention formula from EAR.
+
+This is an estimated FLOPs ratio, not hardware-counter evidence. Install
+DeepSpeed on the run machine, then profile existing checkpoints or run/profile:
+
+```bash
+pip install deepspeed
+
+python -m experiments.backend_realized_local_attention._common.run_deepspeed_flops_suite \
+  --run-root paper_results/backend_4096_realized_attention_deepspeed \
+  --profile-only
+```
+
+If no checkpoints are present and a full rerun is intended, omit
+`--profile-only`.
+
 When counters are available, run the full suite:
 
 ```bash
