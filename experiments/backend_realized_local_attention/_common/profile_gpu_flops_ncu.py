@@ -38,6 +38,17 @@ FLOP_METRIC_PATTERNS = (
     re.compile(r"derived__.*flop", re.IGNORECASE),
     re.compile(r"derived__.*sass.*op_[fdh](add|mul|fma).*", re.IGNORECASE),
     re.compile(r"derived__.*(hmma|mma|tensor).*", re.IGNORECASE),
+    re.compile(r"sm__inst_executed_pipe_tensor_op_hmma", re.IGNORECASE),
+    re.compile(r"sm__sass_thread_inst_executed_op_[dfh]fma", re.IGNORECASE),
+    re.compile(r"sm__sass_thread_inst_executed_ops_[dfh]add_[dfh]mul_[dfh]fma", re.IGNORECASE),
+)
+
+DEFAULT_NCU_FP_METRICS = (
+    "sm__inst_executed_pipe_tensor_op_hmma.sum",
+    "sm__sass_thread_inst_executed_op_ffma_pred_on.sum",
+    "sm__sass_thread_inst_executed_op_hfma_pred_on.sum",
+    "sm__sass_thread_inst_executed_ops_fadd_fmul_ffma_pred_on.sum",
+    "sm__sass_thread_inst_executed_ops_hadd_hmul_hfma_pred_on.sum",
 )
 
 COUNTER_PERMISSION_MARKERS = (
@@ -93,7 +104,7 @@ def discover_flop_metrics(ncu):
         if not token or token.startswith(("#", "==")):
             continue
         if any(pattern.search(token) for pattern in FLOP_METRIC_PATTERNS):
-            metrics.append(token)
+            metrics.append(token if "." in token else f"{token}.sum")
     metrics = sorted(set(metrics))
     return metrics, preflight
 
@@ -116,6 +127,26 @@ def parse_ncu_csv(path, metric_names):
     values = {name: [] for name in metric_names}
     with open(path, newline="") as f:
         rows = list(csv.reader(f))
+
+    # `ncu --csv --page raw` writes a wide table: metric names are columns and
+    # per-kernel values are rows. Parse that first because it is the format used
+    # by the Nsight hardware-counter profiler in this repo.
+    for i, row in enumerate(rows):
+        indexes = {name: row.index(name) for name in metric_names if name in row}
+        if not indexes:
+            continue
+        for data_row in rows[i + 1 :]:
+            if not data_row or data_row[0] in {"ID", ""}:
+                continue
+            for name, idx in indexes.items():
+                if len(data_row) <= idx:
+                    continue
+                val = parse_numeric(data_row[idx])
+                if val is not None:
+                    values[name].append(val)
+        totals = {name: float(sum(vals)) for name, vals in values.items() if vals}
+        if totals:
+            return totals
 
     header = None
     for i, row in enumerate(rows):
@@ -341,6 +372,8 @@ def main():
         metrics, preflight = discover_flop_metrics(args.ncu)
     else:
         preflight = ncu_preflight(args.ncu)
+    if not metrics and preflight and preflight["ncu_permission_ok"]:
+        metrics = list(DEFAULT_NCU_FP_METRICS)
 
     result = {
         **metadata,
