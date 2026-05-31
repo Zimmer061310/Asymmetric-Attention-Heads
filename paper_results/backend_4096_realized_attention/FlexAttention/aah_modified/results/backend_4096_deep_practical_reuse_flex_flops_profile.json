@@ -1,0 +1,27 @@
+{
+  "backend_fallback_reasons": [],
+  "backend_names": [
+    "flex_attention"
+  ],
+  "backend_realized_elements_est": 939524096.0,
+  "batch_size": 1,
+  "checkpoint_loaded": true,
+  "checkpoint_path": "/root/autodl-tmp/aah-runs/backend_4096_realized/FlexAttention/aah_modified/results/backend-4096-deep_practical_reuse-flex-seed0.pt",
+  "config_path": "/root/autodl-tmp/aah-runs/backend_4096_realized/configs/backend_4096_deep_practical_reuse_flex_seed0.yaml",
+  "dense_attention_flops_formula": 1649267441664.0,
+  "dense_kernel_actual_elements_est": 3221225472.0,
+  "device": "cuda",
+  "measured_attention_flops": 2580201603072.0,
+  "measured_attention_flops_ratio": 1.0,
+  "measured_total_flops": 5995927840156.0,
+  "measured_total_flops_ratio": 1.00000006718627,
+  "module": "aah",
+  "peak_memory_mb": 7411.4765625,
+  "precision": "bf16",
+  "profiler_attention_flops": 2580201603072.0,
+  "profiler_total_flops": 5995927840156.0,
+  "profiler_total_flops_ratio": 1.00000006718627,
+  "realized_attention_flops_formula": 481036337152.0,
+  "realized_attention_flops_formula_ratio": 0.2916666666666667,
+  "seq_len": 4096
+}

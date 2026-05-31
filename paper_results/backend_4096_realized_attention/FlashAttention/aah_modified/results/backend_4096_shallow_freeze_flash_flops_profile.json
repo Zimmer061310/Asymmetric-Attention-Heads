@@ -1,0 +1,27 @@
+{
+  "backend_fallback_reasons": [],
+  "backend_names": [
+    "flash_attn"
+  ],
+  "backend_realized_elements_est": 1082130432.0,
+  "batch_size": 1,
+  "checkpoint_loaded": true,
+  "checkpoint_path": "/root/autodl-tmp/aah-runs/backend_4096_realized/FlashAttention/aah_modified/results/backend-4096-shallow_freeze-flash-seed0.pt",
+  "config_path": "/root/autodl-tmp/aah-runs/backend_4096_realized/configs/backend_4096_shallow_freeze_flash_seed0.yaml",
+  "dense_attention_flops_formula": 1649267441664.0,
+  "dense_kernel_actual_elements_est": 3221225472.0,
+  "device": "cuda",
+  "measured_attention_flops": 927712935936.0,
+  "measured_attention_flops_ratio": 1.0,
+  "measured_total_flops": 4343439062896.0,
+  "measured_total_flops_ratio": 1.0000000673936058,
+  "module": "aah",
+  "peak_memory_mb": 4542.5205078125,
+  "precision": "bf16",
+  "profiler_attention_flops": 927712935936.0,
+  "profiler_total_flops": 4343439062896.0,
+  "profiler_total_flops_ratio": 1.0000000673936058,
+  "realized_attention_flops_formula": 554050781184.0,
+  "realized_attention_flops_formula_ratio": 0.3359375,
+  "seq_len": 4096
+}
