@@ -79,10 +79,10 @@ train:
   - 5000
   - 10000
 profiling:
-  measured_flops_ratio: true
+  ncu_gpu_flops_ratio_required: true
   baseline_config: ../pure/configs/backend_4096_pure_flex_seed0.yaml
   profile_regions:
   - total
   - attention
-  notes: Measured FLOPs ratio must be profiler GPU FP ops divided by the matched pure
+  notes: Nsight GPU FLOPs ratio must be Nsight Compute GPU FP ops divided by the matched pure
     backend full-attention baseline.

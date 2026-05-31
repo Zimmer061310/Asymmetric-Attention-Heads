@@ -21,18 +21,20 @@ from the peak GPU fields.
 
 ## FLOPs ratio fields
 
-Do not use the old analytic `flops_ratio` as a measured FLOPs/FLOPs result.
+Do not use the old analytic `flops_ratio`, `analytic_flops_ratio`, ACR, EAR, or
+token/s as a measured FLOPs/FLOPs result.
 
-Measured FLOPs ratios must come from a matched profiler pass:
+Paper FLOPs ratios must come from a matched Nsight Compute pass with real GPU
+floating-point operation counters:
 
 ```text
-measured_attention_flops_ratio =
-  profiler GPU FP ops inside method attention ranges
-  / profiler GPU FP ops inside pure full-attention backend baseline attention ranges
+gpu_flops_attention_ratio_ncu =
+  Nsight GPU FP ops inside method attention ranges
+  / Nsight GPU FP ops inside pure full-attention backend baseline attention ranges
 
-measured_total_flops_ratio =
-  profiler GPU FP ops inside method forward/train-step range
-  / profiler GPU FP ops inside pure full-attention backend baseline forward/train-step range
+gpu_flops_total_ratio_ncu =
+  Nsight GPU FP ops inside method forward-pass range
+  / Nsight GPU FP ops inside pure full-attention backend baseline forward-pass range
 ```
 
 The numerator and denominator must use the same:
@@ -46,9 +48,13 @@ The numerator and denominator must use the same:
 - software stack
 - backend family
 
-If profiler FLOP counters are unavailable for a backend, leave the measured
-FLOPs ratio blank and report token/s, memory, backend fallback rate, and ACR.
+If Nsight Compute counters are unavailable or return `ERR_NVGPUCTRPERM`, leave
+the GPU FLOPs ratio blank, record the failure JSON, and report token/s, memory,
+backend fallback rate, ACR, and EAR separately. Do not substitute Torch profiler
+annotations or formula estimates.
 
-The run scripts write profiler outputs as `*_flops_profile.json` beside each
-backend result. Treat these JSON files as the source of truth for measured FLOPs
-ratios; the trainer's `analytic_flops_*` columns are diagnostic only.
+The NCU path writes profiler outputs as `*_gpu_flops_profile.json`. Treat
+`gpu_flops_total_ratio_ncu` and, when explicit attention ranges are profiled,
+`gpu_flops_attention_ratio_ncu` as the only paper FLOPs/FLOPs fields. The
+trainer's `analytic_flops_*` columns and the legacy Torch-profiler JSONs are
+diagnostic only.

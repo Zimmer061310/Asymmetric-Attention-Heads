@@ -29,5 +29,5 @@ reasons explicitly.
 
 - AAH-selected ACR is logged.
 - Backend fallback rate is zero for the main accepted runs.
-- Measured FLOPs ratios are profiler-derived, not computed from ACR.
+- Nsight GPU FLOPs ratios are hardware-counter derived, not computed from ACR, EAR, or Torch profiler annotations.
 - The pure FlexAttention baseline in `../pure` is used as the denominator.

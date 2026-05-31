@@ -1,7 +1,11 @@
-"""Profile backend-local attention FLOPs for isolated backend experiments.
+"""Legacy Torch-profiler diagnostic for backend-local attention experiments.
 
 This script is intentionally scoped to experiments/backend_realized_local_attention.
 It does not import or modify the top-level src/ Transformer.
+
+Do not use this script's `measured_*_flops_ratio` fields as paper FLOPs/FLOPs
+evidence. The paper metric is `gpu_flops_total_ratio_ncu` from
+`profile_gpu_flops_ncu.py`.
 """
 
 import argparse

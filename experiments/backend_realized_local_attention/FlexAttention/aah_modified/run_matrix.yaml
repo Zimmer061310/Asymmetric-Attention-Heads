@@ -47,10 +47,10 @@ metrics:
   - val_loss
   - val_ppl
   - ACR
-  - measured_attention_flops
-  - measured_attention_flops_ratio
-  - measured_total_flops
-  - measured_total_flops_ratio
+  - gpu_flops_attention_ncu
+  - gpu_flops_attention_ratio_ncu
+  - gpu_flops_total_ncu
+  - gpu_flops_total_ratio_ncu
   - tokens_per_second
   - peak_gpu_memory
   - backend_time_ms

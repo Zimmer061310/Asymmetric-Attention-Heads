@@ -45,9 +45,9 @@ backend_realized_local_attention/
 - Precision: bf16.
 - Dropout: 0.0 for backend parity and deterministic local execution.
 - Dataset: tokenized dataset file on the training server, not raw W&B logs.
-- Main metrics: validation loss, validation perplexity, ACR, measured attention
-  FLOPs ratio, measured total FLOPs ratio, token/s, peak memory, backend fallback
-  rate, and backend timing.
+- Main metrics: validation loss, validation perplexity, ACR, EAR, Nsight
+  Compute GPU FLOPs ratio when hardware counters are available, token/s, peak
+  memory, backend fallback rate, and backend timing.
 
 ## Configs
 
@@ -82,33 +82,63 @@ The pure folders use a local pure backend Transformer with no AAH modules. The
 AAH folders use a local backend-aware copy of the AAH Transformer. The main
 `src/` tree remains the normal AAH implementation.
 
-Each run script also writes a compact FLOPs profile JSON via
-`_common/profile_flops_ratio.py`. The profiler loads the final checkpoint when
-it exists; otherwise it profiles the same architecture with random weights,
-which is still useful for static backend FLOP exposure checks.
+The legacy run scripts still write a compact Torch-profiler diagnostic JSON via
+`_common/profile_flops_ratio.py`, but that file is not a paper FLOPs/FLOPs
+source. It is kept only for debugging backend exposure. Paper FLOPs ratios must
+come from `_common/profile_gpu_flops_ncu.py`.
 
 ## FLOPs rule
 
-Do not reuse the old analytic `flops_ratio`.
+Do not reuse the old analytic `flops_ratio`, `analytic_flops_ratio`, or the
+legacy Torch-profiler `measured_*_flops_ratio` as a paper FLOPs/FLOPs result.
 
-Measured FLOPs ratios must be profiler-derived:
+Paper FLOPs ratios must be Nsight Compute GPU floating-point operation totals:
 
 ```text
-measured_attention_flops_ratio =
-  profiler GPU FP ops inside method attention ranges
-  / profiler GPU FP ops inside full-attention baseline attention ranges
+gpu_flops_attention_ratio_ncu =
+  Nsight GPU FP ops inside method attention ranges
+  / Nsight GPU FP ops inside matched pure full-attention baseline attention ranges
 
-measured_total_flops_ratio =
-  profiler GPU FP ops in the method forward or train step
-  / profiler GPU FP ops in the matched full-attention baseline
+gpu_flops_total_ratio_ncu =
+  Nsight GPU FP ops in the method forward pass
+  / Nsight GPU FP ops in the matched pure full-attention baseline forward pass
 ```
 
 Profiler settings, hardware, dtype, batch size, sequence length, input batch,
 checkpoint, and backend must match between numerator and denominator.
 
-If backend custom kernels do not expose profiler FLOP counters, the JSON keeps
-the profiler FLOPs and backend-realized attention FLOP formula separate. Only
-`measured_*_flops_ratio` should be used as the paper FLOPs/FLOPs ratio.
+Run the hard preflight before training:
+
+```bash
+python -m experiments.backend_realized_local_attention._common.profile_gpu_flops_ncu \
+  --preflight \
+  --ncu /usr/local/cuda/bin/ncu \
+  --output paper_results/backend_4096_realized_attention_ncu/ncu_preflight.json
+```
+
+If this returns `ERR_NVGPUCTRPERM`, the machine cannot produce true GPU FLOPs
+for the paper. Stop before rerunning and use a server or container with NVIDIA
+performance counters enabled (`RmProfilingAdminOnly=0` or equivalent platform
+support). Do not replace this with ACR, EAR, analytic window ratios, token/s, or
+Torch-profiler annotations.
+
+When counters are available, run the full suite:
+
+```bash
+python -m experiments.backend_realized_local_attention._common.run_ncu_suite \
+  --ncu /usr/local/cuda/bin/ncu \
+  --run-root paper_results/backend_4096_realized_attention_ncu \
+  --delete-checkpoints
+```
+
+Then summarize:
+
+```bash
+python -m experiments.backend_realized_local_attention._common.summarize_ncu_results \
+  --profile-dir paper_results/backend_4096_realized_attention_ncu/gpu_flops_profiles \
+  --output-csv paper_results/backend_4096_realized_attention_ncu/backend_4096_ncu_summary.csv \
+  --output-md paper_results/backend_4096_realized_attention_ncu/backend_4096_ncu_summary.md
+```
 
 ## Current implementation rule
 

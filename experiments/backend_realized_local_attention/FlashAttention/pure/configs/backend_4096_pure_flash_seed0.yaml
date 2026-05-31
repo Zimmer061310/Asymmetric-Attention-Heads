@@ -37,10 +37,10 @@ train:
   - 5000
   - 10000
 profiling:
-  measured_flops_ratio: true
+  ncu_gpu_flops_ratio_required: true
   baseline_role: denominator
   profile_regions:
   - total
   - attention
-  notes: Use this pure full-attention backend run as denominator for measured FLOPs/FLOPs
+  notes: Use this pure full-attention backend run as denominator for Nsight GPU FLOPs/FLOPs
     ratios.
