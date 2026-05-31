@@ -1,0 +1,32 @@
+{
+  "backend_fallback_reasons": [],
+  "backend_names": [
+    "flex_attention"
+  ],
+  "backend_realized_elements_est": 1585446912.0,
+  "baseline_json": "/root/autodl-tmp/aah-runs/backend_4096_realized_deepspeed/deepspeed_flops_profiles/flexattention_pure_deepspeed_flops_profile.json",
+  "batch_size": 1,
+  "checkpoint_loaded": false,
+  "checkpoint_path": "",
+  "config_path": "/root/autodl-tmp/aah-work/Asymmetric-Attention-Heads/experiments/backend_realized_local_attention/FlexAttention/aah_modified/configs/backend_4096_shallow_freeze_flex_seed0.yaml",
+  "deepspeed_adjusted_attention_mode": "replace_dense_attention_component",
+  "deepspeed_adjusted_total_flops_est": 5159642232960.0,
+  "deepspeed_adjusted_total_flops_ratio_est": 0.8603475226361766,
+  "deepspeed_elapsed_s": 3.262587785720825,
+  "deepspeed_params": 536832192.0,
+  "deepspeed_raw_macs": 2996249442624.0,
+  "deepspeed_raw_total_flops": 5997160855680.0,
+  "deepspeed_raw_total_flops_ratio": 1.0000000488551202,
+  "dense_attention_flops_formula": 1649267441664.0,
+  "dense_kernel_actual_elements_est": 3221225472.0,
+  "device": "cuda",
+  "device_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+  "hardware_counter_metric": false,
+  "metric_source": "DeepSpeed Flops Profiler plus backend-realized attention formula estimate",
+  "module": "aah",
+  "ok": true,
+  "peak_memory_mb": 7153.87109375,
+  "precision": "bf16",
+  "realized_attention_flops_formula": 811748818944.0,
+  "seq_len": 4096
+}
