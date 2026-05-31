@@ -19,6 +19,11 @@ ROWS = [
     ("FlashAttention", "deep_practical_reuse", "aah", "experiments/backend_realized_local_attention/FlashAttention/aah_modified/configs/backend_4096_deep_practical_reuse_flash_seed0.yaml"),
 ]
 
+DENSE_MEMORY_SANITY_CONFIG = (
+    "experiments/backend_realized_local_attention/"
+    "DenseMasked/memory_sanity/configs/backend_4096_dense_memory_sanity_seed0.yaml"
+)
+
 
 def run(cmd, dry_run=False, continue_on_error=False):
     print("+ " + " ".join(str(x) for x in cmd), flush=True)
@@ -49,6 +54,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument(
+        "--skip-dense-memory-sanity",
+        action="store_true",
+        help="Skip the final dense-masked memory sanity run.",
+    )
     args = parser.parse_args()
 
     run_root = Path(args.run_root)
@@ -114,6 +124,25 @@ def main():
         run(cmd, dry_run=args.dry_run, continue_on_error=args.continue_on_error)
         if method == "pure":
             baselines[backend] = out
+        if args.delete_checkpoints and ckpt.exists():
+            ckpt.unlink()
+
+    if not args.profile_only and not args.skip_dense_memory_sanity:
+        print("Running final dense-masked memory sanity run.", flush=True)
+        run(
+            [
+                sys.executable,
+                "-m",
+                "experiments.backend_realized_local_attention._common.run_train",
+                "--module",
+                "pure",
+                "--config",
+                DENSE_MEMORY_SANITY_CONFIG,
+            ],
+            dry_run=args.dry_run,
+            continue_on_error=args.continue_on_error,
+        )
+        ckpt = checkpoint_path(DENSE_MEMORY_SANITY_CONFIG)
         if args.delete_checkpoints and ckpt.exists():
             ckpt.unlink()
 

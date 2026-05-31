@@ -140,6 +140,18 @@ python -m experiments.backend_realized_local_attention._common.summarize_ncu_res
   --output-md paper_results/backend_4096_realized_attention_ncu/backend_4096_ncu_summary.md
 ```
 
+By default the suite then runs one dense-masked memory sanity control:
+
+```text
+experiments/backend_realized_local_attention/DenseMasked/memory_sanity/configs/backend_4096_dense_memory_sanity_seed0.yaml
+```
+
+This run is not part of the Flex/Flash paper comparison. It is only a server
+sanity check for memory accounting: compare its `gpu_alloc_max_mb` and
+`gpu_reserved_max_mb` against the old dense-masked paper runs to see whether the
+large dense-memory footprint reproduces on the new machine. Use
+`--skip-dense-memory-sanity` to omit it.
+
 ## Current implementation rule
 
 Keep the main `src/` implementation as the paper baseline code path. Backend
