@@ -1,0 +1,93 @@
+{
+  "deleted_at_utc": "2026-05-31T23:09:50Z",
+  "project": "zimmer061310-ena/ENA-AAH",
+  "targets": [
+    "paper-main_4096_deep_practical_reuse-seed0",
+    "paper-main_4096_full_adaptive-seed0",
+    "paper-main_4096_grouping_off-seed0",
+    "paper-main_4096_pure_baseline-seed0",
+    "paper-main_4096_shallow_freeze-seed0"
+  ],
+  "collections": [
+    {
+      "collection": "paper-main_4096_deep_practical_reuse-seed0",
+      "type": "model",
+      "versions": [
+        {
+          "qualified_name": "zimmer061310-ena/ENA-AAH/paper-main_4096_deep_practical_reuse-seed0:v0",
+          "name": "paper-main_4096_deep_practical_reuse-seed0:v0",
+          "version": "v0",
+          "size": 3221198563,
+          "aliases": [
+            "latest"
+          ],
+          "created_at": "2026-05-19T16:01:17Z"
+        }
+      ]
+    },
+    {
+      "collection": "paper-main_4096_shallow_freeze-seed0",
+      "type": "model",
+      "versions": [
+        {
+          "qualified_name": "zimmer061310-ena/ENA-AAH/paper-main_4096_shallow_freeze-seed0:v0",
+          "name": "paper-main_4096_shallow_freeze-seed0:v0",
+          "version": "v0",
+          "size": 3221195637,
+          "aliases": [
+            "latest"
+          ],
+          "created_at": "2026-05-19T10:32:52Z"
+        }
+      ]
+    },
+    {
+      "collection": "paper-main_4096_full_adaptive-seed0",
+      "type": "model",
+      "versions": [
+        {
+          "qualified_name": "zimmer061310-ena/ENA-AAH/paper-main_4096_full_adaptive-seed0:v0",
+          "name": "paper-main_4096_full_adaptive-seed0:v0",
+          "version": "v0",
+          "size": 3221195320,
+          "aliases": [
+            "latest"
+          ],
+          "created_at": "2026-05-19T06:30:59Z"
+        }
+      ]
+    },
+    {
+      "collection": "paper-main_4096_grouping_off-seed0",
+      "type": "model",
+      "versions": [
+        {
+          "qualified_name": "zimmer061310-ena/ENA-AAH/paper-main_4096_grouping_off-seed0:v0",
+          "name": "paper-main_4096_grouping_off-seed0:v0",
+          "version": "v0",
+          "size": 3220654843,
+          "aliases": [
+            "latest"
+          ],
+          "created_at": "2026-05-19T02:20:02Z"
+        }
+      ]
+    },
+    {
+      "collection": "paper-main_4096_pure_baseline-seed0",
+      "type": "model",
+      "versions": [
+        {
+          "qualified_name": "zimmer061310-ena/ENA-AAH/paper-main_4096_pure_baseline-seed0:v0",
+          "name": "paper-main_4096_pure_baseline-seed0:v0",
+          "version": "v0",
+          "size": 3220593400,
+          "aliases": [
+            "latest"
+          ],
+          "created_at": "2026-05-18T22:54:24Z"
+        }
+      ]
+    }
+  ]
+}
