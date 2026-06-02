@@ -1,0 +1,115 @@
+data:
+  dataset: wikitext-2-raw-v1
+  num_workers: 2
+  seq_len: 4096
+  tokenizer: gpt2
+experiment:
+  name: flopslab-4096-noscatter-scatter-control-matched-flash-seed0
+  out_dir: experiments/aah_flops_reduction_lab/h3_noscatter_prototype/results
+  seed: 0
+  variant: noscatter_scatter_control_matched_flash
+model:
+  aah_v3_W_min_gpu: 64
+  aah_v3_apply_window_control: true
+  aah_v3_attention_backend: flash_attn
+  aah_v3_build_hierarchy: true
+  aah_v3_churn_penalty: 0.02
+  aah_v3_control_dim: 16
+  aah_v3_control_enabled: true
+  aah_v3_control_interval: 5
+  aah_v3_controller_arch: mlp
+  aah_v3_controller_choice_mode: learned
+  aah_v3_controller_input_mode: enriched
+  aah_v3_controller_logit_scale: 1.0
+  aah_v3_controller_pairwise_mode: joint_sibling
+  aah_v3_controller_rng_reference_dim: 16
+  aah_v3_cosine_normdiff_scale: 16.0
+  aah_v3_diagnostic_detail: light
+  aah_v3_ema_alpha: 0.9
+  aah_v3_enabled: true
+  aah_v3_fixed_hierarchy_seed: 0
+  aah_v3_flex_block_size: 128
+  aah_v3_group_feature_mode: mean
+  aah_v3_grouping_enabled: true
+  aah_v3_hierarchy_ablation_mode: adaptive
+  aah_v3_joint_hidden_dim: 64
+  aah_v3_joint_output_scale: 1.0
+  aah_v3_max_depth: 4
+  aah_v3_min_group_size: 3
+  aah_v3_pairwise_bias_scale: 1.0
+  aah_v3_parent_constraint: true
+  aah_v3_post_warmup_ramp_steps: 0
+  aah_v3_resolution_collapse_max_frac: 0.98
+  aah_v3_resolution_collapse_min_frac: 0.98
+  aah_v3_resolution_ema_alpha: 0.15
+  aah_v3_reuse_group_hierarchy: false
+  aah_v3_sim_threshold: 0.72
+  aah_v3_super_threshold: 0.76
+  aah_v3_upper_cluster_metric: cosine_normdiff
+  aah_v3_upper_l2_threshold: 0.0
+  aah_v3_warmup_steps: 100
+  aah_v3_windows:
+  - 512
+  - 1024
+  - 2048
+  - 4096
+  dropout: 0.0
+  n_embd: 1536
+  n_ff: 6144
+  n_head: 12
+  n_layer: 16
+  aah_flopslab_enabled: true
+  aah_flopslab_mode: noscatter_prototype
+  aah_flopslab_variant: scatter-control-matched
+  aah_flopslab_plan_path: paper_results/aah_flops_reduction_lab/plans/flopslab-4096-noscatter-scatter-control-matched-flash-seed0.json
+  aah_flopslab_bucket_policy_kind: two_bucket
+  aah_flopslab_bucket_windows:
+  - 1024
+  - 4096
+  aah_flopslab_bucket_threshold: 2048
+profiling:
+  baseline_config: experiments/backend_realized_local_attention/FlashAttention/pure/configs/backend_4096_pure_flash_seed0.yaml
+  ncu_gpu_flops_ratio_required: true
+  notes: FLOPs lab variant. gpu_flops_total_ratio_ncu must be Nsight GPU FP ops divided
+    by the matched pure FlashAttention baseline.
+  profile_regions:
+  - total
+  - attention
+train:
+  batch_size: 1
+  checkpoint_steps:
+  - 1000
+  - 5000
+  - 10000
+  device: cuda
+  eval_batches: 20
+  eval_interval: 200
+  eval_log_progress: false
+  grad_accum: 1
+  log_csv: true
+  log_interval: 50
+  lr: 0.0003
+  max_steps: 10000
+  precision: bf16
+  save_checkpoints: true
+  use_wandb: true
+  warmup_steps: 100
+  weight_decay: 0.1
+lab:
+  enabled: true
+  hypothesis: h3_noscatter_prototype
+  axis: noscatter
+  variant: scatter-control-matched
+  mode: noscatter_prototype
+  description: matched scatter control for no-scatter variants
+  requires_plan: true
+  plan_path: paper_results/aah_flops_reduction_lab/plans/flopslab-4096-noscatter-scatter-control-matched-flash-seed0.json
+  bucket_policy:
+    kind: two_bucket
+    windows:
+    - 1024
+    - 4096
+    threshold: 2048
+  baseline_config: experiments/backend_realized_local_attention/FlashAttention/pure/configs/backend_4096_pure_flash_seed0.yaml
+  primary_metric: gpu_flops_total_ratio_ncu
+  success_threshold: 1.0

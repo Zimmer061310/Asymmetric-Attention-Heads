@@ -194,6 +194,10 @@ def write_json(path, payload):
 
 def collect_model_metadata(config_path, module_key, device_name, checkpoint=None, warmup=1):
     cfg = load_config(config_path)
+    exp = cfg.get("experiment", {}) or {}
+    model_cfg = cfg.get("model", {}) or {}
+    lab_cfg = cfg.get("lab", {}) or {}
+    profiling_cfg = cfg.get("profiling", {}) or {}
     train = cfg.get("train", {})
     device = get_device(device_name or train.get("device", "cuda"))
     precision = train.get("precision", "bf16")
@@ -214,6 +218,20 @@ def collect_model_metadata(config_path, module_key, device_name, checkpoint=None
         peak_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
     device_name_out = torch.cuda.get_device_name(device) if device.type == "cuda" else str(device)
     return {
+        "experiment_name": str(exp.get("name", "")),
+        "variant": str(lab_cfg.get("variant", exp.get("variant", ""))),
+        "backend": str(
+            lab_cfg.get(
+                "backend",
+                model_cfg.get("aah_v3_attention_backend", model_cfg.get("attention_backend", module_key)),
+            )
+        ),
+        "lab_hypothesis": str(lab_cfg.get("hypothesis", "")),
+        "lab_axis": str(lab_cfg.get("axis", "")),
+        "lab_mode": str(lab_cfg.get("mode", model_cfg.get("aah_flopslab_mode", ""))),
+        "lab_description": str(lab_cfg.get("description", "")),
+        "lab_requires_plan": bool(lab_cfg.get("requires_plan", False)),
+        "matched_baseline_config": str(lab_cfg.get("baseline_config", profiling_cfg.get("baseline_config", ""))),
         "config_path": os.path.abspath(config_path),
         "module": module_key,
         "checkpoint_loaded": checkpoint_loaded,
@@ -341,6 +359,7 @@ def add_baseline_ratios(result, baseline_json):
     result["gpu_flops_total_ratio_ncu"] = (float(result.get("gpu_flops_total") or 0.0) / denom) if denom > 0 else None
     result["gpu_flops_attention_ratio_ncu"] = None
     result["baseline_json"] = os.path.abspath(baseline_json)
+    result["baseline_path"] = os.path.abspath(baseline_json)
     return result
 
 

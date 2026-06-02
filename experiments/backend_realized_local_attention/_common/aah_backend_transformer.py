@@ -1,7 +1,9 @@
 import math
 import time
+import json
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -104,6 +106,13 @@ class GPTConfig:
     aah_v3_parent_constraint: bool = True
     aah_v3_attention_backend: str = "dense_masked"
     aah_v3_flex_block_size: int = 128
+    aah_flopslab_enabled: bool = False
+    aah_flopslab_mode: str = ""
+    aah_flopslab_variant: str = ""
+    aah_flopslab_plan_path: str = ""
+    aah_flopslab_bucket_policy_kind: str = ""
+    aah_flopslab_bucket_windows: tuple = ()
+    aah_flopslab_bucket_threshold: int = 0
 
 
 class CausalSelfAttention(nn.Module):
@@ -566,6 +575,21 @@ class AAHV3Attention(nn.Module):
         if self.attention_backend not in valid_attention_backends:
             raise ValueError(f"Unsupported aah_v3_attention_backend: {self.attention_backend}")
         self.flex_block_size = max(16, int(getattr(config, "aah_v3_flex_block_size", 128)))
+        self.flopslab_enabled = bool(getattr(config, "aah_flopslab_enabled", False))
+        self.flopslab_mode = str(getattr(config, "aah_flopslab_mode", ""))
+        self.flopslab_variant = str(getattr(config, "aah_flopslab_variant", ""))
+        self.flopslab_plan_path = str(getattr(config, "aah_flopslab_plan_path", ""))
+        self.flopslab_bucket_policy_kind = str(getattr(config, "aah_flopslab_bucket_policy_kind", ""))
+        self.flopslab_bucket_windows = tuple(int(w) for w in getattr(config, "aah_flopslab_bucket_windows", ()) if int(w) > 0)
+        self.flopslab_bucket_threshold = int(getattr(config, "aah_flopslab_bucket_threshold", 0))
+        self.flopslab_layer_idx = None
+        self.flopslab_static_plan = None
+        if self.flopslab_enabled and self.flopslab_plan_path:
+            plan_path = Path(self.flopslab_plan_path)
+            if not plan_path.exists():
+                raise FileNotFoundError(f"AAH FLOPs lab plan not found: {plan_path}")
+            with open(plan_path, "r") as f:
+                self.flopslab_static_plan = json.load(f)
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -1283,6 +1307,75 @@ class AAHV3Attention(nn.Module):
             return torch.full((n,), idx, device=device, dtype=torch.long)
         return None
 
+    def set_flopslab_layer_idx(self, layer_idx: int):
+        self.flopslab_layer_idx = int(layer_idx)
+
+    def _window_size_to_idx(self, size: int) -> int:
+        size = int(size)
+        return min(range(len(self.windows)), key=lambda i: abs(int(self.windows[i]) - size))
+
+    def _flopslab_static_win_idx(self, device):
+        if not self.flopslab_enabled:
+            return None, None
+        if self.flopslab_mode not in {"static_compiled_plan", "fixed_plan", "noscatter_prototype"}:
+            return None, None
+        if not self.flopslab_static_plan:
+            raise RuntimeError(
+                f"FLOPs lab mode {self.flopslab_mode} requires a static plan JSON at aah_flopslab_plan_path"
+            )
+        layer_idx = int(self.flopslab_layer_idx or 0)
+        layers = self.flopslab_static_plan.get("layers", [])
+        if layer_idx >= len(layers):
+            raise IndexError(f"FLOPs lab plan has {len(layers)} layers, missing layer {layer_idx}")
+        layer = layers[layer_idx]
+        if self.flopslab_variant in {"per-layer", "majority"}:
+            size = layer.get("majority_window_layer")
+            sizes = [int(size) for _ in range(self.n_head)]
+        else:
+            sizes = [int(x) for x in layer.get("majority_window_per_head", [])]
+            if len(sizes) != self.n_head:
+                raise ValueError(
+                    f"FLOPs lab plan layer {layer_idx} has {len(sizes)} head windows, expected {self.n_head}"
+                )
+        idx = torch.tensor([self._window_size_to_idx(s) for s in sizes], device=device, dtype=torch.long)
+        groups = layer.get("majority_group_per_head", [])
+        head_to_group = None
+        if len(groups) == self.n_head and all(g is not None for g in groups):
+            head_to_group = torch.tensor([int(g) for g in groups], device=device, dtype=torch.long)
+        return idx, head_to_group
+
+    def _flopslab_quantize_win_idx(self, win_idx, T, device):
+        if not self.flopslab_enabled or self.flopslab_mode not in {"quantized_execution", "noscatter_prototype"}:
+            return win_idx, {}
+        kind = self.flopslab_bucket_policy_kind
+        bucket_windows = self.flopslab_bucket_windows
+        if not bucket_windows:
+            return win_idx, {"flopslab_quantized": False, "reason": "no_bucket_windows"}
+        selected_sizes = torch.tensor([int(self.windows[int(i.item())]) for i in win_idx], device=device, dtype=torch.long)
+        if kind == "single":
+            target = int(bucket_windows[0])
+            out = torch.full_like(win_idx, self._window_size_to_idx(target))
+        elif kind == "two_bucket":
+            short = int(bucket_windows[0])
+            full = int(bucket_windows[-1])
+            threshold = int(self.flopslab_bucket_threshold or full)
+            short_idx = self._window_size_to_idx(short)
+            full_idx = self._window_size_to_idx(min(full, int(T)))
+            out = torch.where(
+                selected_sizes < threshold,
+                torch.full_like(win_idx, short_idx),
+                torch.full_like(win_idx, full_idx),
+            )
+        else:
+            return win_idx, {"flopslab_quantized": False, "reason": f"unsupported_policy:{kind}"}
+        return out, {
+            "flopslab_quantized": True,
+            "flopslab_bucket_policy_kind": kind,
+            "flopslab_bucket_windows": [int(w) for w in bucket_windows],
+            "flopslab_pre_quant_windows": selected_sizes.detach().cpu().tolist(),
+            "flopslab_post_quant_windows": [int(self.windows[int(i.item())]) for i in out],
+        }
+
     def _sibling_delta_features(self, feats, parent_map=None):
         f = feats.float()
         n = int(f.size(0))
@@ -1852,7 +1945,27 @@ class AAHV3Attention(nn.Module):
         control_mapping_time_ms = 0.0
         diagnostics_pack_time_ms = 0.0
         t_control0 = time.perf_counter()
-        if not self.apply_window_control and not self.build_hierarchy:
+        flopslab_static_active = False
+        flopslab_policy_debug = {}
+        flopslab_static_win_idx, flopslab_static_head_to_group = self._flopslab_static_win_idx(x.device)
+        if flopslab_static_win_idx is not None:
+            path_mode = f"flopslab_{self.flopslab_mode}_{self.flopslab_variant}"
+            win_idx = flopslab_static_win_idx
+            head_to_group = flopslab_static_head_to_group
+            group_change_rate = 0.0
+            resolution_delta = 0.0
+            hierarchy_levels_used = 0
+            group_counts_per_level = []
+            self.cached_win_idx = win_idx.detach().clone()
+            self.cached_head_to_group = head_to_group.detach().clone() if head_to_group is not None else None
+            flopslab_static_active = True
+            flopslab_policy_debug = {
+                "flopslab_static_active": True,
+                "flopslab_mode": self.flopslab_mode,
+                "flopslab_variant": self.flopslab_variant,
+                "flopslab_plan_path": self.flopslab_plan_path,
+            }
+        elif not self.apply_window_control and not self.build_hierarchy:
             path_mode = "full_attention_fastpath"
             t_attn0 = time.perf_counter()
             y_h, att, mask_time_ms, backend_info = self._execute_attention_bucket(q, k, v, T, return_attn=return_attn)
@@ -2191,7 +2304,7 @@ class AAHV3Attention(nn.Module):
             if T in self.windows:
                 win_full = self.windows.index(T)
                 win_idx = torch.full((self.n_head,), win_full, device=x.device, dtype=torch.long)
-        if self.control_enabled and not in_warmup and self.resolution_ema_alpha > 0.0:
+        if (not flopslab_static_active) and self.control_enabled and not in_warmup and self.resolution_ema_alpha > 0.0:
             alpha = max(0.0, min(1.0, self.resolution_ema_alpha))
             win_idx_f = win_idx.float()
             if self.ema_win_idx is None or self.ema_win_idx.shape != win_idx_f.shape:
@@ -2200,6 +2313,8 @@ class AAHV3Attention(nn.Module):
                 self.ema_win_idx = alpha * self.ema_win_idx + (1.0 - alpha) * win_idx_f.detach()
             win_idx = self.ema_win_idx.round().clamp(0, len(self.windows) - 1).to(torch.long)
         if (
+            (not flopslab_static_active)
+            and
             self.control_enabled
             and not in_warmup
             and self.post_warmup_ramp_steps > 0
@@ -2214,6 +2329,9 @@ class AAHV3Attention(nn.Module):
                 win_idx = (ramp_progress * win_idx_f + (1.0 - ramp_progress) * full_idx_f).round().to(torch.long)
         if win_idx_before_execution_mapping is None:
             win_idx_before_execution_mapping = win_idx.detach().clone()
+        win_idx, flopslab_quant_debug = self._flopslab_quantize_win_idx(win_idx, T, x.device)
+        if flopslab_quant_debug:
+            flopslab_policy_debug.update(flopslab_quant_debug)
         win_idx_after_execution_mapping = win_idx.detach().clone()
         control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if (self.apply_window_control or self.build_hierarchy) else 0.0
 
@@ -2230,6 +2348,35 @@ class AAHV3Attention(nn.Module):
         backend_fallback_reasons = []
         backend_name = self.attention_backend
 
+        noscatter_active = (
+            self.flopslab_enabled
+            and self.flopslab_mode == "noscatter_prototype"
+            and self.flopslab_variant != "scatter-control-matched"
+        )
+        q_exec = q
+        k_exec = k
+        v_exec = v
+        win_idx_exec = win_idx
+        head_permutation = list(range(self.n_head))
+        if noscatter_active:
+            head_permutation = sorted(
+                range(self.n_head),
+                key=lambda h: (self.windows[int(win_idx[h].item())], h),
+            )
+            perm = torch.tensor(head_permutation, device=x.device, dtype=torch.long)
+            q_exec = q.index_select(1, perm)
+            k_exec = k.index_select(1, perm)
+            v_exec = v.index_select(1, perm)
+            win_idx_exec = win_idx.index_select(0, perm)
+            flopslab_policy_debug.update(
+                {
+                    "flopslab_noscatter_active": True,
+                    "flopslab_head_permutation": head_permutation,
+                    "flopslab_inverse_scatter_skipped": True,
+                    "flopslab_semantics": "prototype_changes_head_order_before_output_projection",
+                }
+            )
+
         outputs = torch.zeros(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype)
         head_norms = [0.0 for _ in range(self.n_head)]
         head_entropy = [0.0 for _ in range(self.n_head)]
@@ -2240,13 +2387,16 @@ class AAHV3Attention(nn.Module):
 
         head_groups = {}
         for h in range(self.n_head):
-            window = self.windows[int(win_idx[h].item())]
+            window = self.windows[int(win_idx_exec[h].item())]
             head_groups.setdefault(window, []).append(h)
 
         for window, heads in head_groups.items():
-            q_sel = q[:, heads]
-            k_sel = k[:, heads]
-            v_sel = v[:, heads]
+            head_sel = heads
+            if noscatter_active and heads == list(range(heads[0], heads[-1] + 1)):
+                head_sel = slice(heads[0], heads[-1] + 1)
+            q_sel = q_exec[:, head_sel]
+            k_sel = k_exec[:, head_sel]
+            v_sel = v_exec[:, head_sel]
             Bc, Hc, Tc, Dc = q_sel.shape
             y_h, att_h, mask_ms, backend_info = self._execute_attention_bucket(q_sel, k_sel, v_sel, window, return_attn=return_attn)
             mask_time_ms += mask_ms
@@ -2262,7 +2412,7 @@ class AAHV3Attention(nn.Module):
                 backend_realized_elements_est += bucket_dense_actual
             else:
                 backend_realized_elements_est += bucket_effective
-            outputs[:, heads] = y_h
+            outputs[:, head_sel] = y_h
             norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
             for i, h in enumerate(heads):
                 head_norms[h] = float(norms[i].item())
@@ -2456,6 +2606,10 @@ class AAHV3Attention(nn.Module):
             "decision_unique_head_idx_before_execution_mapping": sorted(set(win_idx_before_execution_mapping.detach().cpu().tolist())) if win_idx_before_execution_mapping is not None else [],
             "decision_unique_head_idx_after_execution_mapping": sorted(set(win_idx_after_execution_mapping.detach().cpu().tolist())) if win_idx_after_execution_mapping is not None else [],
             "decision_head_idx_changed_by_execution_mapping_frac": float((win_idx_before_execution_mapping != win_idx_after_execution_mapping).float().mean().item()) if (win_idx_before_execution_mapping is not None and win_idx_after_execution_mapping is not None and win_idx_before_execution_mapping.shape == win_idx_after_execution_mapping.shape) else 0.0,
+            "flopslab_enabled": bool(self.flopslab_enabled),
+            "flopslab_mode": self.flopslab_mode,
+            "flopslab_variant": self.flopslab_variant,
+            "flopslab_policy_debug": flopslab_policy_debug,
             "cluster_metric_per_level": cluster_metric_per_level,
             "cluster_threshold_kind_per_level": cluster_threshold_kind_per_level,
             "cluster_threshold_per_level": cluster_threshold_per_level,
@@ -2555,6 +2709,10 @@ class GPT(nn.Module):
         self.wpe = nn.Embedding(config.seq_len, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.n_layer)])
+        for layer_idx, block in enumerate(self.blocks):
+            attn = getattr(block, "attn", None)
+            if hasattr(attn, "set_flopslab_layer_idx"):
+                attn.set_flopslab_layer_idx(layer_idx)
         self.ln_f = nn.LayerNorm(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.lm_head.weight = self.wte.weight

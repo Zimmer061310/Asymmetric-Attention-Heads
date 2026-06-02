@@ -73,6 +73,16 @@ def sync(device):
 def build_gpt_config(GPTConfig, cfg):
     data = cfg["data"]
     model_cfg = cfg["model"]
+    lab_cfg = cfg.get("lab", {}) or {}
+    bucket_policy = lab_cfg.get("bucket_policy", {}) or {}
+
+    def model_or_lab(model_key, lab_key=None, default=None):
+        if model_key in model_cfg:
+            return model_cfg.get(model_key)
+        if lab_key and lab_key in lab_cfg:
+            return lab_cfg.get(lab_key)
+        return default
+
     params = {
         "vocab_size": int(model_cfg.get("vocab_size", 50257)),
         "seq_len": int(data["seq_len"]),
@@ -133,6 +143,13 @@ def build_gpt_config(GPTConfig, cfg):
         "aah_v3_parent_constraint": bool(model_cfg.get("aah_v3_parent_constraint", True)),
         "aah_v3_attention_backend": str(model_cfg.get("aah_v3_attention_backend", model_cfg.get("attention_backend", "dense_masked"))),
         "aah_v3_flex_block_size": int(model_cfg.get("aah_v3_flex_block_size", model_cfg.get("flex_block_size", 128))),
+        "aah_flopslab_enabled": bool(model_or_lab("aah_flopslab_enabled", "enabled", False)),
+        "aah_flopslab_mode": str(model_or_lab("aah_flopslab_mode", "mode", "")),
+        "aah_flopslab_variant": str(model_or_lab("aah_flopslab_variant", "variant", "")),
+        "aah_flopslab_plan_path": str(model_or_lab("aah_flopslab_plan_path", "plan_path", "")),
+        "aah_flopslab_bucket_policy_kind": str(model_cfg.get("aah_flopslab_bucket_policy_kind", bucket_policy.get("kind", ""))),
+        "aah_flopslab_bucket_windows": tuple(model_cfg.get("aah_flopslab_bucket_windows", bucket_policy.get("windows", ()))),
+        "aah_flopslab_bucket_threshold": int(model_cfg.get("aah_flopslab_bucket_threshold", bucket_policy.get("threshold", 0) or 0)),
     }
     if is_dataclass(GPTConfig):
         allowed = {f.name for f in fields(GPTConfig)}
