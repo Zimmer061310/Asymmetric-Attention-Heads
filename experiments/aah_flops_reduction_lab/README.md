@@ -56,3 +56,15 @@ and `results/`. Checkpoints and raw W&B folders do not belong in Git.
 2. Generate/update variant configs with `_common/make_lab_configs.py`.
 3. Profile only the pure Flash denominator and one cheap H1/H2 variant.
 4. Continue only if the ratio drops meaningfully below the current `~1.60`.
+
+## Training budget
+
+Lab configs are short probes by default, not paper reruns. Generated configs use
+`max_steps=3000` and checkpoints at `1000/2000/3000`. To test a longer probe,
+regenerate configs with:
+
+```bash
+python -m experiments.aah_flops_reduction_lab._common.make_lab_configs \
+  --max-steps 5000 \
+  --checkpoint-steps 1000,3000,5000
+```

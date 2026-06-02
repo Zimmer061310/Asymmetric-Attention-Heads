@@ -114,7 +114,7 @@ def main() -> None:
     parser.add_argument("--device")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--calibration-batches", type=int, default=16)
-    parser.add_argument("--start-step", type=int, default=10000)
+    parser.add_argument("--start-step", type=int, default=3000)
     parser.add_argument("--step-stride", type=int, default=5)
     parser.add_argument("--include-samples", action="store_true")
     args = parser.parse_args()

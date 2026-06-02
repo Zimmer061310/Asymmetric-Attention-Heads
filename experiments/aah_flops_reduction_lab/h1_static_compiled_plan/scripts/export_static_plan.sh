@@ -11,7 +11,7 @@ cmd=(
   --config "$CONFIG"
   --output "$OUT"
   --calibration-batches "${CALIBRATION_BATCHES:-16}"
-  --start-step "${START_STEP:-10000}"
+  --start-step "${START_STEP:-3000}"
   --step-stride "${STEP_STRIDE:-5}"
 )
 

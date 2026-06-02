@@ -79,8 +79,8 @@ train:
   batch_size: 1
   checkpoint_steps:
   - 1000
-  - 5000
-  - 10000
+  - 2000
+  - 3000
   device: cuda
   eval_batches: 20
   eval_interval: 200
@@ -89,7 +89,7 @@ train:
   log_csv: true
   log_interval: 50
   lr: 0.0003
-  max_steps: 10000
+  max_steps: 3000
   precision: bf16
   save_checkpoints: true
   use_wandb: true
@@ -113,3 +113,5 @@ lab:
   baseline_config: experiments/backend_realized_local_attention/FlashAttention/pure/configs/backend_4096_pure_flash_seed0.yaml
   primary_metric: gpu_flops_total_ratio_ncu
   success_threshold: 1.0
+  training_budget_note: 'Lab probe budget: max_steps=3000, checkpoint_steps=[1000,
+    2000, 3000]. These are not 10k-step paper reruns.'

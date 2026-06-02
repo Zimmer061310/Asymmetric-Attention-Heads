@@ -16,6 +16,10 @@ from experiments.aah_flops_reduction_lab._common.naming import (
 )
 
 
+DEFAULT_MAX_STEPS = 3000
+DEFAULT_CHECKPOINT_STEPS = (1000, 2000, 3000)
+
+
 def lab_mode(axis: str) -> str:
     if axis == "static-plan":
         return "static_compiled_plan"
@@ -46,7 +50,14 @@ def variant_bucket_policy(variant: str) -> dict:
     return {"kind": "from_plan"}
 
 
-def build_config(template: dict, variant) -> dict:
+def parse_checkpoint_steps(raw: str) -> tuple[int, ...]:
+    steps = tuple(int(x.strip()) for x in str(raw).split(",") if x.strip())
+    if not steps:
+        raise ValueError("--checkpoint-steps must contain at least one integer")
+    return steps
+
+
+def build_config(template: dict, variant, max_steps: int, checkpoint_steps: tuple[int, ...]) -> dict:
     cfg = yaml.safe_load(yaml.safe_dump(template))
     bucket_policy = variant_bucket_policy(variant.variant)
     bucket_windows = list(bucket_policy.get("windows", []))
@@ -67,6 +78,8 @@ def build_config(template: dict, variant) -> dict:
     model_cfg["aah_flopslab_bucket_threshold"] = int(bucket_policy.get("threshold", 0) or 0)
     cfg.setdefault("train", {})["batch_size"] = 1
     cfg["train"]["precision"] = "bf16"
+    cfg["train"]["max_steps"] = int(max_steps)
+    cfg["train"]["checkpoint_steps"] = [int(s) for s in checkpoint_steps if int(s) <= int(max_steps)]
     cfg["train"]["eval_batches"] = 20
     cfg["train"]["eval_interval"] = 200
     cfg.setdefault("profiling", {})["baseline_config"] = PURE_FLASH_BASELINE
@@ -88,6 +101,11 @@ def build_config(template: dict, variant) -> dict:
         "baseline_config": PURE_FLASH_BASELINE,
         "primary_metric": "gpu_flops_total_ratio_ncu",
         "success_threshold": 1.0,
+        "training_budget_note": (
+            f"Lab probe budget: max_steps={int(max_steps)}, "
+            f"checkpoint_steps={list(int(s) for s in checkpoint_steps if int(s) <= int(max_steps))}. "
+            "These are not 10k-step paper reruns."
+        ),
     }
     return cfg
 
@@ -95,8 +113,15 @@ def build_config(template: dict, variant) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--template", default=AAH_FLASH_TEMPLATE)
+    parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
+    parser.add_argument(
+        "--checkpoint-steps",
+        default=",".join(str(s) for s in DEFAULT_CHECKPOINT_STEPS),
+        help="Comma-separated checkpoint steps, filtered to <= --max-steps.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    checkpoint_steps = parse_checkpoint_steps(args.checkpoint_steps)
 
     with open(args.template, "r") as f:
         template = yaml.safe_load(f)
@@ -104,7 +129,7 @@ def main() -> None:
     for variant in VARIANTS:
         out_dir = Path(hypothesis_dir(variant)) / "configs"
         out_path = out_dir / variant.yaml_name
-        cfg = build_config(template, variant)
+        cfg = build_config(template, variant, max_steps=args.max_steps, checkpoint_steps=checkpoint_steps)
         print(out_path)
         if not args.dry_run:
             out_dir.mkdir(parents=True, exist_ok=True)
