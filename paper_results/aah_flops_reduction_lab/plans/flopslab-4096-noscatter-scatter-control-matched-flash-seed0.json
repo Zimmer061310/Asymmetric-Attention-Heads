@@ -1,0 +1,629 @@
+{
+  "batch_size": 1,
+  "calibration_batches": 16,
+  "checkpoint_loaded": false,
+  "checkpoint_path": "",
+  "config": "experiments/backend_realized_local_attention/FlashAttention/aah_modified/configs/backend_4096_full_adaptive_flash_seed0.yaml",
+  "layers": [
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 0,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 512,
+      "majority_window_per_head": [
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 1,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 2048,
+      "majority_window_per_head": [
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 2,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 2048,
+      "majority_window_per_head": [
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 3,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 1024,
+      "majority_window_per_head": [
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 4,
+      "majority_group_per_head": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 2048,
+      "majority_window_per_head": [
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048,
+        2048
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 5,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 4096,
+      "majority_window_per_head": [
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 6,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 4096,
+      "majority_window_per_head": [
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 7,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 512,
+      "majority_window_per_head": [
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 8,
+      "majority_group_per_head": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 512,
+      "majority_window_per_head": [
+        512,
+        512,
+        512,
+        2048,
+        512,
+        2048,
+        512,
+        2048,
+        512,
+        2048,
+        512,
+        2048
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 9,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 512,
+      "majority_window_per_head": [
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 10,
+      "majority_group_per_head": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 1024,
+      "majority_window_per_head": [
+        2048,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        1024
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 11,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 2048,
+      "majority_window_per_head": [
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096,
+        2048,
+        4096
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 12,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 4096,
+      "majority_window_per_head": [
+        4096,
+        1024,
+        4096,
+        1024,
+        4096,
+        1024,
+        4096,
+        1024,
+        4096,
+        1024,
+        4096,
+        1024
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 13,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 4096,
+      "majority_window_per_head": [
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096,
+        4096
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 14,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 1024,
+      "majority_window_per_head": [
+        1024,
+        1024,
+        1024,
+        1024,
+        1024,
+        2048,
+        1024,
+        2048,
+        1024,
+        2048,
+        1024,
+        2048
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    },
+    {
+      "branch_usage_freq_samples": [],
+      "group_samples": [],
+      "layer_idx": 15,
+      "majority_group_per_head": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "majority_window_layer": 1024,
+      "majority_window_per_head": [
+        2048,
+        1024,
+        2048,
+        1024,
+        2048,
+        1024,
+        2048,
+        1024,
+        2048,
+        1024,
+        2048,
+        1024
+      ],
+      "path_modes": [
+        "grouped_control_update"
+      ],
+      "window_samples": []
+    }
+  ],
+  "precision": "bf16",
+  "schema": "aah_flops_reduction_lab.static_plan.v1",
+  "seed": 0,
+  "seq_len": 4096,
+  "start_step": 3000,
+  "step_stride": 5,
+  "windows": [
+    512,
+    1024,
+    2048,
+    4096
+  ]
+}

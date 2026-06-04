@@ -1,0 +1,18 @@
+name,gpu_flops_total,gpu_flops_total_ratio_ncu,ncu_permission_ok,backend,variant,lab_hypothesis,lab_mode,seq_len,batch_size,precision,device_name
+flopslab-4096-baseline-pure-flash-seed0,6171093130434.0,1.0,True,flash_attn,backend_4096_pure_flash,,,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0,6265980625227.0,1.015376124259905,True,flash_attn,contiguous-1024-4096,h3_noscatter_prototype,noscatter_prototype,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-noscatter-contiguous-layer-plan-flash-seed0,6266345599701.0,1.015435266856895,True,flash_attn,contiguous-layer-plan,h3_noscatter_prototype,noscatter_prototype,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-noscatter-scatter-control-matched-flash-seed0,6267166948539.0,1.0155683630232692,True,flash_attn,scatter-control-matched,h3_noscatter_prototype,noscatter_prototype,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-slow-update-N200-flash-seed0,6267531920428.0,1.0156275052013706,True,flash_attn,N200,h4_fixed_plan_granularity,fixed_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-static-plan-per-layer-head-flash-seed0,6267531924576.0,1.015627505873537,True,flash_attn,per-layer-head,h1_static_compiled_plan,static_compiled_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-fixed-per-head-flash-seed0,6267531926227.0,1.0156275061410744,True,flash_attn,per-head,h4_fixed_plan_granularity,fixed_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-fixed-per-state-flash-seed0,6267531926549.0,1.0156275061932534,True,flash_attn,per-state,h4_fixed_plan_granularity,fixed_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-fixed-per-head-group-flash-seed0,6267531926721.0,1.015627506221125,True,flash_attn,per-head-group,h4_fixed_plan_granularity,fixed_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-slow-update-N1000-flash-seed0,6267531929695.0,1.0156275067030496,True,flash_attn,N1000,h4_fixed_plan_granularity,fixed_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-fixed-per-layer-flash-seed0,6267650317094.0,1.0156466908891406,True,flash_attn,per-layer,h4_fixed_plan_granularity,fixed_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-static-plan-majority-flash-seed0,6267650321618.0,1.015646691622236,True,flash_attn,majority,h1_static_compiled_plan,static_compiled_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-static-plan-per-layer-flash-seed0,6267650321838.0,1.0156466916578861,True,flash_attn,per-layer,h1_static_compiled_plan,static_compiled_plan,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-quantized-two-bucket-1024-4096-flash-seed0,6276513219816.0,1.0170828874485947,True,flash_attn,two-bucket-1024-4096,h2_quantized_execution,quantized_execution,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-quantized-two-bucket-2048-4096-flash-seed0,6276591445966.0,1.0170955636711612,True,flash_attn,two-bucket-2048-4096,h2_quantized_execution,quantized_execution,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-quantized-single-2048-flash-seed0,6276817628095.0,1.0171322155453462,True,flash_attn,single-2048,h2_quantized_execution,quantized_execution,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
+flopslab-4096-quantized-single-1024-flash-seed0,6277824394320.0,1.0172953578288477,True,flash_attn,single-1024,h2_quantized_execution,quantized_execution,4096,1,bf16,NVIDIA RTX PRO 6000 Blackwell Server Edition
