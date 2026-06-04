@@ -39,11 +39,16 @@ FLOP_METRIC_PATTERNS = (
     re.compile(r"derived__.*sass.*op_[fdh](add|mul|fma).*", re.IGNORECASE),
     re.compile(r"derived__.*(hmma|mma|tensor).*", re.IGNORECASE),
     re.compile(r"sm__inst_executed_pipe_tensor_op_hmma", re.IGNORECASE),
+    re.compile(r"sm__ops_path_tensor_src_(bf16|fp16|tf32).*", re.IGNORECASE),
     re.compile(r"sm__sass_thread_inst_executed_op_[dfh]fma", re.IGNORECASE),
     re.compile(r"sm__sass_thread_inst_executed_ops_[dfh]add_[dfh]mul_[dfh]fma", re.IGNORECASE),
 )
 
 DEFAULT_NCU_FP_METRICS = (
+    "sm__ops_path_tensor_src_bf16_dst_fp32.sum",
+    "sm__ops_path_tensor_src_fp16_dst_fp16.sum",
+    "sm__ops_path_tensor_src_fp16_dst_fp32.sum",
+    "sm__ops_path_tensor_src_tf32_dst_fp32.sum",
     "sm__inst_executed_pipe_tensor_op_hmma.sum",
     "sm__sass_thread_inst_executed_op_ffma_pred_on.sum",
     "sm__sass_thread_inst_executed_op_hfma_pred_on.sum",
@@ -97,6 +102,19 @@ def discover_flop_metrics(ncu):
     if not preflight["ncu_permission_ok"]:
         return [], preflight
     lines = full_text.splitlines()
+    base_tokens = set()
+    for raw in lines:
+        token = raw.strip().split()[0] if raw.strip() else ""
+        token = token.strip(",")
+        if token and not token.startswith(("#", "==")):
+            base_tokens.add(token.split(".")[0])
+    preferred = []
+    for metric in DEFAULT_NCU_FP_METRICS:
+        if metric.rsplit(".", 1)[0] in base_tokens:
+            preferred.append(metric)
+    if preferred:
+        return preferred, preflight
+
     metrics = []
     for raw in lines:
         token = raw.strip().split()[0] if raw.strip() else ""
