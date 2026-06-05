@@ -1,0 +1,52 @@
+data:
+  dataset: wikitext-2-raw-v1
+  num_workers: 2
+  seq_len: 4096
+  tokenizer: gpt2
+experiment:
+  name: flopslab-4096-baseline-pure-dense-seed0
+  out_dir: experiments/aah_flops_reduction_lab/p7_dense_framework/results
+  seed: 0
+  variant: baseline_pure_dense
+model:
+  attention_backend: dense_masked
+  dropout: 0.0
+  flex_block_size: 128
+  n_embd: 1536
+  n_ff: 6144
+  n_head: 12
+  n_layer: 16
+profiling:
+  ncu_gpu_flops_ratio_required: true
+  profile_regions:
+  - total
+  - attention
+  notes: 'Dense-framework denominator: standard dense MHA full attention.'
+train:
+  batch_size: 1
+  checkpoint_steps:
+  - 1000
+  - 2000
+  - 3000
+  device: cuda
+  eval_batches: 20
+  eval_interval: 200
+  eval_log_progress: false
+  grad_accum: 1
+  log_csv: true
+  log_interval: 50
+  lr: 0.0003
+  max_steps: 3000
+  precision: bf16
+  save_checkpoints: false
+  use_wandb: false
+  warmup_steps: 100
+  weight_decay: 0.1
+lab:
+  enabled: false
+  hypothesis: p7_dense_framework
+  axis: baseline
+  variant: pure-dense
+  mode: dense_denominator
+  description: Standard dense MHA denominator for dense framework profiles.
+  primary_metric: dense_gpu_flops_total_ratio_ncu

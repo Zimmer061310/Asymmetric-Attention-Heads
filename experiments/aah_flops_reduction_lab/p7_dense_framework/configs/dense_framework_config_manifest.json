@@ -1,0 +1,30 @@
+{
+  "checkpoint_steps": [
+    1000,
+    2000,
+    3000
+  ],
+  "dense_framework": true,
+  "max_steps": 3000,
+  "variants": [
+    "flopslab-4096-same-codepath-full-dense-seed0",
+    "flopslab-4096-static-plan-per-layer-dense-seed0",
+    "flopslab-4096-static-plan-per-layer-head-dense-seed0",
+    "flopslab-4096-static-plan-majority-dense-seed0",
+    "flopslab-4096-quantized-single-1024-dense-seed0",
+    "flopslab-4096-quantized-single-2048-dense-seed0",
+    "flopslab-4096-quantized-two-bucket-1024-4096-dense-seed0",
+    "flopslab-4096-quantized-two-bucket-2048-4096-dense-seed0",
+    "flopslab-4096-noscatter-contiguous-1024-4096-dense-seed0",
+    "flopslab-4096-noscatter-contiguous-layer-plan-dense-seed0",
+    "flopslab-4096-noscatter-scatter-control-matched-dense-seed0",
+    "flopslab-4096-fixed-per-layer-dense-seed0",
+    "flopslab-4096-fixed-per-state-dense-seed0",
+    "flopslab-4096-fixed-per-head-group-dense-seed0",
+    "flopslab-4096-fixed-per-head-dense-seed0",
+    "flopslab-4096-slow-update-N200-dense-seed0",
+    "flopslab-4096-slow-update-N1000-dense-seed0",
+    "flopslab-4096-minruntime-noscatter-1024-4096-dense-seed0",
+    "flopslab-4096-headreorder-lowerbound-1024-4096-dense-seed0"
+  ]
+}

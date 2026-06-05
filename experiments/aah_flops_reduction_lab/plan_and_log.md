@@ -39,6 +39,38 @@ So the dense ratio is not `~1.01`. Dense is now the working framework because it
 is the next controlled target, not because the existing dense AAH profile is
 already below or near `1.0`.
 
+### P7 Dense Framework Queue
+
+Status: queued for Pro 6000.
+
+The P7 dense framework applies the same controls already tried in the Flash lab
+to dense AAH and divides by a standard dense MHA denominator:
+
+```text
+flopslab-4096-baseline-pure-dense-seed0
+```
+
+Rows:
+
+- P1 same-codepath full dense;
+- H1 static compiled plan: per-layer, per-layer-head, majority;
+- H2 quantized execution: single 1024, single 2048, two-bucket 1024/4096,
+  two-bucket 2048/4096;
+- H3 no-scatter prototype: contiguous 1024/4096, contiguous layer plan, matched
+  scatter control;
+- H4 fixed plan granularity: per-layer, per-state, per-head-group, per-head,
+  slow-update N200, slow-update N1000;
+- P3 minimal-runtime no-scatter;
+- H5 head-reorder lower-bound.
+
+Run handle:
+
+```text
+experiments/aah_flops_reduction_lab/p7_dense_framework/scripts/profile_dense_framework_queue.sh
+paper_results/aah_flops_reduction_lab/profile_status_p7_dense_framework.jsonl
+paper_results/aah_flops_reduction_lab/logs/p7_dense_framework.log
+```
+
 ## Current Evidence
 
 The Pro 6000 Blackwell profile-only sweep completed cleanly. The compact

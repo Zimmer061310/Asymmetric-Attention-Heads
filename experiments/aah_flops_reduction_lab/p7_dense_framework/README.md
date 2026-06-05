@@ -67,6 +67,38 @@ solves the problem.
    - Inference: if attention-only is still above `1.0`, dense masking/local
      execution is not reducing real FLOPs.
 
+## Implemented Queue
+
+The first dense queue applies the Flash-lab methods to dense AAH in total-forward
+scope:
+
+- dense denominator: `flopslab-4096-baseline-pure-dense-seed0`;
+- P1 same-codepath full dense;
+- H1 static compiled plan: per-layer, per-layer-head, majority;
+- H2 quantized execution: single 1024, single 2048, two-bucket 1024/4096,
+  two-bucket 2048/4096;
+- H3 no-scatter prototype: contiguous 1024/4096, contiguous layer plan, matched
+  scatter control;
+- H4 fixed plan granularity: per-layer, per-state, per-head-group, per-head,
+  slow-update N200, slow-update N1000;
+- P3 minimal-runtime no-scatter;
+- H5 head-reorder lower-bound.
+
+Run handle:
+
+```bash
+experiments/aah_flops_reduction_lab/p7_dense_framework/scripts/profile_dense_framework_queue.sh
+```
+
+Outputs:
+
+```text
+paper_results/aah_flops_reduction_lab/profile_manifest_p7_dense_framework.jsonl
+paper_results/aah_flops_reduction_lab/profile_status_p7_dense_framework.jsonl
+paper_results/aah_flops_reduction_lab/logs/p7_dense_framework.log
+paper_results/aah_flops_reduction_lab/gpu_flops_profiles/*dense*gpu_flops_profile.json
+```
+
 ## Success / Failure Interpretation
 
 Success is `dense_gpu_flops_total_ratio_ncu < 1.0` with finite logits and the
