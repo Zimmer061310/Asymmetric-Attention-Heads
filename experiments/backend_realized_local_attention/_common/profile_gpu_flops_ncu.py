@@ -309,6 +309,10 @@ def run_ncu_profile(args, metrics):
         nvtx_include = args.ncu_nvtx_include
         if args.profile_scope == "attention" and not nvtx_include:
             nvtx_include = ATTENTION_NVTX_FILTER
+        elif args.profile_scope == "nvtx" and not nvtx_include and args.profile_label:
+            nvtx_include = args.profile_label
+            if not nvtx_include.endswith("]"):
+                nvtx_include = f"{nvtx_include}]"
         cmd = [
             args.ncu,
             "--target-processes",
@@ -409,7 +413,8 @@ def main():
     parser.add_argument("--child-forward", action="store_true")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--cuda-profiler-api", action="store_true")
-    parser.add_argument("--profile-scope", choices=("total", "attention"), default="total")
+    parser.add_argument("--profile-scope", choices=("total", "attention", "nvtx"), default="total")
+    parser.add_argument("--profile-label")
     parser.add_argument("--ncu-nvtx-include")
     args = parser.parse_args()
 
@@ -447,15 +452,26 @@ def main():
         "ncu_preflight": preflight,
         "ncu_metrics_used": metrics,
         "gpu_flops_total": None,
-        "gpu_flops_attention_or_forward": "attention_nvtx_filtered"
-        if args.profile_scope == "attention"
-        else "forward_total",
+        "gpu_flops_attention_or_forward": (
+            "attention_nvtx_filtered"
+            if args.profile_scope == "attention"
+            else ("region_nvtx_filtered" if args.profile_scope == "nvtx" else "forward_total")
+        ),
         "gpu_flops_attention": None,
+        "gpu_flops_region": None,
         "gpu_flops_total_ratio_ncu": None,
         "gpu_flops_attention_ratio_ncu": None,
+        "gpu_flops_region_ratio_ncu": None,
         "profile_scope": args.profile_scope,
+        "profile_label": args.profile_label or "",
         "ncu_nvtx_include": args.ncu_nvtx_include
-        or (ATTENTION_NVTX_FILTER if args.profile_scope == "attention" else ""),
+        or (
+            ATTENTION_NVTX_FILTER
+            if args.profile_scope == "attention"
+            else (
+                f"{args.profile_label}]" if args.profile_scope == "nvtx" and args.profile_label else ""
+            )
+        ),
         "torch_profiler_total_flops_ratio": None,
         "paper_metric_source": "Nsight Compute hardware/derived FLOP counters only",
     }
@@ -479,9 +495,13 @@ def main():
         result["gpu_flops_total"] = float(sum(float(v) for v in metric_values.values()))
         if args.profile_scope == "attention":
             result["gpu_flops_attention"] = result["gpu_flops_total"]
+        elif args.profile_scope == "nvtx":
+            result["gpu_flops_region"] = result["gpu_flops_total"]
         result = add_baseline_ratios(result, args.baseline_json)
         if args.profile_scope == "attention":
             result["gpu_flops_attention_ratio_ncu"] = result["gpu_flops_total_ratio_ncu"]
+        elif args.profile_scope == "nvtx":
+            result["gpu_flops_region_ratio_ncu"] = result["gpu_flops_total_ratio_ncu"]
         result["ncu_error_kind"] = None
         write_json(args.output, result)
         print(

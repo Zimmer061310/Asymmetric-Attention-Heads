@@ -276,11 +276,50 @@ Acceptance:
 - promote only if `gpu_flops_total_ratio_ncu` drops meaningfully, ideally below
   `1.0`.
 
-### P4: H5 Head Reordering Gate
+### P4: Region Attribution
+
+Status: implemented locally; ready for Pro 6000 profile-only launch.
+
+Goal: identify which non-attention region accounts for the gap between
+attention-scope `1.000437x` and total-forward `1.015376x`.
+
+Implementation handle:
+
+```text
+experiments/backend_realized_local_attention/_common/aah_backend_transformer.py
+experiments/backend_realized_local_attention/_common/profile_gpu_flops_ncu.py
+experiments/aah_flops_reduction_lab/p4_region_attribution/
+```
+
+The AAH backend now tags the following NVTX push/pop ranges:
+
+- `aah_ncu_qkv`
+- `aah_ncu_bucket_select`
+- `aah_ncu_attention`
+- `aah_ncu_output_assembly`
+- `aah_ncu_output_projection`
+- `aah_ncu_mlp`
+
+The profiler now supports `--profile-scope nvtx --profile-label <range>`, which
+records raw `gpu_flops_region` for a selected pushed NVTX range. P4 profiles
+the P3 minimal-runtime no-scatter config so diagnostic reductions stay out of
+the attribution.
+
+Expected outcomes:
+
+- If bucket selection or output assembly is large, target tensor layout and
+  reassembly before full head-reordering.
+- If output projection or MLP dominates equally to pure Flash, the residual
+  gap is likely untagged runtime/library kernels or shape/layout differences.
+- If region totals do not explain the gap, switch to Nsight kernel-name/native
+  stack attribution instead of making more model changes.
+
+### P5: H5 Head Reordering Gate
 
 Do not start full head-reordering implementation yet. H3 did not show a large
 enough improvement. Revisit H5 only if P1-P3 show that codepath overhead is
-under control and scatter/head layout remains the major residual cost.
+under control and P4 shows scatter/head layout or output assembly remains the
+major residual cost.
 
 ## Open Decisions
 

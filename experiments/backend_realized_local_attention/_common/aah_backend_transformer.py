@@ -2,6 +2,7 @@ import math
 import time
 import json
 from collections import OrderedDict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 import torch
@@ -15,6 +16,11 @@ _FLEX_ATTENTION = None
 _FLEX_CREATE_BLOCK_MASK = None
 _FLEX_IMPORT_ERROR = None
 NCU_ATTENTION_RANGE = "aah_ncu_attention"
+NCU_QKV_RANGE = "aah_ncu_qkv"
+NCU_BUCKET_SELECT_RANGE = "aah_ncu_bucket_select"
+NCU_OUTPUT_ASSEMBLY_RANGE = "aah_ncu_output_assembly"
+NCU_OUTPUT_PROJECTION_RANGE = "aah_ncu_output_projection"
+NCU_MLP_RANGE = "aah_ncu_mlp"
 
 
 def _nvtx_push(name):
@@ -27,6 +33,15 @@ def _nvtx_push(name):
 def _nvtx_pop(pushed):
     if pushed:
         torch.cuda.nvtx.range_pop()
+
+
+@contextmanager
+def _nvtx_range(name):
+    pushed = _nvtx_push(name)
+    try:
+        yield
+    finally:
+        _nvtx_pop(pushed)
 
 
 def _load_flash_attn_func():
@@ -145,12 +160,13 @@ class CausalSelfAttention(nn.Module):
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()
         t_start = time.perf_counter()
-        with record_function("attn_qkv"):
-            qkv = self.qkv(x)
-            q, k, v = qkv.split(C, dim=2)
-            q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
-            k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
-            v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        with _nvtx_range(NCU_QKV_RANGE):
+            with record_function("attn_qkv"):
+                qkv = self.qkv(x)
+                q, k, v = qkv.split(C, dim=2)
+                q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+                k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+                v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
         with record_function("attn_matmul_qk"):
             att = (q @ k.transpose(-2, -1)) * self.scale
@@ -1989,8 +2005,10 @@ class AAHV3Attention(nn.Module):
             t_attn0 = time.perf_counter()
             y_h, att, mask_time_ms, backend_info = self._execute_attention_bucket(q, k, v, T, return_attn=return_attn)
             y = y_h
-            y = y.transpose(1, 2).contiguous().view(B, T, C)
-            y = self.resid_drop(self.proj(y))
+            with _nvtx_range(NCU_OUTPUT_ASSEMBLY_RANGE):
+                y = y.transpose(1, 2).contiguous().view(B, T, C)
+            with _nvtx_range(NCU_OUTPUT_PROJECTION_RANGE):
+                y = self.resid_drop(self.proj(y))
             attn_time_ms = (time.perf_counter() - t_attn0) * 1000.0
             total_time_ms = (time.perf_counter() - t_start) * 1000.0
             control_time_ms = 0.0
@@ -2414,9 +2432,10 @@ class AAHV3Attention(nn.Module):
             head_sel = heads
             if noscatter_active and heads == list(range(heads[0], heads[-1] + 1)):
                 head_sel = slice(heads[0], heads[-1] + 1)
-            q_sel = q_exec[:, head_sel]
-            k_sel = k_exec[:, head_sel]
-            v_sel = v_exec[:, head_sel]
+            with _nvtx_range(NCU_BUCKET_SELECT_RANGE):
+                q_sel = q_exec[:, head_sel]
+                k_sel = k_exec[:, head_sel]
+                v_sel = v_exec[:, head_sel]
             Bc, Hc, Tc, Dc = q_sel.shape
             y_h, att_h, mask_ms, backend_info = self._execute_attention_bucket(q_sel, k_sel, v_sel, window, return_attn=return_attn)
             mask_time_ms += mask_ms
@@ -2432,7 +2451,8 @@ class AAHV3Attention(nn.Module):
                 backend_realized_elements_est += bucket_dense_actual
             else:
                 backend_realized_elements_est += bucket_effective
-            outputs[:, head_sel] = y_h
+            with _nvtx_range(NCU_OUTPUT_ASSEMBLY_RANGE):
+                outputs[:, head_sel] = y_h
             if not minimal_runtime:
                 norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
                 for i, h in enumerate(heads):
@@ -2454,9 +2474,11 @@ class AAHV3Attention(nn.Module):
         effective_ACR = total_elements / baseline_elements if baseline_elements > 0 else 1.0
         backend_realized_ACR_est = backend_realized_elements_est / dense_kernel_actual_elements_est if dense_kernel_actual_elements_est > 0 else 1.0
 
-        y = outputs
-        y = y.transpose(1, 2).contiguous().view(B, T, C)
-        y = self.resid_drop(self.proj(y))
+        with _nvtx_range(NCU_OUTPUT_ASSEMBLY_RANGE):
+            y = outputs
+            y = y.transpose(1, 2).contiguous().view(B, T, C)
+        with _nvtx_range(NCU_OUTPUT_PROJECTION_RANGE):
+            y = self.resid_drop(self.proj(y))
         if minimal_runtime:
             total_time_ms = (time.perf_counter() - t_start) * 1000.0
             backend_name = next(iter(backend_bucket_counts.keys()), self.attention_backend)
@@ -2728,7 +2750,8 @@ class MLP(nn.Module):
         self.drop = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        return self.drop(self.fc2(F.gelu(self.fc1(x))))
+        with _nvtx_range(NCU_MLP_RANGE):
+            return self.drop(self.fc2(F.gelu(self.fc1(x))))
 
 
 class Block(nn.Module):
