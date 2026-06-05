@@ -151,6 +151,7 @@ class GPTConfig:
     aah_flopslab_bucket_windows: tuple = ()
     aah_flopslab_bucket_threshold: int = 0
     aah_flopslab_minimal_runtime: bool = False
+    aah_flopslab_assume_preordered_heads: bool = False
 
 
 class CausalSelfAttention(nn.Module):
@@ -622,6 +623,7 @@ class AAHV3Attention(nn.Module):
         self.flopslab_bucket_windows = tuple(int(w) for w in getattr(config, "aah_flopslab_bucket_windows", ()) if int(w) > 0)
         self.flopslab_bucket_threshold = int(getattr(config, "aah_flopslab_bucket_threshold", 0))
         self.flopslab_minimal_runtime = bool(getattr(config, "aah_flopslab_minimal_runtime", False))
+        self.flopslab_assume_preordered_heads = bool(getattr(config, "aah_flopslab_assume_preordered_heads", False))
         self.flopslab_layer_idx = None
         self.flopslab_static_plan = None
         if self.flopslab_enabled and self.flopslab_plan_path:
@@ -2399,6 +2401,12 @@ class AAHV3Attention(nn.Module):
             and self.flopslab_mode == "noscatter_prototype"
             and self.flopslab_variant != "scatter-control-matched"
         )
+        minimal_runtime = self.flopslab_enabled and self.flopslab_minimal_runtime and not return_attn
+        head_reorder_lower_bound_active = (
+            noscatter_active
+            and minimal_runtime
+            and self.flopslab_assume_preordered_heads
+        )
         q_exec = q
         k_exec = k
         v_exec = v
@@ -2410,21 +2418,23 @@ class AAHV3Attention(nn.Module):
                 key=lambda h: (self.windows[int(win_idx[h].item())], h),
             )
             perm = torch.tensor(head_permutation, device=x.device, dtype=torch.long)
-            q_exec = q.index_select(1, perm)
-            k_exec = k.index_select(1, perm)
-            v_exec = v.index_select(1, perm)
             win_idx_exec = win_idx.index_select(0, perm)
+            if not head_reorder_lower_bound_active:
+                q_exec = q.index_select(1, perm)
+                k_exec = k.index_select(1, perm)
+                v_exec = v.index_select(1, perm)
             flopslab_policy_debug.update(
                 {
                     "flopslab_noscatter_active": True,
                     "flopslab_head_permutation": head_permutation,
                     "flopslab_inverse_scatter_skipped": True,
+                    "flopslab_assume_preordered_heads": bool(head_reorder_lower_bound_active),
                     "flopslab_semantics": "prototype_changes_head_order_before_output_projection",
                 }
             )
 
-        minimal_runtime = self.flopslab_enabled and self.flopslab_minimal_runtime and not return_attn
         outputs = torch.empty(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype) if minimal_runtime else torch.zeros(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype)
+        bucket_outputs = [] if head_reorder_lower_bound_active else None
         head_norms = [] if minimal_runtime else [0.0 for _ in range(self.n_head)]
         head_entropy = [] if minimal_runtime else [0.0 for _ in range(self.n_head)]
         head_usage = [] if minimal_runtime else [0.0 for _ in range(self.n_head)]
@@ -2461,7 +2471,10 @@ class AAHV3Attention(nn.Module):
             else:
                 backend_realized_elements_est += bucket_effective
             with _nvtx_range(NCU_OUTPUT_ASSEMBLY_RANGE):
-                outputs[:, head_sel] = y_h
+                if head_reorder_lower_bound_active:
+                    bucket_outputs.append(y_h)
+                else:
+                    outputs[:, head_sel] = y_h
             if not minimal_runtime:
                 norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
                 for i, h in enumerate(heads):
@@ -2484,6 +2497,8 @@ class AAHV3Attention(nn.Module):
         backend_realized_ACR_est = backend_realized_elements_est / dense_kernel_actual_elements_est if dense_kernel_actual_elements_est > 0 else 1.0
 
         with _nvtx_range(NCU_OUTPUT_ASSEMBLY_RANGE):
+            if head_reorder_lower_bound_active:
+                outputs = torch.cat(bucket_outputs, dim=1)
             y = outputs
             y = y.transpose(1, 2).contiguous().view(B, T, C)
         with _nvtx_range(NCU_OUTPUT_PROJECTION_RANGE):
@@ -2522,6 +2537,7 @@ class AAHV3Attention(nn.Module):
                 "flopslab_mode": self.flopslab_mode,
                 "flopslab_variant": self.flopslab_variant,
                 "flopslab_minimal_runtime": True,
+                "flopslab_assume_preordered_heads": bool(head_reorder_lower_bound_active),
             }
             return y
         avg_window = float(w.mean().item())

@@ -360,12 +360,56 @@ Expected outcomes:
 - If region totals do not explain the gap, switch to Nsight kernel-name/native
   stack attribution instead of making more model changes.
 
-### P5: H5 Head Reordering Gate
+### P5: H5 Head-Reorder Lower-Bound Probe
 
-Do not start full head-reordering implementation yet. H3 did not show a large
-enough improvement. Revisit H5 only if P1-P3 show that codepath overhead is
-under control and P4 shows scatter/head layout or output assembly remains the
-major residual cost.
+Status: implemented locally; next Pro 6000 profile-only launch.
+
+Do not start full head-reordering surgery yet. The corrected P3/P4 results show
+that codepath overhead is mostly under control and the remaining gap is only
+about `0.0425%`, with small positive deltas from runtime head selection/copy and
+split GEMM shape variants. The next step is therefore a lower-bound profile,
+not a checkpoint-compatible implementation.
+
+Row to launch:
+
+```text
+flopslab-4096-headreorder-lowerbound-1024-4096-flash-seed0
+```
+
+Implementation handle:
+
+```text
+experiments/aah_flops_reduction_lab/h5_head_reorder_candidate/
+experiments/backend_realized_local_attention/_common/aah_backend_transformer.py
+```
+
+The row enables `aah_flopslab_assume_preordered_heads=true` together with the
+corrected P3 minimal-runtime path. During profiled forward, the lab path assumes
+the Q/K/V heads are already physically stored in bucket order, so it skips
+runtime Q/K/V `index_select` and concatenates bucket outputs directly. This is a
+semantics-changing lower-bound probe, not a valid model-quality result.
+
+Question answered:
+
+```text
+If future head-reordered weights made bucket order physical, would removing the
+remaining runtime permutation/output-scatter path push the Nsight ratio below
+1.0?
+```
+
+Success:
+
+- ratio falls below corrected P3 `1.000425x`;
+- strong success is `<1.0`;
+- only then implement real per-layer head permutation, output-projection
+  adjustment, checkpoint metadata, and equivalence tests.
+
+Failure:
+
+- if the row stays around `1.0004x`, full head reordering is probably too small
+  to matter alone;
+- if it rises, the remaining residual is likely GEMM-shape/kernel-selection
+  noise rather than explicit scatter.
 
 ## Open Decisions
 
