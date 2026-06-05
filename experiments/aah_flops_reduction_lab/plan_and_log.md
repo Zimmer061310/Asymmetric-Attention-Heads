@@ -107,12 +107,22 @@ larger transformer surgery.
 
 ### P1: Same-Codepath Full Baseline
 
+Status: config and profile script added. Runtime estimate on Pro 6000 is
+`7-10` minutes based on the prior H1/H4 rows.
+
 Goal: determine whether the remaining `~1.5%` comes from the AAH lab/backend
 transformer wrapper rather than AAH local execution itself.
 
 Run a row that uses the AAH backend transformer codepath but forces full-window
 execution with no dynamic controller or local-window reduction. Compare it
 against pure FlashAttention.
+
+Implementation handle:
+
+```text
+experiments/aah_flops_reduction_lab/baselines/configs/flopslab-4096-same-codepath-full-flash-seed0.yaml
+experiments/aah_flops_reduction_lab/baselines/scripts/profile_same_codepath_full.sh
+```
 
 Expected outcomes:
 
