@@ -8,23 +8,24 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 |---:|---|---|---|---:|---:|---|---|
 | 1 | `flopslab-4096-baseline-pure-flash-seed0` | denominator | total | 1.000000 | 6171093130434 | baseline | pure |
 | 2 | `flopslab-4096-same-codepath-full-flash-seed0` | diagnostic_baseline | total | 1.000000 | 6171093238461 | p1_same_codepath_full_baseline | same_codepath_full |
-| 3 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | aah | total | 1.000425 | 6173714488149 | p3_minimal_runtime | minimal_runtime |
-| 4 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | aah | total | 1.015376 | 6265980625227 | h3_noscatter_prototype | noscatter_prototype |
-| 5 | `flopslab-4096-noscatter-contiguous-layer-plan-flash-seed0` | aah | total | 1.015435 | 6266345599701 | h3_noscatter_prototype | noscatter_prototype |
-| 6 | `flopslab-4096-noscatter-scatter-control-matched-flash-seed0` | aah | total | 1.015568 | 6267166948539 | h3_noscatter_prototype | noscatter_prototype |
-| 7 | `flopslab-4096-slow-update-N200-flash-seed0` | aah | total | 1.015628 | 6267531920428 | h4_fixed_plan_granularity | fixed_plan |
-| 8 | `flopslab-4096-static-plan-per-layer-head-flash-seed0` | aah | total | 1.015628 | 6267531924576 | h1_static_compiled_plan | static_compiled_plan |
-| 9 | `flopslab-4096-fixed-per-head-flash-seed0` | aah | total | 1.015628 | 6267531926227 | h4_fixed_plan_granularity | fixed_plan |
-| 10 | `flopslab-4096-fixed-per-state-flash-seed0` | aah | total | 1.015628 | 6267531926549 | h4_fixed_plan_granularity | fixed_plan |
-| 11 | `flopslab-4096-fixed-per-head-group-flash-seed0` | aah | total | 1.015628 | 6267531926721 | h4_fixed_plan_granularity | fixed_plan |
-| 12 | `flopslab-4096-slow-update-N1000-flash-seed0` | aah | total | 1.015628 | 6267531929695 | h4_fixed_plan_granularity | fixed_plan |
-| 13 | `flopslab-4096-fixed-per-layer-flash-seed0` | aah | total | 1.015647 | 6267650317094 | h4_fixed_plan_granularity | fixed_plan |
-| 14 | `flopslab-4096-static-plan-majority-flash-seed0` | aah | total | 1.015647 | 6267650321618 | h1_static_compiled_plan | static_compiled_plan |
-| 15 | `flopslab-4096-static-plan-per-layer-flash-seed0` | aah | total | 1.015647 | 6267650321838 | h1_static_compiled_plan | static_compiled_plan |
-| 16 | `flopslab-4096-quantized-two-bucket-1024-4096-flash-seed0` | aah | total | 1.017083 | 6276513219816 | h2_quantized_execution | quantized_execution |
-| 17 | `flopslab-4096-quantized-two-bucket-2048-4096-flash-seed0` | aah | total | 1.017096 | 6276591445966 | h2_quantized_execution | quantized_execution |
-| 18 | `flopslab-4096-quantized-single-2048-flash-seed0` | aah | total | 1.017132 | 6276817628095 | h2_quantized_execution | quantized_execution |
-| 19 | `flopslab-4096-quantized-single-1024-flash-seed0` | aah | total | 1.017295 | 6277824394320 | h2_quantized_execution | quantized_execution |
+| 3 | `flopslab-4096-headreorder-lowerbound-1024-4096-flash-seed0` | headreorder_lowerbound | total | 1.000135 | 6171928931891 | h5_head_reorder_candidate | head_reorder_lower_bound |
+| 4 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | aah | total | 1.000425 | 6173714488149 | p3_minimal_runtime | minimal_runtime |
+| 5 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | aah | total | 1.015376 | 6265980625227 | h3_noscatter_prototype | noscatter_prototype |
+| 6 | `flopslab-4096-noscatter-contiguous-layer-plan-flash-seed0` | aah | total | 1.015435 | 6266345599701 | h3_noscatter_prototype | noscatter_prototype |
+| 7 | `flopslab-4096-noscatter-scatter-control-matched-flash-seed0` | aah | total | 1.015568 | 6267166948539 | h3_noscatter_prototype | noscatter_prototype |
+| 8 | `flopslab-4096-slow-update-N200-flash-seed0` | aah | total | 1.015628 | 6267531920428 | h4_fixed_plan_granularity | fixed_plan |
+| 9 | `flopslab-4096-static-plan-per-layer-head-flash-seed0` | aah | total | 1.015628 | 6267531924576 | h1_static_compiled_plan | static_compiled_plan |
+| 10 | `flopslab-4096-fixed-per-head-flash-seed0` | aah | total | 1.015628 | 6267531926227 | h4_fixed_plan_granularity | fixed_plan |
+| 11 | `flopslab-4096-fixed-per-state-flash-seed0` | aah | total | 1.015628 | 6267531926549 | h4_fixed_plan_granularity | fixed_plan |
+| 12 | `flopslab-4096-fixed-per-head-group-flash-seed0` | aah | total | 1.015628 | 6267531926721 | h4_fixed_plan_granularity | fixed_plan |
+| 13 | `flopslab-4096-slow-update-N1000-flash-seed0` | aah | total | 1.015628 | 6267531929695 | h4_fixed_plan_granularity | fixed_plan |
+| 14 | `flopslab-4096-fixed-per-layer-flash-seed0` | aah | total | 1.015647 | 6267650317094 | h4_fixed_plan_granularity | fixed_plan |
+| 15 | `flopslab-4096-static-plan-majority-flash-seed0` | aah | total | 1.015647 | 6267650321618 | h1_static_compiled_plan | static_compiled_plan |
+| 16 | `flopslab-4096-static-plan-per-layer-flash-seed0` | aah | total | 1.015647 | 6267650321838 | h1_static_compiled_plan | static_compiled_plan |
+| 17 | `flopslab-4096-quantized-two-bucket-1024-4096-flash-seed0` | aah | total | 1.017083 | 6276513219816 | h2_quantized_execution | quantized_execution |
+| 18 | `flopslab-4096-quantized-two-bucket-2048-4096-flash-seed0` | aah | total | 1.017096 | 6276591445966 | h2_quantized_execution | quantized_execution |
+| 19 | `flopslab-4096-quantized-single-2048-flash-seed0` | aah | total | 1.017132 | 6276817628095 | h2_quantized_execution | quantized_execution |
+| 20 | `flopslab-4096-quantized-single-1024-flash-seed0` | aah | total | 1.017295 | 6277824394320 | h2_quantized_execution | quantized_execution |
 
 ## Attention NVTX Scope
 
@@ -32,8 +33,9 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 |---:|---|---|---|---:|---:|---|---|
 | 1 | `flopslab-4096-baseline-pure-flash-attention-scope-seed0` | attention_denominator | attention | 1.000000 | 1808239165440 | baseline | pure_attention_scope |
 | 2 | `flopslab-4096-same-codepath-full-flash-seed0` | attention_diagnostic_baseline | attention | 1.000000 | 1808239165440 | p1_same_codepath_full_baseline | same_codepath_full |
-| 3 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | p3_minimal_runtime | minimal_runtime |
-| 4 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | h3_noscatter_prototype | noscatter_prototype |
+| 3 | `flopslab-4096-headreorder-lowerbound-1024-4096-flash-seed0` | attention_headreorder_lowerbound | attention | 1.000437 | 1809030055936 | h5_head_reorder_candidate | head_reorder_lower_bound |
+| 4 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | p3_minimal_runtime | minimal_runtime |
+| 5 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | h3_noscatter_prototype | noscatter_prototype |
 
 ## Kernel Attribution Scope
 
@@ -46,7 +48,7 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 
 The same-codepath full-window diagnostic baseline is `1.000000018x` in total-forward scope and `1.000000x` in attention scope, effectively identical to pure FlashAttention. This rules out generic AAH backend wrapper overhead as the source of the remaining total-forward gap.
 
-After fixing the config plumbing for `aah_flopslab_minimal_runtime`, the P3 minimal-runtime no-scatter path is the best total-forward AAH row: `1.000425x` total-forward and `1.000437x` attention-scope. It is still slightly above pure FlashAttention, but the gap is now about `0.0425%`, not `1.54%`.
+After fixing the config plumbing for `aah_flopslab_minimal_runtime`, the P3 minimal-runtime no-scatter path fell to `1.000425x` total-forward and `1.000437x` attention-scope. The H5 head-reorder lower-bound probe, which assumes heads are already physically bucket-ordered and therefore is not a valid quality result, improves total-forward to `1.000135x`. This removes most of the remaining total-forward overhead, but it still does not beat pure FlashAttention.
 
 P4 kernel attribution with raw Nsight CSVs shows the corrected AAH kernel-summary total is only `316225875` parsed FLOPs above pure in the summarized kernels. The largest positive deltas are extra/split CUTLASS GEMM shape variants and small index-select/copy kernels, while some full-shape GEMM variants decrease and mostly cancel the increase. This points toward bucketed head layout / GEMM-shape fragmentation as the remaining issue, not diagnostics or the FlashAttention kernel itself.
 

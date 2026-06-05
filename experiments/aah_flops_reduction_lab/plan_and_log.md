@@ -27,16 +27,17 @@ gpu_flops_total = 6,171,093,130,434
 gpu_flops_total_ratio_ncu = 1.000000
 ```
 
-Best AAH row:
+Best AAH row after P3/P5 follow-up probes:
 
 ```text
-flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0
-gpu_flops_total = 6,265,980,625,227
-gpu_flops_total_ratio_ncu = 1.015376
+flopslab-4096-headreorder-lowerbound-1024-4096-flash-seed0
+gpu_flops_total = 6,171,928,931,891
+gpu_flops_total_ratio_ncu = 1.000135
 ```
 
-So the best tested AAH path is still about `1.54%` above pure FlashAttention in
-measured total GPU FLOPs.
+This is a semantics-changing lower-bound probe, not a valid quality result. It
+is still about `0.0135%` above pure FlashAttention in measured total GPU FLOPs.
+The best non-H5 lab path remains corrected P3 at `1.000425x`.
 
 ## Completed Hypotheses
 
@@ -295,10 +296,11 @@ Acceptance:
 
 ### P4: Region Attribution
 
-Status: implemented locally; ready for Pro 6000 profile-only launch.
+Status: completed on Pro 6000.
 
-Goal: identify which non-attention region accounts for the gap between
-attention-scope `1.000437x` and total-forward `1.015376x`.
+Goal: identify which non-attention region accounted for the original gap between
+attention-scope `1.000437x` and the pre-fix total-forward `1.015376x`, then
+rerun attribution after corrected P3.
 
 Implementation handle:
 
@@ -362,7 +364,7 @@ Expected outcomes:
 
 ### P5: H5 Head-Reorder Lower-Bound Probe
 
-Status: implemented locally; next Pro 6000 profile-only launch.
+Status: completed on Pro 6000.
 
 Do not start full head-reordering surgery yet. The corrected P3/P4 results show
 that codepath overhead is mostly under control and the remaining gap is only
@@ -410,6 +412,28 @@ Failure:
   to matter alone;
 - if it rises, the remaining residual is likely GEMM-shape/kernel-selection
   noise rather than explicit scatter.
+
+Observed rows:
+
+```text
+flopslab-4096-headreorder-lowerbound-1024-4096-flash-seed0
+gpu_flops_total = 6,171,928,931,891
+gpu_flops_total_ratio_ncu = 1.0001354382
+
+flopslab-4096-headreorder-lowerbound-1024-4096-flash-seed0_attention
+gpu_flops_total = 1,809,030,055,936
+gpu_flops_total_ratio_ncu = 1.0004373816
+```
+
+Interpretation: the lower-bound head-reorder proxy improves total-forward from
+corrected P3 `1.000425x` to `1.000135x`, so runtime Q/K/V permutation and output
+scatter were part of the residual. However, even the semantics-changing
+lower-bound probe remains above pure FlashAttention, and attention-scope FLOPs
+are unchanged. Full head-reordering alone is therefore not a strong enough path
+to a paper-facing `<1.0` FLOPs ratio. A real implementation may still be useful
+for cleanup or runtime, but the next compute-reduction attempt should target the
+attention kernel schedule or reduce the number/shape fragmentation of attention
+and projection/GEMM launches, not just head order.
 
 ## Open Decisions
 
