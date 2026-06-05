@@ -5,7 +5,38 @@ true Nsight Compute GPU FLOPs ratio below `1.0`.
 
 The paper branch evidence shows that current AAH execution increases measured
 GPU FLOPs despite lower ACR/EAR. This lab therefore treats ACR and EAR as
-diagnostics only. The primary metric is:
+diagnostics only.
+
+## Current working framework
+
+The active follow-up framework is now **dense execution first**. The immediate
+question is whether AAH can beat a standard dense MHA implementation when both
+paths use the dense/window-execution code family, before spending more work on
+FlashAttention bucket surgery.
+
+The dense-framework metric is:
+
+```text
+dense_gpu_flops_total_ratio_ncu =
+  Nsight GPU FP ops for the dense AAH variant
+  / Nsight GPU FP ops for the matched standard dense MHA baseline
+```
+
+The existing dense full-adaptive window-execution diagnostic is not a win:
+
+```text
+standard dense MHA baseline GPU FLOPs = 178,003,140,306
+dense AAH full_adaptive GPU FLOPs     = 285,093,795,549
+dense_gpu_flops_total_ratio_ncu      = 1.601622
+```
+
+So the dense framework is a new engineering target, not a reinterpretation of
+that result as `~1.01x`.
+
+## FlashAttention reference framework
+
+The stronger systems baseline remains pure FlashAttention. Results using that
+denominator are labeled as the FlashAttention reference framework:
 
 ```text
 gpu_flops_total_ratio_ncu =
@@ -45,6 +76,7 @@ aah_flops_reduction_lab/
   h3_noscatter_prototype/  # contiguous head blocks without arbitrary scatter
   h4_fixed_plan_granularity/
   h5_head_reorder_candidate/
+  p7_dense_framework/      # dense MHA denominator and dense AAH follow-ups
 ```
 
 Each hypothesis folder contains its own `README.md`, `configs/`, `scripts/`,

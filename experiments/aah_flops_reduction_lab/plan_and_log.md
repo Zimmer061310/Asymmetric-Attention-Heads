@@ -7,9 +7,37 @@ primary target is still:
 gpu_flops_total_ratio_ncu < 1.0
 ```
 
-The denominator is the matched pure FlashAttention row at `seq_len=4096`,
-`batch_size=1`, `bf16`, measured with Nsight Compute GPU FLOP counters on the
-same hardware.
+The earlier denominator was the matched pure FlashAttention row at
+`seq_len=4096`, `batch_size=1`, `bf16`, measured with Nsight Compute GPU FLOP
+counters on the same hardware.
+
+## Framework Pivot: Dense Execution First
+
+The active follow-up framework is now dense execution first. The new dense
+metric is explicitly denominator-scoped:
+
+```text
+dense_gpu_flops_total_ratio_ncu =
+  dense AAH gpu_flops_total
+  / standard dense MHA gpu_flops_total
+```
+
+This is not the same claim as beating pure FlashAttention. It is a weaker
+dense-framework diagnostic: can AAH beat standard dense MHA after removing
+dense-path overhead?
+
+The copied Pro 6000 dense diagnostic says the current dense AAH path does not
+win:
+
+```text
+standard dense MHA baseline GPU FLOPs = 178,003,140,306
+dense AAH full_adaptive GPU FLOPs     = 285,093,795,549
+dense_gpu_flops_total_ratio_ncu      = 1.601622
+```
+
+So the dense ratio is not `~1.01`. Dense is now the working framework because it
+is the next controlled target, not because the existing dense AAH profile is
+already below or near `1.0`.
 
 ## Current Evidence
 
@@ -103,6 +131,10 @@ The broad cheap hypotheses are exhausted:
 The remaining gap is small, about `1.5%` over pure FlashAttention. The next
 work should target measurement/control overhead and codepath parity before
 larger transformer surgery.
+
+Dense-framework note: the existing dense full_adaptive/window-execution profile
+is much worse than the Flash lab's best rows: `1.601622x` versus standard dense
+MHA. That makes the dense branch a separate debugging target.
 
 ## Next Phase Plan
 
