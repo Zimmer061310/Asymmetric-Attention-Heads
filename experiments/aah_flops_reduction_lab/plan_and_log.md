@@ -107,8 +107,15 @@ larger transformer surgery.
 
 ### P1: Same-Codepath Full Baseline
 
-Status: config and profile script added. Runtime estimate on Pro 6000 is
-`7-10` minutes based on the prior H1/H4 rows.
+Status: completed on Pro 6000.
+
+Result:
+
+```text
+flopslab-4096-same-codepath-full-flash-seed0
+gpu_flops_total = 6,171,093,238,461
+gpu_flops_total_ratio_ncu = 1.0000000175
+```
 
 Goal: determine whether the remaining `~1.5%` comes from the AAH lab/backend
 transformer wrapper rather than AAH local execution itself.
@@ -131,13 +138,41 @@ Expected outcomes:
 - If the same-codepath full baseline is near `1.0`, then AAH execution still
   adds real extra FLOPs that must be removed.
 
+Interpretation: the same-codepath full-window diagnostic is effectively equal
+to pure FlashAttention. This rules out generic AAH backend wrapper overhead as
+the source of the `~1.5%` gap. The remaining overhead comes from the AAH
+local/window execution path or its non-attention bookkeeping during that path.
+
 ### P2: Attention-Only Nsight Range
+
+Status: implemented locally; ready for Pro 6000 profile-only launch.
 
 Goal: separate attention-kernel FLOPs from total forward FLOPs.
 
 Keep `gpu_flops_total_ratio_ncu` as the primary metric, but add an
 attention-region profile row or range-tagged profile if the existing profiler
 can support it cleanly.
+
+Implementation handle:
+
+```text
+experiments/backend_realized_local_attention/_common/profile_gpu_flops_ncu.py
+experiments/backend_realized_local_attention/_common/pure_backend_transformer.py
+experiments/backend_realized_local_attention/_common/aah_backend_transformer.py
+experiments/aah_flops_reduction_lab/baselines/scripts/profile_attention_scope.sh
+```
+
+The profiler now has an opt-in `--profile-scope attention` mode. It uses an
+explicit `aah_ncu_attention` NVTX range around backend attention execution and
+passes `--nvtx --nvtx-include aah_ncu_attention` to Nsight Compute. The default
+scope remains total forward, so existing paper-facing total-FLOPs profiles are
+unchanged.
+
+Rows to launch:
+
+- pure FlashAttention attention denominator;
+- best AAH no-scatter row attention profile;
+- same-codepath full-window AAH attention sanity check.
 
 Expected outcomes:
 

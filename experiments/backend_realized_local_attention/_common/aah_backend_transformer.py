@@ -14,6 +14,19 @@ _FLASH_ATTN_IMPORT_ERROR = None
 _FLEX_ATTENTION = None
 _FLEX_CREATE_BLOCK_MASK = None
 _FLEX_IMPORT_ERROR = None
+NCU_ATTENTION_RANGE = "aah_ncu_attention"
+
+
+def _nvtx_push(name):
+    if not torch.cuda.is_available():
+        return False
+    torch.cuda.nvtx.range_push(name)
+    return True
+
+
+def _nvtx_pop(pushed):
+    if pushed:
+        torch.cuda.nvtx.range_pop()
 
 
 def _load_flash_attn_func():
@@ -1876,40 +1889,44 @@ class AAHV3Attention(nn.Module):
         if return_attn:
             requested_backend = "dense_masked"
 
-        if requested_backend == "flash_attn":
-            with record_function("attn_flash_backend"):
-                y, info = self._flash_attention_bucket(q, k, v, window)
-            if y is not None:
-                return y, None, 0.0, info
-        elif requested_backend == "flex_attention":
-            with record_function("attn_flex_backend"):
-                y, info = self._flex_attention_bucket(q, k, v, window)
-            if y is not None:
-                return y, None, 0.0, info
-        else:
-            info = {
-                "backend": "dense_masked",
-                "requested_backend": self.attention_backend,
-                "fallback_reason": "",
-            }
+        pushed = _nvtx_push(NCU_ATTENTION_RANGE)
+        try:
+            if requested_backend == "flash_attn":
+                with record_function("attn_flash_backend"):
+                    y, info = self._flash_attention_bucket(q, k, v, window)
+                if y is not None:
+                    return y, None, 0.0, info
+            elif requested_backend == "flex_attention":
+                with record_function("attn_flex_backend"):
+                    y, info = self._flex_attention_bucket(q, k, v, window)
+                if y is not None:
+                    return y, None, 0.0, info
+            else:
+                info = {
+                    "backend": "dense_masked",
+                    "requested_backend": self.attention_backend,
+                    "fallback_reason": "",
+                }
 
-        B, H, T, D = q.shape
-        qf = q.reshape(B * H, T, D)
-        kf = k.reshape(B * H, T, D)
-        vf = v.reshape(B * H, T, D)
-        with record_function("attn_dense_masked_backend"):
-            y_f, att_f, mask_ms = self._local_attention(qf, kf, vf, window)
-        y_h = y_f.view(B, H, T, D)
-        att_h = att_f.view(B, H, att_f.size(1), att_f.size(2))
-        if requested_backend != "dense_masked" and "fallback_reason" not in info:
-            info = self._backend_fallback("unknown_backend_fallback")
-        if return_attn and not info.get("fallback_reason"):
-            info = {
-                "backend": "dense_masked",
-                "requested_backend": self.attention_backend,
-                "fallback_reason": "return_attn_requires_dense_weights",
-            }
-        return y_h, att_h, mask_ms, info
+            B, H, T, D = q.shape
+            qf = q.reshape(B * H, T, D)
+            kf = k.reshape(B * H, T, D)
+            vf = v.reshape(B * H, T, D)
+            with record_function("attn_dense_masked_backend"):
+                y_f, att_f, mask_ms = self._local_attention(qf, kf, vf, window)
+            y_h = y_f.view(B, H, T, D)
+            att_h = att_f.view(B, H, att_f.size(1), att_f.size(2))
+            if requested_backend != "dense_masked" and "fallback_reason" not in info:
+                info = self._backend_fallback("unknown_backend_fallback")
+            if return_attn and not info.get("fallback_reason"):
+                info = {
+                    "backend": "dense_masked",
+                    "requested_backend": self.attention_backend,
+                    "fallback_reason": "return_attn_requires_dense_weights",
+                }
+            return y_h, att_h, mask_ms, info
+        finally:
+            _nvtx_pop(pushed)
 
     def forward(self, x, return_attn: bool = False):
         B, T, C = x.size()

@@ -18,6 +18,19 @@ _FLASH_ATTN_IMPORT_ERROR = None
 _FLEX_ATTENTION = None
 _FLEX_CREATE_BLOCK_MASK = None
 _FLEX_IMPORT_ERROR = None
+NCU_ATTENTION_RANGE = "aah_ncu_attention"
+
+
+def _nvtx_push(name):
+    if not torch.cuda.is_available():
+        return False
+    torch.cuda.nvtx.range_push(name)
+    return True
+
+
+def _nvtx_pop(pushed):
+    if pushed:
+        torch.cuda.nvtx.range_pop()
 
 
 def _load_flash_attn_func():
@@ -187,18 +200,22 @@ class BackendCausalSelfAttention(nn.Module):
         t_attn = time.perf_counter()
         y = None
         info = {"backend": "dense_masked", "requested_backend": self.backend, "fallback_reason": ""}
-        if not return_attn and self.backend == "flash_attn":
-            with record_function("attn_flash_backend"):
-                y, info = self._flash_attention(q, k, v)
-        elif not return_attn and self.backend == "flex_attention":
-            with record_function("attn_flex_backend"):
-                y, info = self._flex_attention(q, k, v)
-        if y is None:
-            with record_function("attn_dense_masked_backend"):
-                y, dense_info = self._dense_attention(q, k, v)
-            if info.get("fallback_reason"):
-                dense_info["fallback_reason"] = info["fallback_reason"]
-            info = dense_info
+        pushed = _nvtx_push(NCU_ATTENTION_RANGE)
+        try:
+            if not return_attn and self.backend == "flash_attn":
+                with record_function("attn_flash_backend"):
+                    y, info = self._flash_attention(q, k, v)
+            elif not return_attn and self.backend == "flex_attention":
+                with record_function("attn_flex_backend"):
+                    y, info = self._flex_attention(q, k, v)
+            if y is None:
+                with record_function("attn_dense_masked_backend"):
+                    y, dense_info = self._dense_attention(q, k, v)
+                if info.get("fallback_reason"):
+                    dense_info["fallback_reason"] = info["fallback_reason"]
+                info = dense_info
+        finally:
+            _nvtx_pop(pushed)
         attn_time_ms = (time.perf_counter() - t_attn) * 1000.0
 
         y = y.transpose(1, 2).contiguous().view(B, T, C)
