@@ -1,6 +1,6 @@
 # AAH FLOPs Lab Pro 6000 Nsight Summary
 
-All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len=4096, batch_size=1, bf16. Total-forward rows divide by the matched pure FlashAttention total-forward baseline. Attention-scope rows divide by the matched pure FlashAttention attention NVTX-scope baseline. Lower is better; values below 1.0 would indicate lower measured GPU FLOPs than pure FlashAttention for that scope.
+All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, batch_size=1, bf16. Total-forward rows divide by the matched pure FlashAttention total-forward baseline at the same context length. Attention-scope rows divide by the matched pure FlashAttention attention NVTX-scope baseline at the same context length. Lower is better; values below 1.0 would indicate lower measured GPU FLOPs than pure FlashAttention for that scope.
 
 ## Total Forward Scope
 
@@ -37,6 +37,17 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 | 4 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | p3_minimal_runtime | minimal_runtime |
 | 5 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | h3_noscatter_prototype | noscatter_prototype |
 
+## 8192 Context Scaling Scope
+
+| Rank | Experiment | Type | Scope | Ratio | GPU FLOPs | Hypothesis | Mode |
+|---:|---|---|---|---:|---:|---|---|
+| 1 | `flopslab-8192-baseline-pure-flash-seed0` | denominator_8192 | total | 1.000000 | 15954416264647 | baseline | pure_8192 |
+| 2 | `flopslab-8192-headreorder-lowerbound-1024-8192-flash-seed0` | headreorder_lowerbound_8192 | total | 1.000449 | 15961586090092 | p6_context_scaling | head_reorder_lower_bound_context_scaling |
+| 3 | `flopslab-8192-minruntime-noscatter-1024-8192-flash-seed0` | aah_8192 | total | 1.000673 | 15965150152996 | p6_context_scaling | minimal_runtime_context_scaling |
+| 4 | `flopslab-8192-baseline-pure-flash-seed0` | attention_denominator_8192 | attention | 1.000000 | 7230693310464 | baseline | pure_attention_scope_8192 |
+| 5 | `flopslab-8192-headreorder-lowerbound-1024-8192-flash-seed0` | attention_headreorder_lowerbound_8192 | attention | 1.000981 | 7237784770560 | p6_context_scaling | head_reorder_lower_bound_context_scaling |
+| 6 | `flopslab-8192-minruntime-noscatter-1024-8192-flash-seed0` | attention_aah_8192 | attention | 1.000981 | 7237784770560 | p6_context_scaling | minimal_runtime_context_scaling |
+
 ## Kernel Attribution Scope
 
 | Rank | Experiment | Type | Scope | Ratio | GPU FLOPs | Hypothesis | Mode |
@@ -49,6 +60,8 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 The same-codepath full-window diagnostic baseline is `1.000000018x` in total-forward scope and `1.000000x` in attention scope, effectively identical to pure FlashAttention. This rules out generic AAH backend wrapper overhead as the source of the remaining total-forward gap.
 
 After fixing the config plumbing for `aah_flopslab_minimal_runtime`, the P3 minimal-runtime no-scatter path fell to `1.000425x` total-forward and `1.000437x` attention-scope. The H5 head-reorder lower-bound probe, which assumes heads are already physically bucket-ordered and therefore is not a valid quality result, improves total-forward to `1.000135x`. This removes most of the remaining total-forward overhead, but it still does not beat pure FlashAttention.
+
+The 8192 context-scaling profiles also do not cross below `1.0`. At 8192, P3 is `1.000673x` total-forward and H5 lower-bound is `1.000449x` total-forward. Both AAH attention-scope rows are `1.000981x`. This means longer context did not reveal a hidden FlashAttention+AAH FLOPs win; the current execution path remains slightly above pure FlashAttention even when attention is a larger fraction of the forward pass.
 
 P4 kernel attribution with raw Nsight CSVs shows the corrected AAH kernel-summary total is only `316225875` parsed FLOPs above pure in the summarized kernels. The largest positive deltas are extra/split CUTLASS GEMM shape variants and small index-select/copy kernels, while some full-shape GEMM variants decrease and mostly cancel the increase. This points toward bucketed head layout / GEMM-shape fragmentation as the remaining issue, not diagnostics or the FlashAttention kernel itself.
 

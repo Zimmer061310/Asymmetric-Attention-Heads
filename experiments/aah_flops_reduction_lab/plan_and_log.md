@@ -437,7 +437,7 @@ and projection/GEMM launches, not just head order.
 
 ### P6: 8192 Context Scaling Profiles
 
-Status: configured locally; next overnight Pro 6000 queue.
+Status: completed on Pro 6000.
 
 Goal: test whether AAH only becomes FLOPs-competitive when the context length is
 larger than 4096.
@@ -463,7 +463,42 @@ Expected interpretation:
   prove true GPU FLOPs reduction;
 - H5 remains a semantics-changing lower-bound profile, not a quality result.
 
+Observed rows:
+
+```text
+flopslab-8192-baseline-pure-flash-seed0
+gpu_flops_total = 15,954,416,264,647
+gpu_flops_total_ratio_ncu = 1.000000
+
+flopslab-8192-baseline-pure-flash-seed0_attention
+gpu_flops_total = 7,230,693,310,464
+gpu_flops_total_ratio_ncu = 1.000000
+
+flopslab-8192-minruntime-noscatter-1024-8192-flash-seed0
+gpu_flops_total = 15,965,150,152,996
+gpu_flops_total_ratio_ncu = 1.0006727848
+
+flopslab-8192-minruntime-noscatter-1024-8192-flash-seed0_attention
+gpu_flops_total = 7,237,784,770,560
+gpu_flops_total_ratio_ncu = 1.0009807441
+
+flopslab-8192-headreorder-lowerbound-1024-8192-flash-seed0
+gpu_flops_total = 15,961,586,090,092
+gpu_flops_total_ratio_ncu = 1.0004493944
+
+flopslab-8192-headreorder-lowerbound-1024-8192-flash-seed0_attention
+gpu_flops_total = 7,237,784,770,560
+gpu_flops_total_ratio_ncu = 1.0009807441
+```
+
+Interpretation: 8192 scaling did not produce a FLOPs win. The H5 lower-bound
+row remains the best 8192 AAH result, but it is still `0.0449%` above pure
+FlashAttention in total-forward FLOPs and attention-scope is `0.0981%` above
+pure. Longer context therefore does not rescue the current FlashAttention+AAH
+execution path as a measured GPU FLOPs reduction claim.
+
 ## Open Decisions
 
-- Whether to add a follow-up 16384 pure-vs-P3 run if 8192 completes cleanly and
-  memory headroom is still large.
+- Whether to stop profile-only probing here, since 8192 did not cross below
+  `1.0`, or move to a new implementation direction such as custom fused kernels
+  or actual Q/K/V projection compute reduction.
