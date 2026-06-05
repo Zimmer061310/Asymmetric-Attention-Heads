@@ -150,6 +150,7 @@ def build_gpt_config(GPTConfig, cfg):
         "aah_flopslab_bucket_policy_kind": str(model_cfg.get("aah_flopslab_bucket_policy_kind", bucket_policy.get("kind", ""))),
         "aah_flopslab_bucket_windows": tuple(model_cfg.get("aah_flopslab_bucket_windows", bucket_policy.get("windows", ()))),
         "aah_flopslab_bucket_threshold": int(model_cfg.get("aah_flopslab_bucket_threshold", bucket_policy.get("threshold", 0) or 0)),
+        "aah_flopslab_minimal_runtime": bool(model_or_lab("aah_flopslab_minimal_runtime", "minimal_runtime", False)),
     }
     if is_dataclass(GPTConfig):
         allowed = {f.name for f in fields(GPTConfig)}
