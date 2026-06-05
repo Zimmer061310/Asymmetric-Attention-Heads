@@ -1,0 +1,43 @@
+experiment:
+  name: flopslab-8192-baseline-pure-flash-seed0
+  seed: 0
+  variant: flopslab_8192_baseline_pure_flash
+  out_dir: experiments/aah_flops_reduction_lab/p6_context_scaling/results
+data:
+  dataset: wikitext-2-raw-v1
+  tokenizer: gpt2
+  seq_len: 8192
+  num_workers: 2
+model:
+  n_layer: 16
+  n_head: 12
+  n_embd: 1536
+  n_ff: 6144
+  dropout: 0.0
+  attention_backend: flash_attn
+  flex_block_size: 128
+train:
+  batch_size: 1
+  grad_accum: 1
+  max_steps: 1
+  lr: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 100
+  eval_interval: 200
+  eval_batches: 20
+  eval_log_progress: false
+  log_interval: 50
+  device: cuda
+  precision: bf16
+  use_wandb: false
+  log_csv: true
+  save_checkpoints: false
+  checkpoint_steps: []
+profiling:
+  ncu_gpu_flops_ratio_required: true
+  baseline_role: denominator
+  profile_regions:
+  - total
+  - attention
+  notes: 8192 context-scaling pure FlashAttention denominator for Nsight GPU FLOPs/FLOPs
+    ratios.

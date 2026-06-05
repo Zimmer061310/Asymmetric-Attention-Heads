@@ -435,10 +435,35 @@ for cleanup or runtime, but the next compute-reduction attempt should target the
 attention kernel schedule or reduce the number/shape fragmentation of attention
 and projection/GEMM launches, not just head order.
 
+### P6: 8192 Context Scaling Profiles
+
+Status: configured locally; next overnight Pro 6000 queue.
+
+Goal: test whether AAH only becomes FLOPs-competitive when the context length is
+larger than 4096.
+
+Rows to launch:
+
+```text
+flopslab-8192-baseline-pure-flash-seed0
+flopslab-8192-minruntime-noscatter-1024-8192-flash-seed0
+flopslab-8192-headreorder-lowerbound-1024-8192-flash-seed0
+```
+
+Each row records total-forward and attention-scope Nsight profiles. The pure
+Flash row is the matched 8192 denominator. The AAH rows reuse the 4096 learned
+head-window pattern, but the execution quantizer maps selected windows below
+4096 to `1024` and selected 4096/full heads to `8192`.
+
+Expected interpretation:
+
+- if P3 or H5 falls below `1.0`, AAH may only be useful as a longer-context
+  systems result;
+- if both remain `>=1.0`, the current FlashAttention + AAH path still does not
+  prove true GPU FLOPs reduction;
+- H5 remains a semantics-changing lower-bound profile, not a quality result.
+
 ## Open Decisions
 
-- Whether to run P1-P3 immediately on the idle Pro 6000 instance.
-- Whether P1-P3 should remain profile-only, or include a short `3000`-step
-  quality probe after a promising profile result.
-- Whether to keep the existing pure FlashAttention denominator or rerun it once
-  alongside P1 for a fresh same-session denominator.
+- Whether to add a follow-up 16384 pure-vs-P3 run if 8192 completes cleanly and
+  memory headroom is still large.
