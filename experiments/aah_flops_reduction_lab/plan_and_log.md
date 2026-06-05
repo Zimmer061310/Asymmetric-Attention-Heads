@@ -217,7 +217,7 @@ Expected outcomes:
 
 ### P3: Minimal-Runtime AAH Path
 
-Status: implemented locally; ready for Pro 6000 profile-only launch.
+Status: completed on Pro 6000.
 
 Goal: shave the remaining measured overhead by disabling everything not needed
 for inference execution.
@@ -250,6 +250,23 @@ Rows to launch:
   FlashAttention total-forward denominator;
 - attention-scope P3 minimal-runtime no-scatter profile, divided by the pure
   FlashAttention attention denominator.
+
+Final P3 rows:
+
+```text
+flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0
+gpu_flops_total = 6,265,980,625,951
+gpu_flops_total_ratio_ncu = 1.0153761244
+
+flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0_attention
+gpu_flops_total = 1,809,030,055,936
+gpu_flops_total_ratio_ncu = 1.0004373816
+```
+
+Interpretation: P3 is effectively identical to the best H3 no-scatter row in
+both total-forward and attention-scope FLOPs. Skipping profile-time diagnostic
+GPU reductions and using an uninitialized output buffer did not reduce measured
+GPU FLOPs. The remaining gap is therefore not caused by those diagnostics.
 
 Acceptance:
 
