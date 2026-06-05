@@ -163,16 +163,27 @@ experiments/aah_flops_reduction_lab/baselines/scripts/profile_attention_scope.sh
 ```
 
 The profiler now has an opt-in `--profile-scope attention` mode. It uses an
-explicit `aah_ncu_attention` NVTX range around backend attention execution and
-passes `--nvtx --nvtx-include aah_ncu_attention` to Nsight Compute. The default
-scope remains total forward, so existing paper-facing total-FLOPs profiles are
-unchanged.
+explicit `aah_ncu_attention` NVTX push/pop range around backend attention
+execution and passes `--nvtx --nvtx-include aah_ncu_attention]` to Nsight
+Compute. The closing bracket is required by this Nsight version for pushed
+NVTX ranges. The default scope remains total forward, so existing paper-facing
+total-FLOPs profiles are unchanged.
 
 Rows to launch:
 
 - pure FlashAttention attention denominator;
 - best AAH no-scatter row attention profile;
 - same-codepath full-window AAH attention sanity check.
+
+Launch note: the first pure-row P2 attempt used `aah_ncu_attention` without the
+push/pop closing bracket and failed with `ncu_metric_parse_empty`. A direct
+bracket-pattern test succeeded for the pure Flash attention denominator:
+
+```text
+flashattention_pure_attention_gpu_flops_profile_bracket_test
+gpu_flops_total = 1,808,239,165,440
+gpu_flops_total_ratio_ncu = 1.000000
+```
 
 Expected outcomes:
 

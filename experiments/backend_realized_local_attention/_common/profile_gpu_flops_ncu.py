@@ -33,6 +33,7 @@ from experiments.backend_realized_local_attention._common.profile_flops_ratio im
 DEFAULT_NCU = os.environ.get("NCU_BIN", "ncu")
 TOTAL_RANGE = "aah_ncu_total_forward"
 ATTENTION_RANGE = "aah_ncu_attention"
+ATTENTION_NVTX_FILTER = f"{ATTENTION_RANGE}]"
 
 FLOP_METRIC_PATTERNS = (
     re.compile(r"flop.*(count|sum|total)", re.IGNORECASE),
@@ -307,7 +308,7 @@ def run_ncu_profile(args, metrics):
         raw_csv = Path(tmp) / "ncu_raw.csv"
         nvtx_include = args.ncu_nvtx_include
         if args.profile_scope == "attention" and not nvtx_include:
-            nvtx_include = ATTENTION_RANGE
+            nvtx_include = ATTENTION_NVTX_FILTER
         cmd = [
             args.ncu,
             "--target-processes",
@@ -454,7 +455,7 @@ def main():
         "gpu_flops_attention_ratio_ncu": None,
         "profile_scope": args.profile_scope,
         "ncu_nvtx_include": args.ncu_nvtx_include
-        or (ATTENTION_RANGE if args.profile_scope == "attention" else ""),
+        or (ATTENTION_NVTX_FILTER if args.profile_scope == "attention" else ""),
         "torch_profiler_total_flops_ratio": None,
         "paper_metric_source": "Nsight Compute hardware/derived FLOP counters only",
     }
