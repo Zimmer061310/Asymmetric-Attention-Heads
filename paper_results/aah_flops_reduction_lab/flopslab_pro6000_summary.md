@@ -24,4 +24,4 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 
 ## Main Takeaway
 
-Best AAH variant is `flopslab-4096-baseline-pure-flash-seed0` at `1.000000x`; no tested variant reached `<1.0`. The best no-scatter prototype narrowed overhead to roughly `0.00%` above pure FlashAttention.
+Best AAH variant is `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` at `1.015376x`; no tested AAH variant reached `<1.0`. The best no-scatter prototype narrowed measured total-GPU-FLOPs overhead to roughly `1.54%` above pure FlashAttention.
