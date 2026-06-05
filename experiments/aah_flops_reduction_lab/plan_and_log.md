@@ -300,10 +300,13 @@ The AAH backend now tags the following NVTX push/pop ranges:
 - `aah_ncu_output_projection`
 - `aah_ncu_mlp`
 
-The profiler now supports `--profile-scope nvtx --profile-label <range>`, which
-records raw `gpu_flops_region` for a selected pushed NVTX range. P4 profiles
-the P3 minimal-runtime no-scatter config so diagnostic reductions stay out of
-the attribution.
+The profiler now supports `--profile-scope cuda_region --profile-label <range>`,
+which records raw `gpu_flops_region` for a selected region by opening
+CUDA-profiler start/stop inside that range. A plain NVTX-only first attempt
+failed for `aah_ncu_qkv` with `ncu_metric_parse_empty`, likely because
+PyTorch/cuBLAS kernels are not reliably attributed to the Python NVTX push/pop
+range. P4 profiles the P3 minimal-runtime no-scatter config so diagnostic
+reductions stay out of the attribution.
 
 Expected outcomes:
 

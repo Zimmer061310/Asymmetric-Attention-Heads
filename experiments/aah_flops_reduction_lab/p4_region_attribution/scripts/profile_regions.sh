@@ -17,7 +17,7 @@ profile_region() {
     --warmup 1 \
     --repeats 1 \
     --timeout "$TIMEOUT" \
-    --profile-scope nvtx \
+    --profile-scope cuda_region \
     --profile-label "$region" \
     --baseline-json "$BASELINE_JSON" \
     --output "$ROOT/gpu_flops_profiles/${out_name}_gpu_flops_profile.json"

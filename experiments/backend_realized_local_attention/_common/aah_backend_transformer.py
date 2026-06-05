@@ -1,4 +1,5 @@
 import math
+import os
 import time
 import json
 from collections import OrderedDict
@@ -38,9 +39,17 @@ def _nvtx_pop(pushed):
 @contextmanager
 def _nvtx_range(name):
     pushed = _nvtx_push(name)
+    cuda_profiled = False
+    if torch.cuda.is_available() and os.environ.get("AAH_NCU_CUDA_PROFILE_REGION", "") == name:
+        torch.cuda.synchronize()
+        torch.cuda.cudart().cudaProfilerStart()
+        cuda_profiled = True
     try:
         yield
     finally:
+        if cuda_profiled:
+            torch.cuda.synchronize()
+            torch.cuda.cudart().cudaProfilerStop()
         _nvtx_pop(pushed)
 
 

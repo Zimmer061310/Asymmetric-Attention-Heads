@@ -3,8 +3,11 @@
 Goal: identify which non-attention region accounts for the remaining
 total-forward Nsight FLOPs gap after P2/P3.
 
-This step does not change execution semantics. It adds NVTX ranges around the
-best current AAH path and profiles them individually:
+This step does not change execution semantics. It adds named ranges around the
+best current AAH path and profiles them individually. The runner uses a
+CUDA-profiler start/stop gate for each selected region because plain NVTX
+include filtering can miss PyTorch/cuBLAS-launched kernels outside custom
+FlashAttention calls.
 
 - `aah_ncu_qkv`
 - `aah_ncu_bucket_select`

@@ -267,6 +267,8 @@ def collect_model_metadata(config_path, module_key, device_name, checkpoint=None
 
 
 def child_forward(args):
+    if args.cuda_profile_region:
+        os.environ["AAH_NCU_CUDA_PROFILE_REGION"] = str(args.cuda_profile_region)
     cfg = load_config(args.config)
     train = cfg.get("train", {})
     device = get_device(args.device or train.get("device", "cuda"))
@@ -287,7 +289,7 @@ def child_forward(args):
 
         profiler_started = False
         try:
-            if args.cuda_profiler_api:
+            if args.cuda_profiler_api and not args.cuda_profile_region:
                 torch.cuda.cudart().cudaProfilerStart()
                 profiler_started = True
             torch.cuda.nvtx.range_push(TOTAL_RANGE)
@@ -350,6 +352,8 @@ def run_ncu_profile(args, metrics):
             "--cuda-profiler-api",
             ]
         )
+        if args.profile_scope == "cuda_region" and args.profile_label:
+            cmd.extend(["--cuda-profile-region", args.profile_label])
         if args.checkpoint:
             cmd.extend(["--checkpoint", args.checkpoint])
         proc = run_cmd(cmd, timeout=args.timeout)
@@ -413,9 +417,10 @@ def main():
     parser.add_argument("--child-forward", action="store_true")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--cuda-profiler-api", action="store_true")
-    parser.add_argument("--profile-scope", choices=("total", "attention", "nvtx"), default="total")
+    parser.add_argument("--profile-scope", choices=("total", "attention", "nvtx", "cuda_region"), default="total")
     parser.add_argument("--profile-label")
     parser.add_argument("--ncu-nvtx-include")
+    parser.add_argument("--cuda-profile-region")
     args = parser.parse_args()
 
     if args.child_forward:
@@ -455,7 +460,11 @@ def main():
         "gpu_flops_attention_or_forward": (
             "attention_nvtx_filtered"
             if args.profile_scope == "attention"
-            else ("region_nvtx_filtered" if args.profile_scope == "nvtx" else "forward_total")
+            else (
+                "region_cuda_profiler_filtered"
+                if args.profile_scope == "cuda_region"
+                else ("region_nvtx_filtered" if args.profile_scope == "nvtx" else "forward_total")
+            )
         ),
         "gpu_flops_attention": None,
         "gpu_flops_region": None,
@@ -495,12 +504,12 @@ def main():
         result["gpu_flops_total"] = float(sum(float(v) for v in metric_values.values()))
         if args.profile_scope == "attention":
             result["gpu_flops_attention"] = result["gpu_flops_total"]
-        elif args.profile_scope == "nvtx":
+        elif args.profile_scope in {"nvtx", "cuda_region"}:
             result["gpu_flops_region"] = result["gpu_flops_total"]
         result = add_baseline_ratios(result, args.baseline_json)
         if args.profile_scope == "attention":
             result["gpu_flops_attention_ratio_ncu"] = result["gpu_flops_total_ratio_ncu"]
-        elif args.profile_scope == "nvtx":
+        elif args.profile_scope in {"nvtx", "cuda_region"}:
             result["gpu_flops_region_ratio_ncu"] = result["gpu_flops_total_ratio_ncu"]
         result["ncu_error_kind"] = None
         write_json(args.output, result)
