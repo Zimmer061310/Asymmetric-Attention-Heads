@@ -251,7 +251,7 @@ Rows to launch:
 - attention-scope P3 minimal-runtime no-scatter profile, divided by the pure
   FlashAttention attention denominator.
 
-Final P3 rows:
+Initial P3 rows before config-plumbing fix:
 
 ```text
 flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0
@@ -263,10 +263,27 @@ gpu_flops_total = 1,809,030,055,936
 gpu_flops_total_ratio_ncu = 1.0004373816
 ```
 
-Interpretation: P3 is effectively identical to the best H3 no-scatter row in
-both total-forward and attention-scope FLOPs. Skipping profile-time diagnostic
-GPU reductions and using an uninitialized output buffer did not reduce measured
-GPU FLOPs. The remaining gap is therefore not caused by those diagnostics.
+These initial rows were invalid for the intended P3 test because
+`load_model()` did not pass `aah_flopslab_minimal_runtime` into `GPTConfig`.
+After adding that plumbing, the server verified
+`model.blocks[0].attn.flopslab_minimal_runtime == True` and P3 was rerun.
+
+Corrected P3 rows:
+
+```text
+flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0
+gpu_flops_total = 6,173,714,488,149
+gpu_flops_total_ratio_ncu = 1.0004247801
+
+flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0_attention
+gpu_flops_total = 1,809,030,055,936
+gpu_flops_total_ratio_ncu = 1.0004373816
+```
+
+Interpretation: P3 almost closes the original gap. The total-forward AAH ratio
+falls from `1.015376x` to `1.000425x` once diagnostic GPU reductions and
+profile-time stats are actually disabled. It is still slightly above pure
+FlashAttention, but the gap is now about `0.0425%`.
 
 Acceptance:
 
@@ -309,11 +326,30 @@ range. P4 profiles the P3 minimal-runtime no-scatter config so diagnostic
 reductions stay out of the attribution.
 
 Launch note: the CUDA-gated first attempt also returned
-`ncu_metric_parse_empty` for both `aah_ncu_qkv` and `aah_ncu_attention`, so the
-next P4 fallback is full-total kernel-name attribution. The profiler now
-supports `--raw-csv-output`; P4 will rerun pure Flash and P3-minimal AAH total
-profiles, preserve compact raw Nsight CSVs, and summarize FLOP metrics by
-kernel name under `paper_results/aah_flops_reduction_lab/kernel_summaries/`.
+`ncu_metric_parse_empty` for both `aah_ncu_qkv` and `aah_ncu_attention`, so P4
+fell back to full-total kernel-name attribution. The profiler now supports
+`--raw-csv-output`; P4 reran pure Flash and corrected P3-minimal AAH total
+profiles, preserved raw Nsight CSVs on the server, and copied compact kernel
+summaries back under `paper_results/aah_flops_reduction_lab/kernel_summaries/`.
+
+Corrected P4 rows:
+
+```text
+flopslab-4096-kernel-pure-flash-seed0
+gpu_flops_total = 6,171,093,131,871
+gpu_flops_total_ratio_ncu = 1.000000
+
+flopslab-4096-kernel-minruntime-noscatter-1024-4096-flash-seed0
+gpu_flops_total = 6,173,714,490,376
+gpu_flops_total_ratio_ncu = 1.0004247803
+```
+
+Kernel-summary interpretation: the parsed kernel-summary total is only
+`316,225,875` FLOPs above pure. Positive deltas come mainly from extra/split
+CUTLASS GEMM variants and small index-select/copy kernels, while removed or
+smaller full-shape GEMM variants mostly cancel them. This points to bucketed
+head layout / GEMM-shape fragmentation as the remaining issue, not diagnostics
+or FlashAttention itself.
 
 Expected outcomes:
 

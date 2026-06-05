@@ -1,0 +1,201 @@
+{
+  "kernels": [
+    {
+      "count": 48,
+      "flops": 2414634073414.8813,
+      "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x128_32x3_tn_align8>(T1::Params)",
+      "metrics": {
+        "sm__ops_path_tensor_src_bf16_dst_fp32.avg": 12610755039.36001,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.max": 14990442496.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.min": 12222201856.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.sum": 2370821947392.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 20882279.51999999,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 25690112.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 16285696.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 3925868544.0
+      },
+      "share": 0.3913820175477033
+    },
+    {
+      "count": 32,
+      "flops": 2202331892104.16,
+      "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_tn_align8>(T1::Params)",
+      "metrics": {
+        "sm__ops_path_tensor_src_bf16_dst_fp32.avg": 11514167644.640009,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.max": 13958643712.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.min": 11274289152.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.sum": 2164663517184.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 4818987.52,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 5767168.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 4718592.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 905969664.0
+      },
+      "share": 0.3569704862245919
+    },
+    {
+      "count": 16,
+      "flops": 838786125213.92,
+      "kernel": "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_64x64_32x6_nn_align8>(T1::Params)",
+      "metrics": {
+        "sm__ops_path_tensor_src_bf16_dst_fp32.avg": 4386349578.879999,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.max": 5368709120.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.min": 4294967296.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.sum": 824633720832.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 535443.04,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 655360.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 524288.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 100663296.0
+      },
+      "share": 0.1359567520361246
+    },
+    {
+      "count": 1,
+      "flops": 643031780417.36,
+      "kernel": "void cutlass::Kernel2<cutlass_75_tensorop_bf16_s1688gemm_bf16_128x128_tn_align1>(T1::Params)",
+      "metrics": {
+        "sm__ops_path_tensor_src_bf16_dst_fp32.avg": 3366865985.36,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.max": 3372220416.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.min": 3321888768.0,
+        "sm__ops_path_tensor_src_bf16_dst_fp32.sum": 632970805248.0
+      },
+      "share": 0.10422741828169177
+    },
+    {
+      "count": 16,
+      "flops": 58140134379.80002,
+      "kernel": "void at::<unnamed>::cunn_SoftMaxForwardReg<float, float, float, at::<unnamed>::SoftMaxForwardEpilogue, long, 4>(T3 *, const T1 *, T5)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 239878492.6399999,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 358400000.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 161882112.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 45097156608.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 64251076.159999974,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 95972420.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 43391367.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 12079202304.0
+      },
+      "share": 0.009423789444783075
+    },
+    {
+      "count": 16,
+      "flops": 4091253882.559999,
+      "kernel": "void at::unrolled_elementwise_kernel<at::direct_copy_kernel_cuda(at::TensorIteratorBase &)::[lambda() (instance 3)]::operator ()() const::[lambda() (instance 7)]::operator ()() const::[lambda(float) (instance 1)], std::array<char *, 2>, 4, TrivialOffsetCalculator<1, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, memory::LoadWithCast<1>, memory::StoreWithCast<1>>(int, T1, T2, T4, T5, T6, T7)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 21417722.56,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 30437120.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 12867200.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 4026531840.0
+      },
+      "share": 0.0006631411427867654
+    },
+    {
+      "count": 16,
+      "flops": 3272131682.080001,
+      "kernel": "void at::elementwise_kernel<128, 4, void at::gpu_kernel_impl_nocast<at::<unnamed>::masked_fill_kernel(at::TensorIterator &, const c10::Scalar &)::[lambda() (instance 1)]::operator ()() const::[lambda() (instance 12)]::operator ()() const::[lambda(c10::BFloat16, bool) (instance 1)]>(at::TensorIteratorBase &, const T1 &)::[lambda(int) (instance 1)]>(int, T3)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 17134178.07999999,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 22668800.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 11103232.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 3221225472.0
+      },
+      "share": 0.0005303716672908018
+    },
+    {
+      "count": 16,
+      "flops": 3070552891.839999,
+      "kernel": "void at::vectorized_elementwise_kernel<4, at::GeluCUDAKernelImpl(at::TensorIteratorBase &, at::GeluType)::[lambda() (instance 2)]::operator ()() const::[lambda() (instance 4)]::operator ()() const::[lambda(c10::BFloat16) (instance 1)], std::array<char *, 2>>(int, T2, T3)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 14992405.759999996,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 21224448.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 11060224.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 2818572288.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 1070886.08,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 1516032.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 790016.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 201326592.0
+      },
+      "share": 0.0004976982636941312
+    },
+    {
+      "count": 33,
+      "flops": 1321096702.39,
+      "kernel": "void at::<unnamed>::vectorized_layer_norm_kernel<float, float, 0>(int, T2, const T1 *, const T1 *, const T1 *, T2 *, T2 *, T1 *)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 6546301.409999995,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 8403915.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 5107905.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 1230704640.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 368116.98,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 472576.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 287232.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 69206016.0
+      },
+      "share": 0.00021413327114438348
+    },
+    {
+      "count": 32,
+      "flops": 613758834.2400001,
+      "kernel": "void at::unrolled_elementwise_kernel<at::CUDAFunctor_add<float>, std::array<char *, 3>, 4, TrivialOffsetCalculator<2, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, memory::LoadWithCast<2>, memory::StoreWithCast<1>>(int, T1, T2, T4, T5, T6, T7)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 1070886.0799999991,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 1477120.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 711680.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 201326592.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 2141772.1599999983,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 2954240.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 1423360.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 402653184.0
+      },
+      "share": 9.948263940997745e-05
+    },
+    {
+      "count": 16,
+      "flops": 204538662.07999995,
+      "kernel": "void at::elementwise_kernel<128, 4, void at::gpu_kernel_impl_nocast<at::direct_copy_kernel_cuda(at::TensorIteratorBase &)::[lambda() (instance 3)]::operator ()() const::[lambda() (instance 12)]::operator ()() const::[lambda(c10::BFloat16) (instance 1)]>(at::TensorIteratorBase &, const T1 &)::[lambda(int) (instance 1)]>(int, T3)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 1070886.08,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 1459200.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 681984.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 201326592.0
+      },
+      "share": 3.315316184458715e-05
+    },
+    {
+      "count": 1,
+      "flops": 6394553.19,
+      "kernel": "void at::vectorized_elementwise_kernel<4, at::CUDAFunctor_add<float>, std::array<char *, 3>>(int, T2, T3)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.avg": 33465.19,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.max": 43008.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.min": 26624.0,
+        "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": 6291456.0
+      },
+      "share": 1.0364771856626937e-06
+    },
+    {
+      "count": 2,
+      "flops": 3194076.6,
+      "kernel": "void at::vectorized_gather_kernel<16, long>(char *, char *, T2 *, int, long, long, long, long, bool)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 16732.6,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 20608.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.min": 11008.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 3145728.0
+      },
+      "share": 5.177199136190257e-07
+    },
+    {
+      "count": 17,
+      "flops": 13090.680000000004,
+      "kernel": "void at::vectorized_elementwise_kernel<4, at::bfloat16_copy_kernel_cuda(at::TensorIteratorBase &)::[lambda(float) (instance 1)], std::array<char *, 2>>(int, T2, T3)",
+      "metrics": {
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.avg": 34.67999999999999,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.max": 6528.0,
+        "sm__sass_thread_inst_executed_op_hfma_pred_on.sum": 6528.0
+      },
+      "share": 2.121835687601953e-09
+    }
+  ],
+  "raw_csv": "paper_results/aah_flops_reduction_lab/ncu_raw/flopslab-4096-kernel-pure-flash-seed0_ncu_raw.csv",
+  "total_flops": 6169506939905.78
+}

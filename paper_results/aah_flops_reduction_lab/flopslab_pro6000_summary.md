@@ -8,8 +8,8 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 |---:|---|---|---|---:|---:|---|---|
 | 1 | `flopslab-4096-baseline-pure-flash-seed0` | denominator | total | 1.000000 | 6171093130434 | baseline | pure |
 | 2 | `flopslab-4096-same-codepath-full-flash-seed0` | diagnostic_baseline | total | 1.000000 | 6171093238461 | p1_same_codepath_full_baseline | same_codepath_full |
-| 3 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | aah | total | 1.015376 | 6265980625227 | h3_noscatter_prototype | noscatter_prototype |
-| 4 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | aah | total | 1.015376 | 6265980625951 | p3_minimal_runtime | minimal_runtime |
+| 3 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | aah | total | 1.000425 | 6173714488149 | p3_minimal_runtime | minimal_runtime |
+| 4 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | aah | total | 1.015376 | 6265980625227 | h3_noscatter_prototype | noscatter_prototype |
 | 5 | `flopslab-4096-noscatter-contiguous-layer-plan-flash-seed0` | aah | total | 1.015435 | 6266345599701 | h3_noscatter_prototype | noscatter_prototype |
 | 6 | `flopslab-4096-noscatter-scatter-control-matched-flash-seed0` | aah | total | 1.015568 | 6267166948539 | h3_noscatter_prototype | noscatter_prototype |
 | 7 | `flopslab-4096-slow-update-N200-flash-seed0` | aah | total | 1.015628 | 6267531920428 | h4_fixed_plan_granularity | fixed_plan |
@@ -35,12 +35,24 @@ All rows use Nsight Compute GPU FLOP counters on RTX PRO 6000 Blackwell, seq_len
 | 3 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | p3_minimal_runtime | minimal_runtime |
 | 4 | `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` | attention_aah | attention | 1.000437 | 1809030055936 | h3_noscatter_prototype | noscatter_prototype |
 
+## Kernel Attribution Scope
+
+| Rank | Experiment | Type | Scope | Ratio | GPU FLOPs | Hypothesis | Mode |
+|---:|---|---|---|---:|---:|---|---|
+| 1 | `backend-4096-pure-flash-seed0` | kernel_denominator | total | 1.000000 | 6171093131871 | p4_region_attribution | kernel_total_raw_csv |
+| 2 | `flopslab-4096-minruntime-noscatter-1024-4096-flash-seed0` | kernel_aah | total | 1.000425 | 6173714490376 | p4_region_attribution | kernel_total_raw_csv |
+
 ## Main Takeaway
 
 The same-codepath full-window diagnostic baseline is `1.000000018x` in total-forward scope and `1.000000x` in attention scope, effectively identical to pure FlashAttention. This rules out generic AAH backend wrapper overhead as the source of the remaining total-forward gap.
 
-Best total-forward AAH variant is `flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0` at `1.015376x`; no tested AAH variant reached `<1.0` in total-forward GPU FLOPs.
+After fixing the config plumbing for `aah_flopslab_minimal_runtime`, the P3 minimal-runtime no-scatter path is the best total-forward AAH row: `1.000425x` total-forward and `1.000437x` attention-scope. It is still slightly above pure FlashAttention, but the gap is now about `0.0425%`, not `1.54%`.
 
-P2 attention-only profiling shows the best no-scatter AAH row at `1.000437x` attention FLOPs versus pure FlashAttention. That means the `~1.54%` total-forward gap mostly collapses to a `~0.044%` attention-kernel gap when Nsight is filtered to backend attention ranges.
+P4 kernel attribution with raw Nsight CSVs shows the corrected AAH kernel-summary total is only `316225875` parsed FLOPs above pure in the summarized kernels. The largest positive deltas are extra/split CUTLASS GEMM shape variants and small index-select/copy kernels, while some full-shape GEMM variants decrease and mostly cancel the increase. This points toward bucketed head layout / GEMM-shape fragmentation as the remaining issue, not diagnostics or the FlashAttention kernel itself.
 
-P3 minimal-runtime profiling did not improve the ratio: total-forward `1.015376x`, attention-scope `1.000437x`. Skipping profile-time diagnostic GPU reductions and using an uninitialized output buffer did not change measured GPU FLOPs, so the residual gap is not explained by those diagnostics.
+Top positive kernel deltas:
+- `217796274742` FLOPs, count delta `7`: `void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_nn_align8>(T1::Params)`
+- `43481255326` FLOPs, count delta `3`: `void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x128_32x4_nn_align8>(T1::Params)`
+- `4376786203` FLOPs, count delta `1`: `void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_tn_align8>(T1::Params)`
+- `929687595` FLOPs, count delta `48`: `void at::<unnamed>::indexSelectSmallIndex<c10::BFloat16, long, unsigned int, (int)-1, (int)-1, (int)-1>(cuda::TensorInfo<T1, T3>, cuda::TensorInfo<const T1, T3>`
+- `379275909` FLOPs, count delta `5`: `void at::<unnamed>::cunn_SoftMaxForwardReg<float, float, float, at::<unnamed>::SoftMaxForwardEpilogue, long, 4>(T3 *, const T1 *, T5)`
