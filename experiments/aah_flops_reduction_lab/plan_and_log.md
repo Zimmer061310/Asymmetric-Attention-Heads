@@ -145,7 +145,7 @@ local/window execution path or its non-attention bookkeeping during that path.
 
 ### P2: Attention-Only Nsight Range
 
-Status: implemented locally; ready for Pro 6000 profile-only launch.
+Status: completed on Pro 6000.
 
 Goal: separate attention-kernel FLOPs from total forward FLOPs.
 
@@ -185,6 +185,29 @@ gpu_flops_total = 1,808,239,165,440
 gpu_flops_total_ratio_ncu = 1.000000
 ```
 
+Final P2 rows:
+
+```text
+flashattention_pure_attention_gpu_flops_profile
+gpu_flops_total = 1,808,239,165,440
+gpu_flops_total_ratio_ncu = 1.000000
+
+flopslab-4096-noscatter-contiguous-1024-4096-flash-seed0_attention
+gpu_flops_total = 1,809,030,055,936
+gpu_flops_total_ratio_ncu = 1.0004373816
+
+flopslab-4096-same-codepath-full-flash-seed0_attention
+gpu_flops_total = 1,808,239,165,440
+gpu_flops_total_ratio_ncu = 1.000000
+```
+
+Interpretation: the attention-only Nsight range collapses the best AAH gap from
+`1.015376x` total-forward FLOPs to `1.000437x` attention-scope FLOPs. AAH still
+does not beat pure FlashAttention in the profiled attention kernels, but the
+remaining attention-only gap is only about `0.044%`. The larger total-forward
+gap is therefore mostly outside the backend attention kernels or in non-attention
+work around local/window execution.
+
 Expected outcomes:
 
 - If attention-only is below `1.0` but total is `1.015x`, the attention saving
@@ -193,6 +216,8 @@ Expected outcomes:
   still does not beat the pure FlashAttention kernel.
 
 ### P3: Minimal-Runtime AAH Path
+
+Status: implemented locally; ready for Pro 6000 profile-only launch.
 
 Goal: shave the remaining measured overhead by disabling everything not needed
 for inference execution.
@@ -205,6 +230,26 @@ Candidate removals for the profiled forward:
 - per-forward debug dictionaries;
 - avoidable tensor/list conversions;
 - any timing/stat collection not required for the profile JSON.
+
+Implementation handle:
+
+```text
+experiments/backend_realized_local_attention/_common/aah_backend_transformer.py
+experiments/aah_flops_reduction_lab/p3_minimal_runtime/
+```
+
+The P3 config reuses the best no-scatter 1024/full plan and enables the
+lab-only `aah_flopslab_minimal_runtime` flag. This skips profile-time GPU
+diagnostic reductions such as `y_h.float().norm(...)`, attention entropy/usage
+statistics, and full diagnostic dictionary packing during the profiled forward.
+It also uses an uninitialized output buffer because every head is written once.
+
+Rows to launch:
+
+- total-forward P3 minimal-runtime no-scatter profile, divided by the pure
+  FlashAttention total-forward denominator;
+- attention-scope P3 minimal-runtime no-scatter profile, divided by the pure
+  FlashAttention attention denominator.
 
 Acceptance:
 

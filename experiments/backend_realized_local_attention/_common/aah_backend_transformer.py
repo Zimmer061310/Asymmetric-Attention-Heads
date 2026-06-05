@@ -126,6 +126,7 @@ class GPTConfig:
     aah_flopslab_bucket_policy_kind: str = ""
     aah_flopslab_bucket_windows: tuple = ()
     aah_flopslab_bucket_threshold: int = 0
+    aah_flopslab_minimal_runtime: bool = False
 
 
 class CausalSelfAttention(nn.Module):
@@ -595,6 +596,7 @@ class AAHV3Attention(nn.Module):
         self.flopslab_bucket_policy_kind = str(getattr(config, "aah_flopslab_bucket_policy_kind", ""))
         self.flopslab_bucket_windows = tuple(int(w) for w in getattr(config, "aah_flopslab_bucket_windows", ()) if int(w) > 0)
         self.flopslab_bucket_threshold = int(getattr(config, "aah_flopslab_bucket_threshold", 0))
+        self.flopslab_minimal_runtime = bool(getattr(config, "aah_flopslab_minimal_runtime", False))
         self.flopslab_layer_idx = None
         self.flopslab_static_plan = None
         if self.flopslab_enabled and self.flopslab_plan_path:
@@ -2394,10 +2396,11 @@ class AAHV3Attention(nn.Module):
                 }
             )
 
-        outputs = torch.zeros(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype)
-        head_norms = [0.0 for _ in range(self.n_head)]
-        head_entropy = [0.0 for _ in range(self.n_head)]
-        head_usage = [0.0 for _ in range(self.n_head)]
+        minimal_runtime = self.flopslab_enabled and self.flopslab_minimal_runtime and not return_attn
+        outputs = torch.empty(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype) if minimal_runtime else torch.zeros(B, self.n_head, T, self.head_dim, device=x.device, dtype=q.dtype)
+        head_norms = [] if minimal_runtime else [0.0 for _ in range(self.n_head)]
+        head_entropy = [] if minimal_runtime else [0.0 for _ in range(self.n_head)]
+        head_usage = [] if minimal_runtime else [0.0 for _ in range(self.n_head)]
         attn_maps = [None for _ in range(self.n_head)] if return_attn else None
         t_attn0 = time.perf_counter()
         mask_time_ms = 0.0
@@ -2430,10 +2433,11 @@ class AAHV3Attention(nn.Module):
             else:
                 backend_realized_elements_est += bucket_effective
             outputs[:, head_sel] = y_h
-            norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
-            for i, h in enumerate(heads):
-                head_norms[h] = float(norms[i].item())
-            if att_h is not None:
+            if not minimal_runtime:
+                norms = y_h.float().norm(dim=-1).mean(dim=(0, 2))
+                for i, h in enumerate(heads):
+                    head_norms[h] = float(norms[i].item())
+            if att_h is not None and not minimal_runtime:
                 att_h_f = att_h.float()
                 ent = -(att_h_f * (att_h_f + 1e-9).log()).sum(dim=-1).mean(dim=(0, 2))
                 ent = ent / max(1.0, math.log(att_h.size(-1)))
@@ -2453,6 +2457,42 @@ class AAHV3Attention(nn.Module):
         y = outputs
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_drop(self.proj(y))
+        if minimal_runtime:
+            total_time_ms = (time.perf_counter() - t_start) * 1000.0
+            backend_name = next(iter(backend_bucket_counts.keys()), self.attention_backend)
+            if len(backend_bucket_counts) > 1:
+                backend_name = "mixed"
+            self.last_stats = {
+                "lq": lq,
+                "lk": [],
+                "total_elements": total_elements,
+                "baseline_elements": baseline_elements,
+                "effective_attn_elements": total_elements,
+                "effective_ACR": effective_ACR,
+                "dense_kernel_actual_elements_est": dense_kernel_actual_elements_est,
+                "backend_realized_elements_est": backend_realized_elements_est,
+                "backend_realized_ACR_est": backend_realized_ACR_est,
+                "backend_name": backend_name,
+                "requested_backend": self.attention_backend,
+                "backend_bucket_counts": backend_bucket_counts,
+                "backend_kernel_calls": backend_kernel_calls,
+                "backend_time_ms": attn_time_ms,
+                "backend_fallback_reasons": sorted(set(backend_fallback_reasons)),
+                "attention_stats_available": False,
+                "head_norms": [],
+                "head_entropy": [],
+                "head_usage": [],
+                "control_time_ms": control_time_ms,
+                "attn_time_ms": attn_time_ms,
+                "overhead_time_ms": max(0.0, total_time_ms - attn_time_ms),
+                "mask_time_ms": mask_time_ms,
+                "path_mode": f"{path_mode}_minimal_runtime",
+                "flopslab_enabled": bool(self.flopslab_enabled),
+                "flopslab_mode": self.flopslab_mode,
+                "flopslab_variant": self.flopslab_variant,
+                "flopslab_minimal_runtime": True,
+            }
+            return y
         avg_window = float(w.mean().item())
         lk_list = lk_tensor.to(torch.int64).tolist()
         total_time_ms = (time.perf_counter() - t_start) * 1000.0
