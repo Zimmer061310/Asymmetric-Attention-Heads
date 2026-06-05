@@ -308,6 +308,13 @@ PyTorch/cuBLAS kernels are not reliably attributed to the Python NVTX push/pop
 range. P4 profiles the P3 minimal-runtime no-scatter config so diagnostic
 reductions stay out of the attribution.
 
+Launch note: the CUDA-gated first attempt also returned
+`ncu_metric_parse_empty` for both `aah_ncu_qkv` and `aah_ncu_attention`, so the
+next P4 fallback is full-total kernel-name attribution. The profiler now
+supports `--raw-csv-output`; P4 will rerun pure Flash and P3-minimal AAH total
+profiles, preserve compact raw Nsight CSVs, and summarize FLOP metrics by
+kernel name under `paper_results/aah_flops_reduction_lab/kernel_summaries/`.
+
 Expected outcomes:
 
 - If bucket selection or output assembly is large, target tensor layout and

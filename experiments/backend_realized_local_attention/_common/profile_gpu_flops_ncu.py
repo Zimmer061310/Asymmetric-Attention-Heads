@@ -12,6 +12,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -212,6 +213,15 @@ def write_json(path, payload):
         json.dump(payload, f, indent=2, sort_keys=True)
 
 
+def copy_raw_csv(raw_csv, output_path):
+    if not output_path:
+        return ""
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(raw_csv, out)
+    return os.path.abspath(out)
+
+
 def collect_model_metadata(config_path, module_key, device_name, checkpoint=None, warmup=1):
     cfg = load_config(config_path)
     exp = cfg.get("experiment", {}) or {}
@@ -374,11 +384,13 @@ def run_ncu_profile(args, metrics):
                 "ncu_stderr_tail": (proc.stderr or "")[-4000:],
                 "ncu_error_kind": "ncu_csv_missing",
             }
+        copied_raw_csv = copy_raw_csv(raw_csv, args.raw_csv_output)
         values = parse_ncu_csv(raw_csv, metrics)
         return {
             "ok": bool(values),
             "ncu_command": cmd,
             "ncu_metric_values": values,
+            "ncu_raw_csv_output": copied_raw_csv,
             "ncu_stdout_tail": (proc.stdout or "")[-2000:],
             "ncu_stderr_tail": (proc.stderr or "")[-2000:],
             "ncu_error_kind": None if values else "ncu_metric_parse_empty",
@@ -421,6 +433,7 @@ def main():
     parser.add_argument("--profile-label")
     parser.add_argument("--ncu-nvtx-include")
     parser.add_argument("--cuda-profile-region")
+    parser.add_argument("--raw-csv-output")
     args = parser.parse_args()
 
     if args.child_forward:
