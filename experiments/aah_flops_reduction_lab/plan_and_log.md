@@ -41,32 +41,56 @@ already below or near `1.0`.
 
 ### P7 Dense Framework Queue
 
-Status: queued for Pro 6000.
+Status: completed on Pro 6000. The queue finished 20/20 profiles with no
+failures, and the compact artifacts were copied back under
+`paper_results/aah_flops_reduction_lab/`.
 
-The P7 dense framework applies the same controls already tried in the Flash lab
-to dense AAH and divides by a standard dense MHA denominator:
+The P7 dense framework applied the same controls already tried in the Flash lab
+to dense AAH and divided by a standard dense MHA denominator:
 
 ```text
 flopslab-4096-baseline-pure-dense-seed0
+gpu_flops_total = 6,171,093,127,247
+gpu_flops_total_ratio_ncu = 1.000000
 ```
 
-Rows:
+Final rows:
 
-- P1 same-codepath full dense;
-- H1 static compiled plan: per-layer, per-layer-head, majority;
-- H2 quantized execution: single 1024, single 2048, two-bucket 1024/4096,
-  two-bucket 2048/4096;
-- H3 no-scatter prototype: contiguous 1024/4096, contiguous layer plan, matched
-  scatter control;
-- H4 fixed plan granularity: per-layer, per-state, per-head-group, per-head,
-  slow-update N200, slow-update N1000;
-- P3 minimal-runtime no-scatter;
-- H5 head-reorder lower-bound.
+```text
+same-codepath-full-dense             1.000000
+static-plan-per-layer-dense          1.015647
+static-plan-per-layer-head-dense     1.015628
+static-plan-majority-dense           1.015647
+quantized-single-1024-dense          1.017295
+quantized-single-2048-dense          1.017132
+quantized-two-bucket-1024-4096       1.017158
+quantized-two-bucket-2048-4096       1.017104
+noscatter-contiguous-1024-4096       1.015376
+noscatter-contiguous-layer-plan      1.015435
+noscatter-scatter-control-matched    1.015568
+fixed-per-layer-dense                1.015647
+fixed-per-state-dense                1.015628
+fixed-per-head-group-dense           1.015628
+fixed-per-head-dense                 1.015628
+slow-update-N200-dense               1.015628
+slow-update-N1000-dense              1.015628
+minruntime-noscatter-1024-4096       1.000425
+headreorder-lowerbound-1024-4096     1.000135
+```
+
+Interpretation: dense execution confirms the FlashAttention lab pattern. The
+same-codepath dense control is effectively equal to pure dense MHA, most normal
+AAH variants remain `1.015x` to `1.017x`, and only the lower-overhead probes
+approach but do not beat `1.0`. The best valid dense-style probe is
+`minruntime-noscatter-1024-4096` at `1.000425x`; the `1.000135x` head-reorder
+row is a semantics-changing lower bound. P7 therefore does not support a true
+GPU FLOPs-reduction claim.
 
 Run handle:
 
 ```text
 experiments/aah_flops_reduction_lab/p7_dense_framework/scripts/profile_dense_framework_queue.sh
+paper_results/aah_flops_reduction_lab/dense_framework_summary.md
 paper_results/aah_flops_reduction_lab/profile_status_p7_dense_framework.jsonl
 paper_results/aah_flops_reduction_lab/logs/p7_dense_framework.log
 ```
