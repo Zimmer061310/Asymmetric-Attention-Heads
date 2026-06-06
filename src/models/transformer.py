@@ -69,6 +69,9 @@ class GPTConfig:
     aah_v3_hierarchy_ablation_mode: str = "adaptive"
     aah_v3_fixed_hierarchy_seed: int = 1337
     aah_v3_parent_constraint: bool = True
+    aah_v3_window_ablation_mode: str = "adaptive"
+    aah_v3_fixed_window: int = 0
+    aah_v3_window_ablation_seed: int = 0
 
 
 class CausalSelfAttention(nn.Module):
@@ -478,13 +481,14 @@ class AAHV3Controller(nn.Module):
 
 class AAHV3Attention(nn.Module):
     """AAH-v3: adaptive, hierarchical resolution control with variable-size supergroups."""
-    def __init__(self, config: GPTConfig):
+    def __init__(self, config: GPTConfig, layer_idx: int = 0):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         self.n_head = config.n_head
         self.head_dim = config.n_embd // config.n_head
         self.scale = self.head_dim ** -0.5
         self.seq_len = config.seq_len
+        self.layer_idx = int(layer_idx)
         self.windows = tuple(int(w) for w in config.aah_v3_windows)
         self.control_interval = max(1, int(config.aah_v3_control_interval))
         self.sim_threshold = float(config.aah_v3_sim_threshold)
@@ -526,6 +530,16 @@ class AAHV3Attention(nn.Module):
             raise ValueError(f"Unsupported aah_v3_hierarchy_ablation_mode: {self.hierarchy_ablation_mode}")
         self.fixed_hierarchy_seed = int(getattr(config, "aah_v3_fixed_hierarchy_seed", 1337))
         self.parent_constraint = bool(getattr(config, "aah_v3_parent_constraint", True))
+        self.window_ablation_mode = str(getattr(config, "aah_v3_window_ablation_mode", "adaptive"))
+        valid_window_ablation_modes = {"adaptive", "shuffle_post_select", "random_uniform", "fixed_window"}
+        if self.window_ablation_mode not in valid_window_ablation_modes:
+            raise ValueError(f"Unsupported aah_v3_window_ablation_mode: {self.window_ablation_mode}")
+        self.fixed_window = int(getattr(config, "aah_v3_fixed_window", 0) or 0)
+        self.window_ablation_seed = int(getattr(config, "aah_v3_window_ablation_seed", self.fixed_hierarchy_seed))
+        if self.window_ablation_mode == "fixed_window" and self.fixed_window not in self.windows:
+            raise ValueError(
+                f"aah_v3_fixed_window={self.fixed_window} must be one of aah_v3_windows={self.windows}"
+            )
         if self.controller_input_mode == "contrastive":
             self.controller_feat_dim = 38
         elif self.controller_input_mode == "position_aware":
@@ -1233,6 +1247,57 @@ class AAHV3Attention(nn.Module):
             vals = torch.arange(n, device=device, dtype=torch.long) % 2
             return torch.where(vals == 0, torch.full_like(vals, lo), torch.full_like(vals, hi))
         return None
+
+    def _window_ablation_generator(self):
+        step = int(self.current_step) if self.current_step is not None else 0
+        seed = (
+            int(self.window_ablation_seed)
+            + 1_000_003 * int(self.layer_idx)
+            + 97_409 * step
+        ) % (2 ** 31 - 1)
+        generator = torch.Generator(device="cpu")
+        generator.manual_seed(seed)
+        return generator
+
+    def _apply_window_ablation(self, win_idx):
+        mode = self.window_ablation_mode
+        before = win_idx.detach().clone()
+        if mode == "adaptive" or before.numel() == 0:
+            return win_idx, {
+                "mode": mode,
+                "changed_frac": 0.0,
+                "preserves_histogram": True,
+                "before": before.detach().cpu().tolist(),
+                "after": before.detach().cpu().tolist(),
+            }
+        generator = self._window_ablation_generator()
+        if mode == "shuffle_post_select":
+            perm = torch.randperm(before.numel(), generator=generator, device="cpu").to(before.device)
+            after = before[perm]
+            preserves_histogram = True
+        elif mode == "random_uniform":
+            after = torch.randint(
+                low=0,
+                high=len(self.windows),
+                size=(before.numel(),),
+                generator=generator,
+                dtype=torch.long,
+            ).to(before.device)
+            preserves_histogram = False
+        elif mode == "fixed_window":
+            fixed_idx = self.windows.index(self.fixed_window)
+            after = torch.full_like(before, fixed_idx)
+            preserves_histogram = False
+        else:
+            raise ValueError(f"Unsupported aah_v3_window_ablation_mode: {mode}")
+        changed_frac = float((after != before).float().mean().item()) if before.numel() > 0 else 0.0
+        return after, {
+            "mode": mode,
+            "changed_frac": changed_frac,
+            "preserves_histogram": bool(preserves_histogram),
+            "before": before.detach().cpu().tolist(),
+            "after": after.detach().cpu().tolist(),
+        }
 
     def _sibling_delta_features(self, feats, parent_map=None):
         f = feats.float()
@@ -2011,6 +2076,7 @@ class AAHV3Attention(nn.Module):
                 win_idx = (ramp_progress * win_idx_f + (1.0 - ramp_progress) * full_idx_f).round().to(torch.long)
         if win_idx_before_execution_mapping is None:
             win_idx_before_execution_mapping = win_idx.detach().clone()
+        win_idx, window_ablation_debug = self._apply_window_ablation(win_idx)
         win_idx_after_execution_mapping = win_idx.detach().clone()
         control_time_ms = (time.perf_counter() - t_control0) * 1000.0 if (self.apply_window_control or self.build_hierarchy) else 0.0
 
@@ -2219,6 +2285,11 @@ class AAHV3Attention(nn.Module):
             "decision_unique_head_idx_before_execution_mapping": sorted(set(win_idx_before_execution_mapping.detach().cpu().tolist())) if win_idx_before_execution_mapping is not None else [],
             "decision_unique_head_idx_after_execution_mapping": sorted(set(win_idx_after_execution_mapping.detach().cpu().tolist())) if win_idx_after_execution_mapping is not None else [],
             "decision_head_idx_changed_by_execution_mapping_frac": float((win_idx_before_execution_mapping != win_idx_after_execution_mapping).float().mean().item()) if (win_idx_before_execution_mapping is not None and win_idx_after_execution_mapping is not None and win_idx_before_execution_mapping.shape == win_idx_after_execution_mapping.shape) else 0.0,
+            "window_ablation_mode": window_ablation_debug["mode"],
+            "window_ablation_changed_frac": window_ablation_debug["changed_frac"],
+            "window_ablation_preserves_histogram": window_ablation_debug["preserves_histogram"],
+            "window_ablation_idx_before": window_ablation_debug["before"],
+            "window_ablation_idx_after": window_ablation_debug["after"],
             "cluster_metric_per_level": cluster_metric_per_level,
             "cluster_threshold_kind_per_level": cluster_threshold_kind_per_level,
             "cluster_threshold_per_level": cluster_threshold_per_level,
@@ -2284,11 +2355,11 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config: GPTConfig):
+    def __init__(self, config: GPTConfig, layer_idx: int = 0):
         super().__init__()
         self.ln1 = nn.LayerNorm(config.n_embd)
         if config.aah_v3_enabled:
-            self.attn = AAHV3Attention(config)
+            self.attn = AAHV3Attention(config, layer_idx=layer_idx)
         elif config.aah_v2_enabled:
             self.attn = AAHV2Attention(config)
         else:
@@ -2317,7 +2388,7 @@ class GPT(nn.Module):
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.seq_len, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
-        self.blocks = nn.ModuleList([Block(config) for _ in range(config.n_layer)])
+        self.blocks = nn.ModuleList([Block(config, layer_idx=i) for i in range(config.n_layer)])
         self.ln_f = nn.LayerNorm(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.lm_head.weight = self.wte.weight

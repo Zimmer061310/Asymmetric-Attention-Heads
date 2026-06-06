@@ -161,6 +161,9 @@ def build_model(cfg, vocab_size, device):
         aah_v3_hierarchy_ablation_mode=model_cfg.get("aah_v3_hierarchy_ablation_mode", "adaptive"),
         aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", cfg["experiment"].get("seed", 1337)),
         aah_v3_parent_constraint=model_cfg.get("aah_v3_parent_constraint", True),
+        aah_v3_window_ablation_mode=model_cfg.get("aah_v3_window_ablation_mode", "adaptive"),
+        aah_v3_fixed_window=model_cfg.get("aah_v3_fixed_window", 0),
+        aah_v3_window_ablation_seed=model_cfg.get("aah_v3_window_ablation_seed", cfg["experiment"].get("seed", 0)),
     )
     return GPT(gpt_cfg).to(device)
 

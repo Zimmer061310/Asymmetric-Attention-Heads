@@ -1,0 +1,73 @@
+runs:
+- name: quality-4096-phase1-pure-baseline-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-pure-baseline-seed0.yaml
+  group: reference
+  purpose: budget-matched quality denominator
+  source: main_4096_pure_baseline
+  max_steps: 3000
+- name: quality-4096-phase1-shallow-freeze-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-shallow-freeze-seed0.yaml
+  group: reference
+  purpose: current best-quality AAH reference
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-full-adaptive-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-full-adaptive-seed0.yaml
+  group: reference
+  purpose: adaptive structure reference
+  source: main_4096_full_adaptive
+  max_steps: 3000
+- name: quality-4096-phase1-shallow-shuffle-post-select-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-shallow-shuffle-post-select-seed0.yaml
+  group: random_control
+  purpose: preserve AAH window histogram but destroy head-window identity
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-full-adaptive-shuffle-post-select-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-full-adaptive-shuffle-post-select-seed0.yaml
+  group: random_control
+  purpose: same histogram shuffle control for full adaptive hierarchy
+  source: main_4096_full_adaptive
+  max_steps: 3000
+- name: quality-4096-phase1-shallow-random-uniform-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-shallow-random-uniform-seed0.yaml
+  group: random_control
+  purpose: arbitrary local-window noise control
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-fixed-1024-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-fixed-1024-seed0.yaml
+  group: fixed_control
+  purpose: simple fixed 1024 local-window control
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-fixed-2048-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-fixed-2048-seed0.yaml
+  group: fixed_control
+  purpose: simple fixed 2048 local-window control
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-fixed-random-grouping-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-fixed-random-grouping-seed0.yaml
+  group: topology_control
+  purpose: existing random topology/grouping control
+  source: appendix_4096_fixed_random_grouping
+  max_steps: 3000
+- name: quality-4096-phase1-shallow-no512-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-shallow-no512-seed0.yaml
+  group: optimization
+  purpose: test whether removing the 512 window improves quality
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-shallow-control-interval10-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-shallow-control-interval10-seed0.yaml
+  group: optimization
+  purpose: test whether slower routing improves stability
+  source: main_4096_shallow_freeze
+  max_steps: 3000
+- name: quality-4096-phase1-shallow-resolution-ema030-seed0
+  config: experiments/aah_quality_structure_lab/configs/phase1/quality-4096-phase1-shallow-resolution-ema030-seed0.yaml
+  group: optimization
+  purpose: test whether smoother execution improves quality
+  source: main_4096_shallow_freeze
+  max_steps: 3000

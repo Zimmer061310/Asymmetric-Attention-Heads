@@ -319,6 +319,9 @@ def main():
         aah_v3_hierarchy_ablation_mode=model_cfg.get("aah_v3_hierarchy_ablation_mode", "adaptive"),
         aah_v3_fixed_hierarchy_seed=model_cfg.get("aah_v3_fixed_hierarchy_seed", exp.get("seed", 1337)),
         aah_v3_parent_constraint=model_cfg.get("aah_v3_parent_constraint", True),
+        aah_v3_window_ablation_mode=model_cfg.get("aah_v3_window_ablation_mode", "adaptive"),
+        aah_v3_fixed_window=model_cfg.get("aah_v3_fixed_window", 0),
+        aah_v3_window_ablation_seed=model_cfg.get("aah_v3_window_ablation_seed", exp.get("seed", 0)),
     )
     model = GPT(gpt_cfg).to(device)
 
@@ -563,6 +566,8 @@ def main():
         "hierarchy_stop_reason_per_level",
         "cluster_forced_bipartition_level0",
         "cluster_force_split_anchor_similarity_level0",
+        "window_ablation_mode_freq",
+        "window_ablation_changed_frac",
     ]
     csv_idx = {k: i for i, k in enumerate(csv_headers)}
     wandb_mod = None
@@ -865,6 +870,8 @@ def main():
                 attn_times = []
                 mask_times = []
                 overhead_times = []
+                window_ablation_modes = []
+                window_ablation_changed_fracs = []
                 if model_cfg.get("aah_v2_enabled", False) or model_cfg.get("aah_v3_enabled", False):
                     total_elements = 0.0
                     baseline_elements = 0.0
@@ -1017,6 +1024,10 @@ def main():
                                 decision_unique_head_idx_after_execution_mappings.append(attn.last_stats.get("decision_unique_head_idx_after_execution_mapping"))
                             if "decision_head_idx_changed_by_execution_mapping_frac" in attn.last_stats:
                                 decision_head_idx_changed_by_execution_mapping_fracs.append(attn.last_stats.get("decision_head_idx_changed_by_execution_mapping_frac"))
+                            if "window_ablation_mode" in attn.last_stats:
+                                window_ablation_modes.append(attn.last_stats.get("window_ablation_mode"))
+                            if "window_ablation_changed_frac" in attn.last_stats:
+                                window_ablation_changed_fracs.append(attn.last_stats.get("window_ablation_changed_frac"))
                             if "hierarchy_head_group_map_per_level" in attn.last_stats:
                                 hierarchy_head_group_map_per_levels.append(attn.last_stats.get("hierarchy_head_group_map_per_level"))
                             if "hierarchy_group_members_per_level" in attn.last_stats:
@@ -1243,6 +1254,18 @@ def main():
                     denom = float(len(path_modes))
                     for k in list(path_mode_freq.keys()):
                         path_mode_freq[k] = path_mode_freq[k] / denom
+                window_ablation_mode_freq = {}
+                if window_ablation_modes:
+                    for mode in window_ablation_modes:
+                        ms = str(mode)
+                        window_ablation_mode_freq[ms] = window_ablation_mode_freq.get(ms, 0.0) + 1.0
+                    denom = float(len(window_ablation_modes))
+                    for k in list(window_ablation_mode_freq.keys()):
+                        window_ablation_mode_freq[k] = window_ablation_mode_freq[k] / denom
+                window_ablation_changed_frac = (
+                    sum(float(v) for v in window_ablation_changed_fracs) / len(window_ablation_changed_fracs)
+                    if window_ablation_changed_fracs else None
+                )
                 avg_window = sum(avg_windows) / len(avg_windows) if avg_windows else None
                 lk_mean = sum(lk_means) / len(lk_means) if lk_means else None
                 lk_p90 = sum(lk_p90s) / len(lk_p90s) if lk_p90s else None
@@ -1380,6 +1403,10 @@ def main():
                         payload["aah/group_counts_per_level"] = group_counts_per_levels[0]
                     if controller_logits_std_per_levels:
                         payload["aah/controller_logits_std_per_level"] = controller_logits_std_per_levels[0]
+                    if window_ablation_mode_freq:
+                        payload["aah/window_ablation_mode_freq"] = window_ablation_mode_freq
+                    if window_ablation_changed_frac is not None:
+                        payload["aah/window_ablation_changed_frac"] = window_ablation_changed_frac
                     if win_idx_pre_parent_clamps:
                         payload["aah/win_idx_pre_parent_clamp"] = win_idx_pre_parent_clamps[0]
                     if win_idx_post_parent_clamps:
@@ -1695,6 +1722,8 @@ def main():
                         str(hierarchy_stop_reason_per_levels[0]) if hierarchy_stop_reason_per_levels else "",
                         str(cluster_forced_bipartition_level0) if cluster_forced_bipartition_level0 is not None else "",
                         f"{cluster_force_split_anchor_similarity_level0:.6f}" if cluster_force_split_anchor_similarity_level0 is not None else "",
+                        str(window_ablation_mode_freq) if window_ablation_mode_freq else "",
+                        f"{window_ablation_changed_frac:.6f}" if window_ablation_changed_frac is not None else "",
                     ])
                 if head_groups:
                     prev_head_groups = [list(g) for g in head_groups]
