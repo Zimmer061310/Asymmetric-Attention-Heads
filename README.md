@@ -52,6 +52,10 @@ The implementation supports the reference `dense_masked` path and
 backend-realized paths using FlashAttention or PyTorch FlexAttention where the
 environment supports them.
 
+<p align="center">
+  <img src="figures/paper_fig2_joint_scorer.png" alt="Independent sibling scoring versus joint sibling scoring" width="900">
+</p>
+
 ## Claim Boundary
 
 The latest draft uses a conservative claim boundary:
@@ -76,6 +80,14 @@ structure, throughput, and memory.
 Older table columns named `flops_ratio`, `ACR`, or related analytic quantities
 should be read as routing or formula diagnostics, not as measured GPU-FLOPs
 ratios.
+
+<p align="center">
+  <img src="figures/paper_fig3_training_dynamics.png" alt="Training dynamics for the 1B 4096-token seed-0 suite" width="900">
+</p>
+
+<p align="center">
+  <img src="figures/paper_fig4_window_bucket_heatmap.png" alt="Aggregate selected-window bucket heatmap" width="900">
+</p>
 
 ### Qwen3-4B compatibility snapshot
 
