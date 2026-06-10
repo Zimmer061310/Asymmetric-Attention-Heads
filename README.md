@@ -8,7 +8,7 @@ preserving the standard Transformer block interface.
 <p align="center">
   <a href="#overview">Overview</a> |
   <a href="#method">Method</a> |
-  <a href="#claim-boundary">Claim Boundary</a> |
+  <a href="#diagnostics">Diagnostics</a> |
   <a href="#results">Results</a> |
   <a href="#setup">Setup</a> |
   <a href="#citation">Citation</a>
@@ -30,11 +30,10 @@ head. AAH-v3 keeps the usual Q/K/V projections, flat head concatenation, and
 Transformer output interface, but adds a separate control path that chooses a
 local causal window for each head or head group.
 
-The current paper framing is **quality and structure**, not a hardware-FLOPs
-reduction claim. AAH-v3 is best understood as a head-wise context-allocation
-mechanism: it tests whether structured head-window assignments can improve or
-preserve language-model quality compared with full attention and simpler window
-assignment controls.
+The current paper framing is **quality and structure**. AAH-v3 is best
+understood as a head-wise context-allocation mechanism: it tests whether
+structured head-window assignments can improve or preserve language-model
+quality compared with full attention and simpler window assignment controls.
 
 ## Method
 
@@ -56,18 +55,13 @@ environment supports them.
   <img src="figures/paper_fig2_joint_scorer.png" alt="Independent sibling scoring versus joint sibling scoring" width="900">
 </p>
 
-## Claim Boundary
+## Diagnostics
 
-The latest draft uses a conservative claim boundary:
-
-- AAH-v3 is not presented as a measured GPU-FLOPs reduction method.
-- `ACR`, `EAR`, and analytic FLOPs fields are routing diagnostics only. They
-  describe selected or backend-accounted attention structure, not hardware FLOPs
-  savings.
-- Paper-facing evidence should focus on validation quality, routing structure,
-  compatibility checks, and implementation diagnostics.
-- Throughput, memory, and backend behavior are systems diagnostics, not the main
-  claim.
+Paper-facing evidence focuses on validation quality, routing structure,
+compatibility checks, and implementation diagnostics. The compact result files
+include selected-window distributions, hierarchy statistics, throughput, and
+memory so the behavior of the control path can be inspected alongside model
+quality.
 
 ## Results
 
@@ -76,10 +70,6 @@ The latest draft uses a conservative claim boundary:
 The 1B/4096 suite is the main custom Transformer evidence. The result tables
 and diagnostics report validation quality, selected-window behavior, hierarchy
 structure, throughput, and memory.
-
-Older table columns named `flops_ratio`, `ACR`, or related analytic quantities
-should be read as routing or formula diagnostics, not as measured GPU-FLOPs
-ratios.
 
 <p align="center">
   <img src="figures/paper_fig3_training_dynamics.png" alt="Training dynamics for the 1B 4096-token seed-0 suite" width="900">
